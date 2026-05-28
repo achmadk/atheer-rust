@@ -1,0 +1,149 @@
+name: Benchmarks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      model_url:
+        description: "URL to a small GGUF model for benchmarking"
+        required: false
+        default: ""
+      duration_secs:
+        description: "Sustained benchmark duration in seconds"
+        required: false
+        default: "30"
+  schedule:
+    # Nightly benchmarks on main branch
+    - cron: "0 6 * * *"
+
+env:
+  CARGO_TERM_COLOR: always
+  ATHEER_TEST_MODEL: /tmp/models/LFM2-700M-Q4_0.gguf
+
+jobs:
+  build:
+    name: Build benchmark binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-gnu
+
+      - name: Restore cached dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/
+            ~/.cargo/git/
+            target/
+          key: ${{ runner.os }}-cargo-bench-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-bench-
+
+      - name: Build perf-bench
+        run: cargo build -p perf-bench --release
+
+      - name: Build Criterion benches
+        run: cargo bench -p perf-bench --no-run
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-bench-linux-x86_64
+          path: target/release/perf-bench
+          retention-days: 7
+
+  unit-tests:
+    name: Unit tests (all crates)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Restore cached test model
+        id: cache-model
+        uses: actions/cache@v4
+        with:
+          path: /tmp/models/LFM2-700M-Q4_0.gguf
+          key: test-model-${{ hashFiles('scripts/download-test-model.sh') }}
+
+      - name: Download test model
+        if: steps.cache-model.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p /tmp/models
+          scripts/download-test-model.sh
+          cp models/LFM2-700M-Q4_0.gguf $ATHEER_TEST_MODEL
+
+      - name: Symlink model for cached runs
+        if: steps.cache-model.outputs.cache-hit == 'true'
+        run: |
+          mkdir -p models
+          ln -sf $ATHEER_TEST_MODEL models/LFM2-700M-Q4_0.gguf
+
+      - name: Run all unit tests
+        run: cargo test --workspace --lib
+
+      - name: Run integration tests (requires real GGUF model)
+        run: cargo test -p atheer-core -- --ignored
+
+  integration-tests:
+    name: Integration tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run integration test suite
+        run: cargo test -p atheer-integration-tests --lib
+
+  lint:
+    name: Lint & format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      - name: Clippy
+        run: cargo clippy --workspace -- -D warnings
+
+  accuracy-tests:
+    name: Accuracy regression tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Restore cached test model
+        id: cache-model
+        uses: actions/cache@v4
+        with:
+          path: /tmp/models/LFM2-700M-Q4_0.gguf
+          key: test-model-${{ hashFiles('scripts/download-test-model.sh') }}
+
+      - name: Download test model
+        if: steps.cache-model.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p /tmp/models
+          scripts/download-test-model.sh
+          cp models/LFM2-700M-Q4_0.gguf $ATHEER_TEST_MODEL
+
+      - name: Run accuracy integration tests
+        run: cargo test -p atheer-core -- --ignored accuracy

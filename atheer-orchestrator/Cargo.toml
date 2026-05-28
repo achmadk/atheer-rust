@@ -1,0 +1,17 @@
+[package]
+name = "atheer-orchestrator"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+candle-core = "0.10.2"
+atheer-core = { path = "../atheer-core" }
+atheer-hardware = { path = "../atheer-hardware" }
+atheer-memory-bank = { path = "../atheer-memory-bank" }

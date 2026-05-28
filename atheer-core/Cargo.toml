@@ -1,0 +1,38 @@
+[package]
+name = "atheer-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tokio = { workspace = true }
+memmap2 = { workspace = true }
+tracing = { workspace = true }
+
+uuid = { version = "1.23", features = ["v4"] }
+candle-core = "0.10.2"
+candle-nn = "0.10.2"
+candle-transformers = "0.10.2"
+tokenizers = "0.23.1"
+rand = "0.8"
+regex = "1"
+sha2 = "0.10"
+hex = "0.4"
+dirs = "5.0"
+filetime = "0.2"
+reqwest = { workspace = true, features = ["blocking"], optional = true }
+atheer-memory-bank = { path = "../atheer-memory-bank", optional = true }
+atheer-accel = { path = "../atheer-accel", optional = true }
+
+[features]
+default = []
+auto-backend = ["atheer-accel"]
+memory-bank = ["atheer-memory-bank"]
+mmap = []
+model-registry = ["dep:reqwest"]
+
+[dev-dependencies]
+tempfile = "3.27"

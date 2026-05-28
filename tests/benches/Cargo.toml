@@ -1,0 +1,24 @@
+[package]
+name = "atheer-benches"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+atheer-memory-bank = { path = "../../atheer-memory-bank" }
+atheer-orchestrator = { path = "../../atheer-orchestrator" }
+atheer-accel = { path = "../../atheer-accel" }
+atheer-core = { path = "../../atheer-core" }
+criterion = { workspace = true }
+
+[[bench]]
+name = "kv_cache"
+harness = false
+
+[[bench]]
+name = "orchestrator"
+harness = false
+
+[[bench]]
+name = "ngram_cache"
+harness = false

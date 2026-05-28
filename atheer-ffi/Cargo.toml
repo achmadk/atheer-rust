@@ -1,0 +1,25 @@
+[package]
+name = "atheer-ffi"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+uniffi = { workspace = true }
+
+atheer-core = { path = "../atheer-core" }
+atheer-orchestrator = { path = "../atheer-orchestrator" }
+atheer-memory-bank = { path = "../atheer-memory-bank" }
+atheer-hardware = { path = "../atheer-hardware" }
+atheer-accel = { path = "../atheer-accel" }
+
+[lib]
+crate-type = ["rlib", "staticlib", "cdylib"] # staticlib for iOS, cdylib for Android, rlib for Rust dependencies
+
+[build-dependencies]
+uniffi = { workspace = true, features = ["build"] }

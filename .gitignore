@@ -1,0 +1,47 @@
+/models/
+target
+
+# Build artifacts
+perf-bench/
+sampleoutput/
+bindgen-tool/
+jniLibs/
+
+# Workflow/tooling directories
+.opencode/
+openspec/
+.planning/
+.sisyphus/
+
+# Android
+android/.gradle/
+android/build/
+android/app/build/
+android/app/*.apk
+android/gradle.properties
+
+# iOS
+ios/Pods/
+ios/build/
+ios/*.xcworkspace
+ios/*.xcodeproj/project.xcworkspace/
+ios/*.xcodeproj/xcuserdata/
+ios/*.ipa
+
+# IDE/Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Python (for tools/)
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Backup files
+*.rs.bk
+
+# Misc
+*.log

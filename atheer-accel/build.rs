@@ -1,0 +1,61 @@
+use std::env;
+use std::fs;
+use std::path::Path;
+
+fn compile_shader(shader_path: &Path, out_path: &Path) {
+    let glsl_source = fs::read_to_string(shader_path)
+        .expect(&format!("Failed to read {:?}", shader_path));
+
+    let mut frontend = naga::front::glsl::Frontend::default();
+    let options = naga::front::glsl::Options {
+        stage: naga::ShaderStage::Compute,
+        defines: Default::default(),
+    };
+    let module = frontend
+        .parse(&options, &glsl_source)
+        .expect(&format!("Failed to parse GLSL: {:?}", shader_path));
+
+    let info = naga::valid::Validator::new(
+        naga::valid::ValidationFlags::all(),
+        naga::valid::Capabilities::all(),
+    )
+    .validate(&module)
+    .expect(&format!("Failed to validate SPIR-V: {:?}", shader_path));
+
+    let spv = naga::back::spv::write_vec(
+        &module,
+        &info,
+        &naga::back::spv::Options {
+            lang_version: (1, 0),
+            ..Default::default()
+        },
+        None,
+    )
+    .expect(&format!("Failed to write SPIR-V: {:?}", shader_path));
+
+    let output_bytes: Vec<u8> = spv
+        .iter()
+        .flat_map(|w| w.to_le_bytes())
+        .collect();
+
+    let stem = shader_path.file_stem().unwrap().to_str().unwrap();
+    let spv_path = out_path.join(format!("{}.spv", stem));
+    fs::write(&spv_path, &output_bytes)
+        .expect(&format!("Failed to write SPIR-V: {:?}", spv_path));
+}
+
+fn main() {
+    let out_dir = env::var("OUT_DIR").unwrap();
+    let shader_dir = Path::new("shaders");
+    let out_path = Path::new(&out_dir).join("shaders");
+    fs::create_dir_all(&out_path).unwrap();
+
+    let shaders = ["gemv.glsl", "attention.glsl"];
+    for shader_name in &shaders {
+        let shader_path = shader_dir.join(shader_name);
+        if shader_path.exists() {
+            compile_shader(&shader_path, out_path.as_path());
+        }
+        println!("cargo:rerun-if-changed=shaders/{}", shader_name);
+    }
+}

@@ -1,0 +1,79 @@
+[workspace]
+resolver = "2"
+members = [
+    "candle-transformers",
+    "atheer-core",
+    "atheer-orchestrator",
+    "atheer-memory-bank",
+    "atheer-hardware",
+    "atheer-accel",
+    "atheer-ffi",
+    "atheer-bindgen",
+    "tests",
+    "tests/benches",
+    "fuzz",
+    "perf-bench",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Atheer-Rust Team"]
+license = "MIT OR Apache-2.0"
+rust-version = "1.75"
+
+# ═══════════════════════════════════════════════════════════════
+# Local forks of upstream crates
+# ═══════════════════════════════════════════════════════════════
+#
+# candle-transformers 0.10.2 — patched to add:
+#   - ModelWeights::kv_cache_snapshot()
+#   - ModelWeights::kv_cache_restore()
+[patch.crates-io]
+candle-transformers = { path = "candle-transformers" }
+# candle-core = { path = "/tmp/candle-core-0.10.2" }
+# candle-nn = { path = "/tmp/candle-nn-0.10.2" }
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1.52", features = ["full"] }
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Utilities
+thiserror = "1.0"
+anyhow = "1.0"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# FFI
+uniffi = { version = "0.27", features = ["cli"] }
+uniffi_bindgen = { version = "0.27" }
+uniffi_udl = { version = "0.27" }
+camino = "1.2"
+
+# Memory
+memmap2 = "0.9"
+
+# HTTP (for model downloads)
+reqwest = { version = "0.12", features = ["json", "stream"] }
+
+# LZ4 compression for L3 storage
+lz4 = "1.28"
+
+# Vulkan compute
+ash = "0.38"
+gpu-allocator = { version = "0.27", default-features = false, features = ["vulkan"] }
+
+# Shader compilation (build-time)
+naga = { version = "0.20", features = ["glsl-in", "spv-out"] }
+spirt = "0.4"
+
+# Testing
+proptest = "1.11"
+criterion = { version = "0.5", features = ["html_reports"] }

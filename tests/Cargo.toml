@@ -1,0 +1,20 @@
+[package]
+name = "atheer-integration-tests"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+atheer-core = { path = "../atheer-core" }
+atheer-orchestrator = { path = "../atheer-orchestrator" }
+atheer-memory-bank = { path = "../atheer-memory-bank" }
+atheer-accel = { path = "../atheer-accel" }
+atheer-hardware = { path = "../atheer-hardware" }
+atheer-ffi = { path = "../atheer-ffi" }
+
+[dev-dependencies]
+tokio = { version = "1.52", features = ["full"] }
+proptest = "1.11"

@@ -1,0 +1,13 @@
+[package]
+name = "atheer-bindgen"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "atheer-bindgen"
+path = "src/main.rs"
+
+[dependencies]
+uniffi_bindgen.workspace = true
+uniffi_udl.workspace = true
+camino.workspace = true

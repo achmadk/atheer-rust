@@ -1,0 +1,15 @@
+[package]
+name = "atheer-memory-bank"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+lz4 = { workspace = true }
+
+uuid = { version = "1.23", features = ["v4"] }
+parking_lot = "0.12"

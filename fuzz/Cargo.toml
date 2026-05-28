@@ -1,0 +1,17 @@
+[package]
+name = "atheer-fuzz"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[dependencies]
+atheer-ffi = { path = "../atheer-ffi" }
+atheer-core = { path = "../atheer-core" }
+atheer-memory-bank = { path = "../atheer-memory-bank" }
+serde_json = { workspace = true }
+arbitrary = "1.4"
+libfuzzer-sys = "0.4"
+
+[profile.release]
+opt-level = 3
+lto = true
