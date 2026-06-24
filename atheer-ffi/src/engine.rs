@@ -162,8 +162,23 @@ impl AtheerEngine {
             health.on_battery,
         );
 
+        // Check and relieve memory pressure before generation
+        {
+            let memory = self.memory_bank.lock().unwrap();
+            if orch.check_memory_pressure(&memory) {
+                orch.log_memory_pressure_if_needed(&memory);
+                drop(memory);
+                // Try to relieve pressure - demote L1 to L2
+                let snapshot = engine.kv_cache_snapshot().unwrap_or_default();
+                if !snapshot.is_empty() {
+                    let mut mem = self.memory_bank.lock().unwrap();
+                    mem.demote_l1_to_l2_on_pressure(&snapshot, 8, 128, 0.8);
+                }
+            }
+        }
+
         let (text, tokens_gen, time_ms) = engine
-            .generate(&request.prompt, request.max_tokens)
+            .generate(&request.prompt, request.max_tokens, None)
             .map_err(|e| AtheerError::GenerationFailed {
                 message: format!("{e}"),
             })?;

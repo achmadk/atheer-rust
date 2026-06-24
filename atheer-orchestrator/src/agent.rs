@@ -47,7 +47,7 @@ impl Agent {
             .ok_or_else(|| AgentError::GenerationError("Engine not initialized".to_string()))?;
 
         let (text, _, _) = engine
-            .generate(prompt, max_tokens)
+            .generate(prompt, max_tokens, None)
             .map_err(|e| AgentError::GenerationError(e.to_string()))?;
 
         Ok(text)

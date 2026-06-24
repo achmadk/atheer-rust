@@ -528,6 +528,7 @@ impl AccelBackend for NnapiBackend {
         matches!(quantization, "q4_k_m" | "q4_k_s" | "q8_0" | "f16")
     }
 
+    #[cfg(test)]
     fn forward(&self, input_ids: &[u32], _positions: &[usize]) -> Result<AccelResult> {
         let start = Instant::now();
         let vocab_size = 50257;
@@ -548,6 +549,13 @@ impl AccelBackend for NnapiBackend {
                 fallback_forward(input_ids, vocab_size, start)
             }
         }
+    }
+
+    #[cfg(not(test))]
+    fn forward(&self, _input_ids: &[u32], _positions: &[usize]) -> Result<AccelResult> {
+        Err(crate::AccelError::Deprecated(
+            "NnapiBackend::forward() is deprecated; use InferenceEngine::generate() instead".to_string(),
+        ))
     }
 }
 

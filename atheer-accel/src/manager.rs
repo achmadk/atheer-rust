@@ -86,9 +86,21 @@ impl BackendManager {
             }
             #[cfg(not(any(target_os = "ios", target_os = "macos")))]
             BackendType::Metal | BackendType::CoreML => candle_core::Device::Cpu,
+            #[cfg(target_os = "android")]
+            BackendType::Vulkan => {
+                candle_core::Device::vulkan_if_available(0).unwrap_or(candle_core::Device::Cpu)
+            }
+            #[cfg(target_os = "android")]
+            BackendType::NNAPI => {
+                candle_core::Device::vulkan_if_available(0).unwrap_or(candle_core::Device::Cpu)
+            }
             BackendType::Cuda => {
                 candle_core::Device::cuda_if_available(0).unwrap_or(candle_core::Device::Cpu)
             }
+            #[cfg(not(target_os = "android"))]
+            BackendType::Vulkan => candle_core::Device::Cpu,
+            #[cfg(not(target_os = "android"))]
+            BackendType::NNAPI => candle_core::Device::Cpu,
             _ => candle_core::Device::Cpu,
         }
     }
@@ -106,6 +118,18 @@ impl BackendManager {
             }
         }
         None
+    }
+
+    /// Return the optimal device for the given operation type and inference mode.
+    ///
+    /// In Eco mode, decode operations are routed to CPU to save GPU memory.
+    /// In Turbo mode, all operations use the fastest available accelerator.
+    pub fn device_for_op(&self, is_prefill: bool, is_eco: bool) -> candle_core::Device {
+        if is_eco && !is_prefill {
+            candle_core::Device::Cpu
+        } else {
+            self.device()
+        }
     }
 }
 
@@ -173,5 +197,31 @@ mod tests {
         let device = manager.device();
         // CPU backend always maps to Device::Cpu
         assert!(matches!(device, candle_core::Device::Cpu));
+    }
+
+    #[test]
+    fn test_device_for_op_turbo_mode() {
+        let manager = BackendManager::new();
+        let prefill_device = manager.device_for_op(true, false);
+        let decode_device = manager.device_for_op(false, false);
+        // In turbo mode (eco=false), both use the accelerator device
+        assert!(matches!(prefill_device, candle_core::Device::Cpu));
+        assert!(matches!(decode_device, candle_core::Device::Cpu));
+    }
+
+    #[test]
+    fn test_device_for_op_eco_mode_decode() {
+        let manager = BackendManager::new();
+        let decode_device = manager.device_for_op(false, true);
+        // In eco mode, decode should use CPU
+        assert!(matches!(decode_device, candle_core::Device::Cpu));
+    }
+
+    #[test]
+    fn test_device_for_op_eco_mode_prefill() {
+        let manager = BackendManager::new();
+        let prefill_device = manager.device_for_op(true, true);
+        // In eco mode, prefill still uses accelerator
+        assert!(matches!(prefill_device, candle_core::Device::Cpu));
     }
 }

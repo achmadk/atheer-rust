@@ -19,6 +19,10 @@ pub enum AccelError {
 
     #[error("Model compilation failed: {0}")]
     ModelCompilationFailed(String),
+
+    #[deprecated(since = "0.1.0", note = "use InferenceEngine::generate() instead")]
+    #[error("Deprecated: {0}")]
+    Deprecated(String),
 }
 
 pub type Result<T> = std::result::Result<T, AccelError>;

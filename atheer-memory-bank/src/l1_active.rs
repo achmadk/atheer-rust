@@ -69,6 +69,23 @@ impl L1ActiveCache {
             .map(|kv| kv.max_memory_bytes())
             .unwrap_or(0)
     }
+
+    pub fn promote_to_l2(&mut self, layer: usize, position: usize, l2: &mut crate::L2WarmCache) -> bool {
+        let kv = match self.kv_cache.as_mut() {
+            Some(kv) => kv,
+            None => return false,
+        };
+        let entry = match kv.get(layer, position) {
+            Some(e) => e,
+            None => return false,
+        };
+        l2.kv_cache_mut().and_then(|l2_kv| {
+            l2_kv.insert(layer, position, entry.token_id, entry.keys.clone(), entry.values.clone());
+            Some(())
+        });
+        kv.remove_entry(layer, position);
+        true
+    }
 }
 
 #[cfg(test)]
@@ -101,5 +118,21 @@ mod tests {
         cache.clear_kv_cache();
 
         assert!(cache.kv_cache_mut().unwrap().get(0, 0).is_none());
+    }
+
+    #[test]
+    fn test_l1_promote_to_l2() {
+        let mut l1 = L1ActiveCache::new("test".to_string()).with_kv_cache(2, 4, 64, 128);
+        let mut l2 = crate::L2WarmCache::new("test".to_string()).with_kv_cache(2, 4, 64, 128);
+
+        if let Some(kv) = l1.kv_cache_mut() {
+            kv.insert(0, 0, 42, vec![1.0; 256], vec![2.0; 256]);
+        }
+
+        let promoted = l1.promote_to_l2(0, 0, &mut l2);
+        assert!(promoted);
+
+        assert!(l1.kv_cache_mut().unwrap().get(0, 0).is_none());
+        assert!(l2.kv_cache_mut().unwrap().get(0, 0).is_some());
     }
 }

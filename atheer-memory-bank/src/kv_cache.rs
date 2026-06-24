@@ -74,6 +74,10 @@ impl KvCache {
         total_entries * entry_size
     }
 
+    pub fn num_layers(&self) -> usize {
+        self.num_layers
+    }
+
     pub fn memory_pressure(&self) -> f32 {
         let current = self.current_memory_bytes() as f32;
         let max = self.max_memory_bytes() as f32;
@@ -145,12 +149,15 @@ impl KvCache {
     pub fn evict_one(&mut self) {
         let victim = self.select_victim();
         if let Some((layer, position)) = victim {
-            if let Some(entries) = self.entries.get_mut(&layer) {
-                entries.retain(|e| e.position != position);
-            }
-            self.access_order
-                .retain(|(l, p)| !(*l == layer && *p == position));
+            self.remove_entry(layer, position);
         }
+    }
+
+    pub fn remove_entry(&mut self, layer: usize, position: usize) {
+        if let Some(entries) = self.entries.get_mut(&layer) {
+            entries.retain(|e| e.position != position);
+        }
+        self.access_order.retain(|(l, p)| !(*l == layer && *p == position));
     }
 
     fn select_victim(&self) -> Option<(usize, usize)> {

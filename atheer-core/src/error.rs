@@ -34,6 +34,12 @@ pub enum AtheerCoreError {
 
     #[error("Cache error: {0}")]
     CacheError(String),
+
+    #[error("Generation timeout after {elapsed_ms}ms ({tokens_generated} tokens generated)")]
+    Timeout {
+        elapsed_ms: u64,
+        tokens_generated: usize,
+    },
 }
 
 pub type Result<T> = std::result::Result<T, AtheerCoreError>;
@@ -52,5 +58,16 @@ mod tests {
         assert!(msg.contains("Device mismatch"));
         assert!(msg.contains("Cpu"));
         assert!(msg.contains("Metal (unavailable)"));
+    }
+
+    #[test]
+    fn test_timeout_error_display() {
+        let err = AtheerCoreError::Timeout {
+            elapsed_ms: 1234,
+            tokens_generated: 5,
+        };
+        let msg = format!("{}", err);
+        assert!(msg.contains("1234ms"));
+        assert!(msg.contains("5"));
     }
 }

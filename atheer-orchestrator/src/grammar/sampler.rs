@@ -1,13 +1,16 @@
+use std::sync::Arc;
 use atheer_core::Sampler;
 use candle_core::{Result as CandleResult, Tensor};
 
 use super::GrammarConstraint;
+use super::trie::GrammarTrie;
 
 /// A sampler wrapper that applies grammar constraints to mask invalid tokens.
 pub struct GrammarSampler<G: GrammarConstraint> {
     base: Box<dyn Sampler>,
     grammar: G,
     tokenizer: atheer_core::Tokenizer,
+    trie: Option<Arc<GrammarTrie>>,
 }
 
 impl<G: GrammarConstraint> GrammarSampler<G> {
@@ -16,6 +19,21 @@ impl<G: GrammarConstraint> GrammarSampler<G> {
             base,
             grammar,
             tokenizer,
+            trie: None,
+        }
+    }
+
+    pub fn with_trie(mut self, trie: Arc<GrammarTrie>) -> Self {
+        self.trie = Some(trie);
+        self
+    }
+
+    fn get_valid_token_ids(&self) -> Vec<usize> {
+        if let Some(ref trie) = self.trie {
+            trie.valid_tokens("").into_iter().map(|id| id as usize).collect()
+        } else {
+            let vocab_size = self.tokenizer.vocab_size();
+            (0..vocab_size).collect()
         }
     }
 }
@@ -27,15 +45,30 @@ impl<G: GrammarConstraint + Clone> Sampler for GrammarSampler<G> {
         let vocab_size = logits.dims().last().copied().unwrap_or(0);
         let mut mask: Vec<bool> = vec![true; vocab_size];
 
-        // Build a valid-token mask by testing every token against the grammar
-        for token_id in 0..vocab_size {
+        let candidate_ids = self.get_valid_token_ids();
+        let mut valid_count = 0;
+
+        for token_id in candidate_ids {
             let token_text = self.tokenizer.decode(&[token_id as u32], false);
             if !self.grammar.is_valid_prefix(&token_text) {
                 mask[token_id] = false;
+            } else {
+                valid_count += 1;
             }
         }
 
-        // Create masked logits: zero out invalid tokens and mask with large negative
+        if valid_count == 0 {
+            tracing::warn!(
+                "GrammarSampler: no valid tokens from trie, falling back to full scan"
+            );
+            for token_id in 0..vocab_size {
+                let token_text = self.tokenizer.decode(&[token_id as u32], false);
+                if !self.grammar.is_valid_prefix(&token_text) {
+                    mask[token_id] = false;
+                }
+            }
+        }
+
         let logits_f32 = logits.to_dtype(DType::F32)?;
         let mut logits_vec: Vec<f32> = logits_f32.to_vec1()?;
         let mut any_valid = false;
@@ -47,21 +80,16 @@ impl<G: GrammarConstraint + Clone> Sampler for GrammarSampler<G> {
             }
         }
 
-        // Fallback: if no tokens are valid according to the grammar,
-        // fall back to unconstrained sampling (graceful degradation).
         if !any_valid {
             let orig_logits: Vec<f32> = logits_f32.to_vec1()?;
             logits_vec = orig_logits;
         }
 
-        // Materialise a new Tensor for the base sampler
         let device = logits.device();
         let masked_logits = Tensor::new(logits_vec.as_slice(), device)?;
 
-        // Sample from the masked logits
         let sampled_token = self.base.sample(&masked_logits, generated_tokens)?;
 
-        // Advance the grammar with the chosen token
         let sampled_text = self.tokenizer.decode(&[sampled_token], false);
         self.grammar.advance(&sampled_text);
 
@@ -72,13 +100,9 @@ impl<G: GrammarConstraint + Clone> Sampler for GrammarSampler<G> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use atheer_core::sampler::GreedySampler;
 
-    // These tests require a real tokenizer and model, which is hard in a unit test.
-    // We test the GrammarSampler construction here.
     #[test]
     fn test_grammar_sampler_construction() {
-        // Can't easily test without a real tokenizer, but verify compilation
         assert!(true);
     }
 }

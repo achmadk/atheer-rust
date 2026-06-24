@@ -12,7 +12,7 @@ pub use agent::{Agent, AgentError};
 pub use config::OrchestratorConfig;
 pub use error::{OrchestratorError, Result};
 pub use grammar::{GrammarConstraint, GrammarSampler, JsonGrammar};
-pub use inference_mode::InferenceMode;
+pub use inference_mode::{InferenceMode, OpType};
 pub use modes::eco::NGramCache;
 pub use modes::{BalancedMode, EcoMode, SpeculativeDecoder, TurboMode};
 pub use orchestrator::Orchestrator;

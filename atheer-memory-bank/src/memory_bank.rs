@@ -248,6 +248,16 @@ impl MemoryBank {
         self.l1_vram_bytes() + self.l2_vram_bytes()
     }
 
+    /// Total L3 compressed storage size in bytes.
+    pub fn l3_size_bytes(&self) -> usize {
+        self.l3.read().as_ref().map(|s| s.size_bytes()).unwrap_or(0)
+    }
+
+    /// Total allocated memory across all tiers (L1 + L2 + L3) in bytes.
+    pub fn total_allocated_bytes(&self) -> usize {
+        self.total_vram_bytes() + self.l3_size_bytes()
+    }
+
     /// VRAM pressure ratio (0.0–1.0+) relative to `max_size_mb`.
     /// Values > 1.0 indicate the cache exceeds its budget.
     pub fn vram_pressure_ratio(&self) -> f32 {
@@ -284,6 +294,11 @@ impl MemoryBank {
             l1.clear_kv_cache();
         }
         true
+    }
+
+    /// Returns true if memory pressure exceeds threshold (80% of max).
+    pub fn has_memory_pressure(&self) -> bool {
+        self.vram_pressure_ratio() > 0.8
     }
 }
 

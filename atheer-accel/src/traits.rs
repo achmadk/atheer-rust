@@ -15,6 +15,7 @@ pub trait AccelBackend: Send + Sync {
     fn supports_quantization(&self, _quantization: &str) -> bool {
         true
     }
+    #[deprecated(since = "0.1.0", note = "use InferenceEngine::generate() instead")]
     fn forward(&self, input_ids: &[u32], positions: &[usize]) -> Result<AccelResult>;
 }
 

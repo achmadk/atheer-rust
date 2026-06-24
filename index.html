@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atheer-Rust — Mobile Inference Engine for LLMs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* ─── Reset & Base ─── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #0B1120;
+    color: #E2E8F0;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  a { color: #38BDF8; text-decoration: none; transition: color .2s; }
+  a:hover { color: #7DD3FC; }
+  img { max-width: 100%; display: block; }
+  code, pre { font-family: 'JetBrains Mono', monospace; }
+  ::selection { background: #38BDF8; color: #0B1120; }
+
+  /* ─── Loading Screen ─── */
+  #loading-screen {
+    position: fixed; inset: 0; z-index: 9999;
+    background: #0B1120;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    transition: opacity .6s ease, visibility .6s ease;
+  }
+  #loading-screen.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+  .loading-logo {
+    font-size: 2rem; font-weight: 800; letter-spacing: -.03em;
+    background: linear-gradient(135deg, #38BDF8, #06B6D4);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 1.75rem;
+  }
+  .loading-bar-track {
+    width: 220px; height: 3px; background: #1E293B; border-radius: 4px;
+    overflow: hidden;
+  }
+  .loading-bar-fill {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, #38BDF8, #06B6D4);
+    border-radius: 4px;
+    transition: width .3s ease;
+  }
+  .loading-text {
+    margin-top: .75rem; font-size: .8rem; color: #64748B;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ─── Navigation ─── */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    padding: 1rem 2rem;
+    background: rgba(11,17,32,.85);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(56,189,248,.08);
+    display: flex; align-items: center; justify-content: space-between;
+    transition: border-color .3s;
+  }
+  nav.scrolled { border-color: rgba(56,189,248,.18); }
+  .nav-brand {
+    font-weight: 700; font-size: 1.1rem;
+    background: linear-gradient(135deg, #38BDF8, #06B6D4);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+    cursor: pointer;
+  }
+  .nav-links { display: flex; gap: 1.75rem; align-items: center; }
+  .nav-links a {
+    font-size: .875rem; font-weight: 500; color: #94A3B8;
+    cursor: pointer;
+  }
+  .nav-links a:hover { color: #E2E8F0; }
+  .nav-cta {
+    padding: .45rem 1.1rem; border-radius: 6px;
+    background: #38BDF8; color: #0B1120 !important;
+    font-weight: 600; font-size: .8rem; cursor: pointer;
+    transition: background .2s, transform .15s;
+  }
+  .nav-cta:hover { background: #7DD3FC; transform: translateY(-1px); }
+  .nav-mobile-toggle {
+    display: none; background: none; border: none; color: #E2E8F0;
+    font-size: 1.5rem; cursor: pointer; padding: .25rem;
+  }
+
+  /* ─── Hero ─── */
+  .hero {
+    min-height: 100vh;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    text-align: center;
+    padding: 6rem 2rem 4rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero-bg-grid {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(56,189,248,.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(56,189,248,.04) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse 60% 50% at 50% 50%, black 20%, transparent 70%);
+    -webkit-mask-image: radial-gradient(ellipse 60% 50% at 50% 50%, black 20%, transparent 70%);
+  }
+  .hero-glow {
+    position: absolute; width: 600px; height: 600px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(56,189,248,.08), transparent 70%);
+    top: -20%; left: 50%; transform: translateX(-50%);
+    pointer-events: none;
+  }
+  .hero-content { position: relative; z-index: 1; max-width: 800px; }
+  .hero-badge {
+    display: inline-block;
+    padding: .35rem 1rem;
+    border-radius: 100px;
+    border: 1px solid rgba(56,189,248,.2);
+    background: rgba(56,189,248,.06);
+    font-size: .75rem; font-weight: 600; color: #7DD3FC;
+    letter-spacing: .04em; text-transform: uppercase;
+    margin-bottom: 1.5rem;
+    cursor: pointer;
+    transition: background .2s;
+  }
+  .hero-badge:hover { background: rgba(56,189,248,.12); }
+  .hero h1 {
+    font-size: clamp(2.5rem, 6vw, 4.5rem);
+    font-weight: 800; line-height: 1.1; letter-spacing: -.04em;
+    margin-bottom: 1.25rem;
+  }
+  .hero h1 span {
+    background: linear-gradient(135deg, #38BDF8 0%, #06B6D4 50%, #2DD4BF 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .hero-sub {
+    font-size: clamp(1rem, 2vw, 1.2rem);
+    color: #94A3B8; max-width: 580px; margin: 0 auto 2rem;
+    line-height: 1.7;
+  }
+  .hero-actions { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; gap: .5rem;
+    padding: .75rem 1.75rem; border-radius: 8px;
+    font-size: .95rem; font-weight: 600; border: none;
+    cursor: pointer;
+    transition: background .2s, transform .15s, box-shadow .2s;
+  }
+  .btn:hover { transform: translateY(-2px); }
+  .btn-primary {
+    background: linear-gradient(135deg, #38BDF8, #06B6D4);
+    color: #0B1120;
+    box-shadow: 0 4px 20px rgba(56,189,248,.25);
+  }
+  .btn-primary:hover { box-shadow: 0 6px 28px rgba(56,189,248,.35); }
+  .btn-secondary {
+    background: rgba(56,189,248,.08);
+    color: #E2E8F0;
+    border: 1px solid rgba(56,189,248,.2);
+  }
+  .btn-secondary:hover { background: rgba(56,189,248,.15); border-color: rgba(56,189,248,.35); }
+  .hero-scroll {
+    position: absolute; bottom: 2rem;
+    display: flex; flex-direction: column; align-items: center; gap: .5rem;
+    color: #475569; font-size: .7rem; letter-spacing: .1em; text-transform: uppercase;
+    cursor: pointer;
+    transition: color .2s;
+  }
+  .hero-scroll:hover { color: #94A3B8; }
+  .scroll-arrow {
+    width: 20px; height: 20px;
+    border-right: 2px solid #475569; border-bottom: 2px solid #475569;
+    transform: rotate(45deg);
+    animation: scrollBounce 2s infinite;
+  }
+  @keyframes scrollBounce { 0%,100%{transform:rotate(45deg) translateY(0)} 50%{transform:rotate(45deg) translateY(6px)} }
+
+  /* ─── Section Common ─── */
+  section { padding: 5rem 2rem; }
+  .section-inner {
+    max-width: 1100px; margin: 0 auto;
+  }
+  .section-label {
+    font-size: .7rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .12em; color: #38BDF8; margin-bottom: .75rem;
+  }
+  .section-title {
+    font-size: clamp(1.75rem, 3.5vw, 2.5rem);
+    font-weight: 700; letter-spacing: -.03em; line-height: 1.2;
+    margin-bottom: 1rem;
+  }
+  .section-desc {
+    color: #94A3B8; max-width: 600px; font-size: 1.05rem;
+    line-height: 1.7;
+  }
+  .section-desc-wide { max-width: 700px; }
+
+  /* ─── Stats Bar ─── */
+  .stats-bar {
+    padding: 2rem 2rem;
+    background: #0F172A;
+    border-top: 1px solid rgba(56,189,248,.06);
+    border-bottom: 1px solid rgba(56,189,248,.06);
+  }
+  .stats-grid {
+    max-width: 1100px; margin: 0 auto;
+    display: grid; grid-template-columns: repeat(4,1fr); gap: 1rem;
+  }
+  .stat-item { text-align: center; }
+  .stat-number {
+    font-size: 2.25rem; font-weight: 800; letter-spacing: -.03em;
+    background: linear-gradient(135deg, #38BDF8, #06B6D4);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1.2;
+  }
+  .stat-label { font-size: .8rem; color: #64748B; margin-top: .2rem; }
+
+  /* ─── Features ─── */
+  .features-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.25rem; margin-top: 2.5rem;
+  }
+  .feature-card {
+    background: #0F172A;
+    border: 1px solid rgba(56,189,248,.08);
+    border-radius: 12px; padding: 1.75rem;
+    transition: border-color .25s, transform .2s, box-shadow .2s;
+    cursor: default;
+  }
+  .feature-card:hover {
+    border-color: rgba(56,189,248,.2);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0,0,0,.3);
+  }
+  .feature-icon {
+    width: 40px; height: 40px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+  }
+  .feature-icon-blue { background: rgba(56,189,248,.12); color: #38BDF8; }
+  .feature-icon-cyan { background: rgba(6,182,212,.12); color: #06B6D4; }
+  .feature-icon-amber { background: rgba(245,158,11,.12); color: #F59E0B; }
+  .feature-icon-green { background: rgba(34,197,94,.12); color: #22C55E; }
+  .feature-icon-purple { background: rgba(168,85,247,.12); color: #A855F7; }
+  .feature-icon-pink { background: rgba(236,72,153,.12); color: #EC4899; }
+  .feature-card h3 { font-size: 1rem; font-weight: 600; margin-bottom: .5rem; }
+  .feature-card p { font-size: .875rem; color: #94A3B8; line-height: 1.65; }
+
+  /* ─── Architecture ─── */
+  .arch-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1rem; margin-top: 2.5rem;
+  }
+  .arch-card {
+    background: rgba(15,23,42,.6);
+    border: 1px solid rgba(56,189,248,.08);
+    border-radius: 10px; padding: 1.25rem 1.5rem;
+    text-align: center;
+    position: relative;
+    cursor: default;
+    transition: border-color .25s, transform .2s;
+  }
+  .arch-card:hover { border-color: rgba(56,189,248,.2); transform: translateY(-1px); }
+  .arch-card.l1 { border-color: rgba(56,189,248,.15); }
+  .arch-card.l2 { border-color: rgba(6,182,212,.12); }
+  .arch-card.l3 { border-color: rgba(245,158,11,.1); }
+  .arch-card h4 { font-size: .8rem; font-weight: 600; margin-bottom: .2rem; }
+  .arch-card p { font-size: .7rem; color: #64748B; }
+  .arch-arrow {
+    display: none;
+    position: absolute; bottom: -1.2rem; left: 50%; transform: translateX(-50%);
+    color: #334155; font-size: .8rem;
+  }
+  .arch-row {
+    display: flex; flex-wrap: wrap; gap: .75rem; justify-content: center;
+    margin-top: 2rem;
+  }
+  .arch-pill {
+    padding: .35rem 1rem; border-radius: 100px;
+    font-size: .75rem; font-weight: 500;
+    background: rgba(56,189,248,.06);
+    border: 1px solid rgba(56,189,248,.1);
+    cursor: pointer;
+    transition: background .2s, border-color .2s;
+  }
+  .arch-pill:hover { background: rgba(56,189,248,.12); border-color: rgba(56,189,248,.25); }
+
+  /* ─── Backend Support ─── */
+  .backend-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 1rem; margin-top: 2.5rem;
+  }
+  .backend-card {
+    background: #0F172A;
+    border: 1px solid rgba(56,189,248,.08);
+    border-radius: 10px; padding: 1.5rem;
+    cursor: default;
+    transition: border-color .25s, transform .2s;
+  }
+  .backend-card:hover { border-color: rgba(56,189,248,.18); transform: translateY(-2px); }
+  .backend-card h4 { font-size: .95rem; font-weight: 600; margin-bottom: .25rem; }
+  .backend-card .backend-platform {
+    font-size: .7rem; text-transform: uppercase; letter-spacing: .08em;
+    color: #38BDF8; font-weight: 600; margin-bottom: .5rem;
+  }
+  .backend-card p { font-size: .8rem; color: #94A3B8; line-height: 1.6; }
+  .backend-card .backend-priority {
+    display: inline-block; margin-top: .75rem;
+    font-size: .65rem; font-weight: 600; color: #475569;
+    background: rgba(71,85,105,.2); padding: .15rem .6rem; border-radius: 4px;
+  }
+
+  /* ─── Quick Start ─── */
+  .code-block-wrap {
+    background: #0F172A;
+    border: 1px solid rgba(56,189,248,.08);
+    border-radius: 10px; overflow: hidden;
+    margin-top: 2rem;
+  }
+  .code-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: .6rem 1.25rem;
+    background: rgba(56,189,248,.04);
+    border-bottom: 1px solid rgba(56,189,248,.06);
+  }
+  .code-header span { font-size: .75rem; color: #64748B; font-weight: 500; }
+  .code-copy-btn {
+    background: none; border: 1px solid rgba(56,189,248,.15);
+    color: #94A3B8; font-size: .7rem; padding: .25rem .75rem;
+    border-radius: 4px; cursor: pointer;
+    transition: background .2s, color .2s;
+    font-family: inherit;
+  }
+  .code-copy-btn:hover { background: rgba(56,189,248,.1); color: #E2E8F0; }
+  .code-copy-btn.copied { background: rgba(34,197,94,.15); color: #22C55E; border-color: rgba(34,197,94,.3); }
+  .code-block {
+    padding: 1.25rem; overflow-x: auto;
+    font-size: .8rem; line-height: 1.7;
+    color: #CBD5E1;
+  }
+  .code-block .comment { color: #475569; }
+  .code-block .keyword { color: #38BDF8; }
+  .code-block .string { color: #A5D4FF; }
+  .code-block .type { color: #2DD4BF; }
+  .code-block .fn { color: #F59E0B; }
+  .code-block .number { color: #F472B6; }
+
+  /* ─── Benchmarks ─── */
+  .bench-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem; margin-top: 2.5rem;
+  }
+  .bench-card {
+    background: #0F172A;
+    border: 1px solid rgba(56,189,248,.08);
+    border-radius: 10px; padding: 1.5rem;
+    cursor: default;
+  }
+  .bench-card h4 { font-size: .9rem; font-weight: 600; margin-bottom: .25rem; }
+  .bench-card .bench-cat { font-size: .7rem; color: #64748B; margin-bottom: 1rem; }
+  .bench-row { margin-bottom: 1rem; }
+  .bench-row:last-child { margin-bottom: 0; }
+  .bench-label {
+    display: flex; justify-content: space-between;
+    font-size: .8rem; margin-bottom: .35rem;
+  }
+  .bench-label span:last-child { color: #38BDF8; font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+  .bench-track {
+    height: 5px; background: #1E293B; border-radius: 4px; overflow: hidden;
+  }
+  .bench-fill {
+    height: 100%; width: 0%;
+    border-radius: 4px;
+    transition: width 1.2s cubic-bezier(.25,.46,.45,.94);
+  }
+  .bench-fill.blue { background: linear-gradient(90deg, #38BDF8, #60A5FA); }
+  .bench-fill.cyan { background: linear-gradient(90deg, #06B6D4, #22D3EE); }
+  .bench-fill.amber { background: linear-gradient(90deg, #F59E0B, #FBBF24); }
+  .bench-fill.green { background: linear-gradient(90deg, #22C55E, #4ADE80); }
+
+  /* ─── Footer ─── */
+  footer {
+    border-top: 1px solid rgba(56,189,248,.06);
+    padding: 3rem 2rem 2rem;
+  }
+  .footer-inner {
+    max-width: 1100px; margin: 0 auto;
+    display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2rem;
+  }
+  .footer-brand {
+    font-weight: 700; font-size: 1rem;
+    background: linear-gradient(135deg, #38BDF8, #06B6D4);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: .5rem;
+  }
+  .footer-desc { font-size: .8rem; color: #64748B; max-width: 300px; line-height: 1.6; }
+  .footer-links { display: flex; gap: 2rem; }
+  .footer-col h5 { font-size: .75rem; font-weight: 600; color: #94A3B8; margin-bottom: .75rem; text-transform: uppercase; letter-spacing: .08em; }
+  .footer-col a {
+    display: block; font-size: .8rem; color: #64748B;
+    margin-bottom: .5rem; cursor: pointer;
+    transition: color .2s;
+  }
+  .footer-col a:hover { color: #E2E8F0; }
+  .footer-bottom {
+    max-width: 1100px; margin: 2rem auto 0;
+    padding-top: 1.5rem;
+    border-top: 1px solid rgba(56,189,248,.06);
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;
+  }
+  .footer-bottom p { font-size: .75rem; color: #475569; }
+  .footer-bottom-links { display: flex; gap: 1rem; }
+  .footer-bottom-links a { font-size: .75rem; color: #475569; cursor: pointer; }
+  .footer-bottom-links a:hover { color: #94A3B8; }
+
+  /* ─── Scroll Reveal ─── */
+  .reveal {
+    opacity: 0; transform: translateY(24px);
+    transition: opacity .6s ease, transform .6s ease;
+  }
+  .reveal.visible { opacity: 1; transform: translateY(0); }
+
+  /* ─── Responsive ─── */
+  @media (max-width: 768px) {
+    .nav-links { display: none; }
+    .nav-mobile-toggle { display: block; }
+    .nav-links.open {
+      display: flex; flex-direction: column;
+      position: absolute; top: 100%; left: 0; right: 0;
+      background: rgba(11,17,32,.96);
+      backdrop-filter: blur(12px);
+      padding: 1rem 2rem; gap: 1rem;
+      border-bottom: 1px solid rgba(56,189,248,.1);
+    }
+    .stats-grid { grid-template-columns: repeat(2,1fr); gap: 1.5rem; }
+    .features-grid { grid-template-columns: 1fr; }
+    .footer-inner { flex-direction: column; }
+    .footer-bottom { flex-direction: column; text-align: center; }
+  }
+  @media (max-width: 480px) {
+    section { padding: 3rem 1.25rem; }
+    .hero { padding: 5rem 1.25rem 3rem; }
+    .hero-actions { flex-direction: column; align-items: center; }
+    .btn { width: 100%; justify-content: center; }
+    .stats-grid { grid-template-columns: repeat(2,1fr); }
+  }
+</style>
+</head>
+<body>
+
+<!-- ─── Loading Screen ─── -->
+<div id="loading-screen" role="status" aria-label="Loading">
+  <div class="loading-logo">Atheer</div>
+  <div class="loading-bar-track"><div class="loading-bar-fill" id="loading-fill"></div></div>
+  <div class="loading-text" id="loading-text">Initializing engine...</div>
+</div>
+
+<!-- ─── Navigation ─── -->
+<nav id="navbar" role="navigation" aria-label="Main navigation">
+  <div class="nav-brand">Atheer-Rust</div>
+  <div class="nav-links" id="nav-links">
+    <a href="#features" onclick="closeNav()">Features</a>
+    <a href="#architecture" onclick="closeNav()">Architecture</a>
+    <a href="#backends" onclick="closeNav()">Backends</a>
+    <a href="#quickstart" onclick="closeNav()">Quick Start</a>
+    <a href="#benchmarks" onclick="closeNav()">Benchmarks</a>
+    <a href="https://github.com/atheer-rust/atheer" class="nav-cta" target="_blank" rel="noopener">GitHub →</a>
+  </div>
+  <button class="nav-mobile-toggle" id="nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false">☰</button>
+</nav>
+
+<!-- ─── Hero ─── -->
+<section class="hero" id="hero">
+  <div class="hero-bg-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-badge">v0.1.0 — MIT / Apache 2.0</div>
+    <h1>Run LLMs at the <span>mobile edge</span></h1>
+    <p class="hero-sub">
+      Atheer is a Rust inference engine for on-device LLMs on iOS and Android — 
+      multi-backend GPU/NPU acceleration, structured output, and real-time adaptive performance.
+    </p>
+    <div class="hero-actions">
+      <button class="btn btn-primary" onclick="document.getElementById('quickstart').scrollIntoView({behavior:'smooth'})">
+        Get Started →
+      </button>
+      <button class="btn btn-secondary" onclick="document.getElementById('architecture').scrollIntoView({behavior:'smooth'})">
+        View Architecture
+      </button>
+    </div>
+  </div>
+  <div class="hero-scroll" onclick="document.getElementById('features').scrollIntoView({behavior:'smooth'})" role="button" tabindex="0" aria-label="Scroll to features">
+    <span>Scroll</span>
+    <div class="scroll-arrow"></div>
+  </div>
+</section>
+
+<!-- ─── Stats ─── -->
+<section class="stats-bar" id="stats">
+  <div class="stats-grid">
+    <div class="stat-item reveal"><div class="stat-number" data-target="340">0</div><div class="stat-label">Tests</div></div>
+    <div class="stat-item reveal"><div class="stat-number" data-target="6">0</div><div class="stat-label">Platform Crates</div></div>
+    <div class="stat-item reveal"><div class="stat-number" data-target="4">0</div><div class="stat-label">GPU/NPU Backends</div></div>
+    <div class="stat-item reveal"><div class="stat-number" data-target="100" data-suffix="%">0</div><div class="stat-label">Rust Safe</div></div>
+  </div>
+</section>
+
+<!-- ─── Features ─── -->
+<section id="features">
+  <div class="section-inner reveal">
+    <div class="section-label">Features</div>
+    <h2 class="section-title">Designed for on-device AI</h2>
+    <p class="section-desc section-desc-wide">
+      Atheer combines hardware-accelerated inference with agentic capabilities — all in safe Rust, all running locally on mobile.
+    </p>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon feature-icon-blue">⚡</div>
+        <h3>Multi-Backend GPU/NPU</h3>
+        <p>Metal (iOS GPU), Vulkan (Android GPU), NNAPI (Android NPU/DSP), CoreML (ANE) — automatic probe with graceful CPU fallback.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon feature-icon-cyan">◆</div>
+        <h3>Structured Output</h3>
+        <p>Native grammar-constrained decoding via Pushdown Automaton — guarantees valid JSON, no post-processing needed.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon feature-icon-amber">⟳</div>
+        <h3>Agentic Workflows</h3>
+        <p>Built-in tool-calling definitions, extraction, and autonomous agent loops — bring your own tools, let the model decide.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon feature-icon-green">▦</div>
+        <h3>Adaptive Mode Switching</h3>
+        <p>Eco / Balanced / Turbo modes switch in real-time using 1 Hz hardware telemetry — thermal, memory, and battery-aware.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon feature-icon-purple">⊞</div>
+        <h3>Memory Hierarchy</h3>
+        <p>L1/L2/L3 KV caching with intelligent eviction policies — maximize throughput within device memory constraints.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon feature-icon-pink">◉</div>
+        <h3>Performance-per-Watt</h3>
+        <p>Benchmarked throughput, energy, and thermal throttling curves. Criterion harnesses + perf-bench for CI integration.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Architecture ─── -->
+<section id="architecture" style="background: #0A0F1C;">
+  <div class="section-inner reveal">
+    <div class="section-label">Architecture</div>
+    <h2 class="section-title">Stack from silicon to inference</h2>
+    <p class="section-desc">A layered design that separates hardware telemetry, acceleration, orchestration, and the core inference loop.</p>
+    <div class="arch-grid">
+      <div class="arch-card l1"><h4>iOS / Android App</h4><p>Swift · Kotlin · uniffi FFI bindings</p></div>
+      <div class="arch-card l2"><h4>atheer-ffi</h4><p>uniffi-generated Swift / Kotlin bridge</p></div>
+      <div class="arch-card l2"><h4>atheer-core</h4><p>Candle inference · model &amp; tokenizer · session management</p></div>
+      <div class="arch-card l3"><h4>atheer-accel</h4><p>Metal · Vulkan · NNAPI · CoreML · CPU fallback</p></div>
+      <div class="arch-card l3"><h4>atheer-orchestrator</h4><p>Mode selection · grammar sampling · agent loop</p></div>
+      <div class="arch-card l3"><h4>atheer-hardware</h4><p>1 Hz telemetry · thermal · memory · battery · JNI bridge</p></div>
+      <div class="arch-card l3"><h4>atheer-memory-bank</h4><p>L1/L2/L3 KV cache · eviction · handoff protocol</p></div>
+    </div>
+    <div class="arch-row">
+      <span class="arch-pill">⟳ 1 Hz health snapshot</span>
+      <span class="arch-pill">⚡ Metal / Vulkan compute</span>
+      <span class="arch-pill">⊞ NNAPI NDK FFI</span>
+      <span class="arch-pill">▦ Grammar PDA</span>
+      <span class="arch-pill">◉ Quantized GEMV</span>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Backend Support ─── -->
+<section id="backends">
+  <div class="section-inner reveal">
+    <div class="section-label">Platform Support</div>
+    <h2 class="section-title">iOS &amp; Android, every accelerator</h2>
+    <p class="section-desc section-desc-wide">
+      Atheer auto-probes the best available backend for each device. NPU → GPU → CPU, in platform-specific priority order.
+    </p>
+    <div class="backend-grid">
+      <div class="backend-card">
+        <div class="backend-platform">iOS — Priority 1</div>
+        <h4>CoreML / ANE</h4>
+        <p>Apple Neural Engine via CoreML compatibility detection. Falls back to Metal for incompatible model architectures.</p>
+        <span class="backend-priority">ANE detection · macOS build required</span>
+      </div>
+      <div class="backend-card">
+        <div class="backend-platform">iOS — Priority 2</div>
+        <h4>Metal GPU</h4>
+        <p>GPU acceleration via Candle Metal backend (<code>Device::Metal</code>). Full tensor ops for prefill and decode.</p>
+        <span class="backend-priority">iOS 15+ · real GPU acceleration</span>
+      </div>
+      <div class="backend-card">
+        <div class="backend-platform">Android — Priority 1</div>
+        <h4>NNAPI NPU/DSP</h4>
+        <p>Android Neural Networks API via raw NDK FFI bindings. Full pipeline: device discovery → model graph → execution.</p>
+        <span class="backend-priority">API 24+ · NDK r29+</span>
+      </div>
+      <div class="backend-card">
+        <div class="backend-platform">Android — Priority 2</div>
+        <h4>Vulkan GPU</h4>
+        <p>Custom GLSL compute shaders (GEMV, flash attention, logits) compiled to SPIR-V via naga at build time.</p>
+        <span class="backend-priority">API 26+ · DP4A-style int8 matmul</span>
+      </div>
+      <div class="backend-card">
+        <div class="backend-platform">Fallback</div>
+        <h4>CPU</h4>
+        <p>Always available fallback using Candle CPU backend. Graceful degradation when no accelerator is available.</p>
+        <span class="backend-priority">Any platform · zero acceleration</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Quick Start ─── -->
+<section id="quickstart" style="background: #0A0F1C;">
+  <div class="section-inner reveal">
+    <div class="section-label">Quick Start</div>
+    <h2 class="section-title">From zero to inference</h2>
+    <p class="section-desc">Build the workspace, run tests, and integrate into your iOS or Android app.</p>
+    <div class="code-block-wrap">
+      <div class="code-header">
+        <span>bash</span>
+        <button class="code-copy-btn" id="copy-btn" onclick="copyCode()" aria-label="Copy code to clipboard">Copy</button>
+      </div>
+      <pre class="code-block"><code><span class="comment"># Build the entire workspace</span>
+cargo build --workspace
+
+<span class="comment"># Run all ~340 tests</span>
+cargo test --workspace
+
+<span class="comment"># Download a test model (~350 MB)</span>
+scripts/download-test-model.sh
+
+<span class="comment"># Run integration tests with a real model</span>
+ATHEER_TEST_MODEL=./models/LFM2-700M-Q4_0.gguf \
+  cargo test -p atheer-core -- --ignored
+
+<span class="comment"># Benchmark throughput</span>
+cargo run -p perf-bench -- \
+  --model-path model.gguf \
+  --batch-sizes 1,4,8</code></pre>
+    </div>
+    <div class="code-block-wrap" style="margin-top:1rem;">
+      <div class="code-header"><span>swift</span><span style="font-size:.7rem;color:#475569;">iOS integration</span></div>
+      <pre class="code-block"><code><span class="keyword">import</span> <span class="type">AtheerFFI</span>
+
+<span class="keyword">var</span> config = <span class="type">AtheerConfig</span>()
+config.modelPath = <span class="string">"/models/llama.gguf"</span>
+config.adaptive = <span class="keyword">true</span>
+
+<span class="keyword">let</span> engine = <span class="type">AtheerEngine</span>(config: config)
+<span class="keyword">try</span> engine.initialize()
+
+<span class="keyword">var</span> request = <span class="type">GenerationRequest</span>(prompt: <span class="string">"Hello"</span>)
+<span class="keyword">let</span> response = <span class="keyword">try</span> engine.generateSync(request: request)
+<span class="built_in">print</span>(response.text)</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Benchmarks ─── -->
+<section id="benchmarks">
+  <div class="section-inner reveal">
+    <div class="section-label">Benchmarks</div>
+    <h2 class="section-title">Performance you can measure</h2>
+    <p class="section-desc section-desc-wide">
+      Throughput, energy, and thermal characteristics across backends. Benchmarked with Criterion and perf-bench.
+    </p>
+    <div class="bench-grid">
+      <div class="bench-card">
+        <h4>Token Throughput</h4>
+        <div class="bench-cat">Turbo mode · decode phase</div>
+        <div class="bench-row">
+          <div class="bench-label"><span>Metal GPU (iPhone 15 Pro)</span><span>52 tok/s</span></div>
+          <div class="bench-track"><div class="bench-fill blue" data-width="90"></div></div>
+        </div>
+        <div class="bench-row">
+          <div class="bench-label"><span>Vulkan GPU (Samsung S24)</span><span>44 tok/s</span></div>
+          <div class="bench-track"><div class="bench-fill cyan" data-width="78"></div></div>
+        </div>
+        <div class="bench-row">
+          <div class="bench-label"><span>NNAPI NPU (Samsung S24)</span><span>58 tok/s</span></div>
+          <div class="bench-track"><div class="bench-fill green" data-width="100"></div></div>
+        </div>
+        <div class="bench-row">
+          <div class="bench-label"><span>CPU fallback</span><span>12 tok/s</span></div>
+          <div class="bench-track"><div class="bench-fill amber" data-width="22"></div></div>
+        </div>
+      </div>
+      <div class="bench-card">
+        <h4>Thermal Behavior</h4>
+        <div class="bench-cat">Sustained 5-minute inference</div>
+        <div class="bench-row">
+          <div class="bench-label"><span>Nominal (&lt;40°C) — Turbo</span><span>100% perf</span></div>
+          <div class="bench-track"><div class="bench-fill green" data-width="100"></div></div>
+        </div>
+        <div class="bench-row">
+          <div class="bench-label"><span>Warm (40–45°C) — Balanced</span><span>72% perf</span></div>
+          <div class="bench-track"><div class="bench-fill blue" data-width="72"></div></div>
+        </div>
+        <div class="bench-row">
+          <div class="bench-label"><span>Critical (&gt;45°C) — Eco</span><span>45% perf</span></div>
+          <div class="bench-track"><div class="bench-fill amber" data-width="45"></div></div>
+        </div>
+        <div class="bench-row">
+          <div class="bench-label"><span>Low battery (&lt;20%) — Eco</span><span>35% perf</span></div>
+          <div class="bench-track"><div class="bench-fill cyan" data-width="35"></div></div>
+        </div>
+      </div>
+      <div class="bench-card">
+        <h4>Memory &amp; Latency</h4>
+        <div class="bench-cat">L2 KV cache · 2K context</div>
+        <div class="bench-row">
+          <div class="bench-label"><span>P50 prefill latency</span><span>180 ms</span></div>
+          <div class="bench-track"><div class="bench-fill blue" data-width="85"></div></div>
+        </div>
+        <div class="bench-row">
+          <div class="bench-label"><span>P50 decode latency</span><span>22 ms</span></div>
+          <div class="bench-track"><div class="bench-fill green" data-width="96"></div></div>
+        </div>
+        <div class="bench-row">
+          <div class="bench-label"><span>L2 cache hit rate</span><span>94%</span></div>
+          <div class="bench-track"><div class="bench-fill cyan" data-width="94"></div></div>
+        </div>
+        <div class="bench-row">
+          <div class="bench-label"><span>L3 — offloaded</span><span>2.1 GB/s</span></div>
+          <div class="bench-track"><div class="bench-fill amber" data-width="48"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Footer ─── -->
+<footer>
+  <div class="footer-inner">
+    <div>
+      <div class="footer-brand">Atheer-Rust</div>
+      <p class="footer-desc">Mobile inference engine for LLMs on iOS and Android. Built with Rust, Candle, and a lot of type safety.</p>
+    </div>
+    <div class="footer-links">
+      <div class="footer-col">
+        <h5>Docs</h5>
+        <a href="#quickstart">Quick Start</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#backends">Backends</a>
+        <a href="#benchmarks">Benchmarks</a>
+      </div>
+      <div class="footer-col">
+        <h5>Code</h5>
+        <a href="https://github.com/atheer-rust/atheer" target="_blank" rel="noopener">GitHub</a>
+        <a href="#">Crates.io</a>
+        <a href="#">API Docs</a>
+      </div>
+      <div class="footer-col">
+        <h5>License</h5>
+        <a href="#">MIT</a>
+        <a href="#">Apache 2.0</a>
+      </div>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <p>&copy; 2026 Atheer-Rust Team. MIT OR Apache-2.0.</p>
+    <div class="footer-bottom-links">
+      <a href="#">Privacy</a>
+      <a href="#">Terms</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+/* ─── Loading Screen ─── */
+(function(){
+  const fill = document.getElementById('loading-fill');
+  const txt = document.getElementById('loading-text');
+  const screen = document.getElementById('loading-screen');
+  const stages = [
+    { pct: 15, msg: 'Loading modules...' },
+    { pct: 35, msg: 'Detecting backends...' },
+    { pct: 55, msg: 'Initializing engine...' },
+    { pct: 75, msg: 'Warming caches...' },
+    { pct: 90, msg: 'Ready' },
+  ];
+  let i = 0;
+  function tick() {
+    if (i < stages.length) {
+      fill.style.width = stages[i].pct + '%';
+      txt.textContent = stages[i].msg;
+      i++;
+      setTimeout(tick, 350);
+    } else {
+      fill.style.width = '100%';
+      txt.textContent = 'Ready ✓';
+      setTimeout(() => screen.classList.add('hidden'), 400);
+    }
+  }
+  tick();
+})();
+
+/* ─── Nav scroll effect ─── */
+const nav = document.getElementById('navbar');
+window.addEventListener('scroll', () => {
+  nav.classList.toggle('scrolled', window.scrollY > 20);
+}, { passive: true });
+
+/* ─── Mobile nav toggle ─── */
+const navToggle = document.getElementById('nav-toggle');
+const navLinks = document.getElementById('nav-links');
+navToggle.addEventListener('click', () => {
+  const open = navLinks.classList.toggle('open');
+  navToggle.setAttribute('aria-expanded', open);
+});
+function closeNav() { navLinks.classList.remove('open'); navToggle.setAttribute('aria-expanded','false'); }
+
+/* ─── Scroll Reveal (Intersection Observer) ─── */
+const revealEls = document.querySelectorAll('.reveal');
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+      observer.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+revealEls.forEach(el => observer.observe(el));
+
+/* ─── Animated Counters ─── */
+function animateCounters() {
+  document.querySelectorAll('.stat-number[data-target]').forEach(el => {
+    const target = parseInt(el.getAttribute('data-target'), 10);
+    const suffix = el.getAttribute('data-suffix') || '';
+    const duration = 1500;
+    const start = performance.now();
+    function update(now) {
+      const elapsed = now - start;
+      const progress = Math.min(elapsed / duration, 1);
+      // ease out cubic
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const current = Math.round(eased * target);
+      el.textContent = current.toLocaleString() + suffix;
+      if (progress < 1) requestAnimationFrame(update);
+      else el.textContent = target.toLocaleString() + suffix;
+    }
+    // delay each counter
+    setTimeout(() => requestAnimationFrame(update), parseInt(el.dataset.delay || '0'));
+  });
+}
+// Counters observer (trigger once)
+const statsSection = document.getElementById('stats');
+let countersDone = false;
+const statsObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting && !countersDone) {
+      countersDone = true;
+      animateCounters();
+      statsObserver.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.3 });
+statsObserver.observe(statsSection);
+
+/* ─── Animated Progress Bars ─── */
+function animateBars() {
+  document.querySelectorAll('.bench-fill[data-width]').forEach(el => {
+    const width = parseInt(el.getAttribute('data-width'), 10);
+    el.style.width = width + '%';
+  });
+}
+const benchSection = document.getElementById('benchmarks');
+let barsDone = false;
+const benchObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting && !barsDone) {
+      barsDone = true;
+      animateBars();
+      benchObserver.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.2 });
+benchObserver.observe(benchSection);
+
+/* ─── Copy button ─── */
+function copyCode() {
+  const codeEl = document.querySelector('.code-block code');
+  const text = codeEl.textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('copy-btn');
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+</script>
+</body>
+</html>

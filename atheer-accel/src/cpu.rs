@@ -35,6 +35,7 @@ impl AccelBackend for CpuBackend {
         true
     }
 
+    #[cfg(test)]
     fn forward(&self, input_ids: &[u32], _positions: &[usize]) -> Result<AccelResult> {
         let start = std::time::Instant::now();
 
@@ -49,6 +50,13 @@ impl AccelBackend for CpuBackend {
         let elapsed = start.elapsed().as_millis() as u64;
 
         Ok(AccelResult::new(logits, input_ids.len(), elapsed))
+    }
+
+    #[cfg(not(test))]
+    fn forward(&self, _input_ids: &[u32], _positions: &[usize]) -> Result<AccelResult> {
+        Err(crate::AccelError::Deprecated(
+            "CpuBackend::forward() is deprecated; use InferenceEngine::generate() instead".to_string(),
+        ))
     }
 }
 

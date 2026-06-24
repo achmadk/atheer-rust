@@ -6,7 +6,7 @@ Mobile inference engine for LLMs on iOS and Android.
 
 - **Multi-backend GPU/NPU acceleration**: Powered by `candle` framework, supporting Metal (iOS GPU), Vulkan (Android GPU with custom GLSL compute shaders), NNAPI (Android NPU/DSP via NDK FFI), and CoreML/ANE (iOS NPU). Platform-specific probe order: NPU → GPU → CPU.
 - **Agentic Workflows**: Built-in support for tool-calling definitions, extraction, and autonomous agent loops.
-- **Structured Output**: Native zero-allocation grammar-constrained decoding (Pushdown Automaton) guaranteeing valid JSON output.
+- **Structured Output**: Native grammar-constrained decoding (Pushdown Automaton) guaranteeing valid JSON output.
 - **Memory hierarchy**: L1/L2/L3 KV caching with intelligent eviction policies.
 - **Dynamic mode switching**: Eco, Balanced, and Turbo modes based on live hardware telemetry (thermal, memory, battery) sampled at 1 Hz.
 - **Platform hardware telemetry**: Android JNI bridge for thermal headroom, available memory, and battery level; iOS planned (requires macOS).

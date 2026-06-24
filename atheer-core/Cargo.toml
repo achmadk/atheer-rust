@@ -13,6 +13,7 @@ memmap2 = { workspace = true }
 tracing = { workspace = true }
 
 uuid = { version = "1.23", features = ["v4"] }
+chrono = { version = "0.4", features = ["serde"] }
 candle-core = "0.10.2"
 candle-nn = "0.10.2"
 candle-transformers = "0.10.2"

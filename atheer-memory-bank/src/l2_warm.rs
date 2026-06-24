@@ -7,6 +7,7 @@ pub struct L2WarmCache {
     pub alignment_score: f32,
     pub sync_count: AtomicU32,
     kv_cache: Option<KvCache>,
+    l3_snapshot_ids: Vec<String>,
 }
 
 impl L2WarmCache {
@@ -16,6 +17,7 @@ impl L2WarmCache {
             alignment_score: 0.0,
             sync_count: AtomicU32::new(0),
             kv_cache: None,
+            l3_snapshot_ids: Vec::new(),
         }
     }
 
@@ -147,6 +149,66 @@ impl L2WarmCache {
             result.push(layer_snapshot);
         }
         result
+    }
+
+    pub fn demote_to_l3(&mut self, l3: &mut crate::L3CompressedStorage) -> bool {
+        let snapshot = self.extract_snapshot(self.kv_cache.as_ref().map(|kv| kv.num_layers()).unwrap_or(0));
+        if snapshot.iter().all(|(k, v)| k.is_empty() && v.is_empty()) {
+            return false;
+        }
+        let mut data: Vec<u8> = Vec::new();
+        for (keys, values) in &snapshot {
+            for k in keys {
+                data.extend_from_slice(&k.to_le_bytes());
+            }
+            for v in values {
+                data.extend_from_slice(&v.to_le_bytes());
+            }
+        }
+        match l3.snapshot(&self.model_id, &data) {
+            Ok(id) => {
+                self.l3_snapshot_ids.push(id);
+                true
+            }
+            Err(_) => false,
+        }
+    }
+
+    pub fn restore_from_l3(&mut self, l3: &crate::L3CompressedStorage) -> bool {
+        let Some(snapshot_id) = self.l3_snapshot_ids.last() else {
+            return false;
+        };
+        match l3.restore(snapshot_id) {
+            Ok(data) => {
+                let num_layers = self.kv_cache.as_ref().map(|kv| kv.num_layers()).unwrap_or(0);
+                if num_layers == 0 || data.is_empty() {
+                    return false;
+                }
+                let f32_count = data.len() / 4;
+                let half_f32 = f32_count / 2;
+                let layer_f32_count = half_f32 / num_layers;
+                let mut snapshot: Vec<(Vec<f32>, Vec<f32>)> = Vec::with_capacity(num_layers);
+                let mut offset = 0;
+                for _ in 0..num_layers {
+                    let mut keys = Vec::with_capacity(layer_f32_count);
+                    let mut values = Vec::with_capacity(layer_f32_count);
+                    for _ in 0..layer_f32_count {
+                        let k = f32::from_le_bytes(data[offset..offset + 4].try_into().unwrap());
+                        offset += 4;
+                        keys.push(k);
+                    }
+                    for _ in 0..layer_f32_count {
+                        let v = f32::from_le_bytes(data[offset..offset + 4].try_into().unwrap());
+                        offset += 4;
+                        values.push(v);
+                    }
+                    snapshot.push((keys, values));
+                }
+                self.load_from_snapshot(&snapshot, 1, 64, 0);
+                true
+            }
+            Err(_) => false,
+        }
     }
 }
 

@@ -1,8 +1,10 @@
 pub mod json;
 pub mod sampler;
+pub mod trie;
 
 pub use json::JsonGrammar;
 pub use sampler::GrammarSampler;
+pub use trie::GrammarTrie;
 
 /// Trait for grammar constraints that can validate token sequences.
 pub trait GrammarConstraint: Send + Sync {

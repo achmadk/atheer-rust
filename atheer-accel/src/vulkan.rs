@@ -1019,6 +1019,7 @@ impl AccelBackend for VulkanBackend {
         matches!(quantization, "q4_k_m" | "q8_0" | "f16")
     }
 
+    #[cfg(test)]
     fn forward(&self, input_ids: &[u32], _positions: &[usize]) -> Result<AccelResult> {
         let start = Instant::now();
 
@@ -1046,6 +1047,13 @@ impl AccelBackend for VulkanBackend {
                 "Vulkan not available on this platform".to_string(),
             ))
         }
+    }
+
+    #[cfg(not(test))]
+    fn forward(&self, _input_ids: &[u32], _positions: &[usize]) -> Result<AccelResult> {
+        Err(crate::AccelError::Deprecated(
+            "VulkanBackend::forward() is deprecated; use InferenceEngine::generate() instead".to_string(),
+        ))
     }
 }
 

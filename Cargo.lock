@@ -224,6 +224,7 @@ dependencies = [
  "candle-core",
  "candle-nn",
  "candle-transformers",
+ "chrono",
  "dirs",
  "filetime",
  "hex",

@@ -60,6 +60,18 @@ impl L3CompressedStorage {
             format!("Snapshot not found: {}", snapshot_id),
         ))
     }
+
+    pub fn size_bytes(&self) -> usize {
+        fs::read_dir(&self.storage_dir)
+            .map(|entries| {
+                entries
+                    .filter_map(|e| e.ok())
+                    .filter_map(|e| e.metadata().ok())
+                    .map(|m| m.len() as usize)
+                    .sum()
+            })
+            .unwrap_or(0)
+    }
 }
 
 #[cfg(test)]

@@ -68,6 +68,7 @@ impl AccelBackend for MetalBackend {
         )
     }
 
+    #[cfg(test)]
     fn forward(&self, input_ids: &[u32], _positions: &[usize]) -> Result<AccelResult> {
         let start = Instant::now();
 
@@ -106,11 +107,17 @@ impl AccelBackend for MetalBackend {
 
         #[cfg(not(any(target_os = "ios", target_os = "macos")))]
         {
-            let _ = start;
             Err(crate::AccelError::BackendNotAvailable(
                 "Metal not available on this platform".to_string(),
             ))
         }
+    }
+
+    #[cfg(not(test))]
+    fn forward(&self, _input_ids: &[u32], _positions: &[usize]) -> Result<AccelResult> {
+        Err(crate::AccelError::Deprecated(
+            "MetalBackend::forward() is deprecated; use InferenceEngine::generate() instead".to_string(),
+        ))
     }
 }
 
