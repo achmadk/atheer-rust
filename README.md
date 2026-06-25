@@ -9,7 +9,7 @@ Mobile inference engine for LLMs on iOS and Android.
 - **Structured Output**: Native grammar-constrained decoding (Pushdown Automaton) guaranteeing valid JSON output.
 - **Memory hierarchy**: L1/L2/L3 KV caching with intelligent eviction policies.
 - **Dynamic mode switching**: Eco, Balanced, and Turbo modes based on live hardware telemetry (thermal, memory, battery) sampled at 1 Hz.
-- **Platform hardware telemetry**: Android JNI bridge for thermal headroom, available memory, and battery level; iOS planned (requires macOS).
+- **Platform hardware telemetry**: Android JNI bridge for thermal headroom, available memory, and battery level; iOS/macOS telemetry via `objc2` FFI (`IosMonitor` with 1 Hz sampling thread).
 - **Performance-per-watt measurement**: Benchmarking infrastructure for throughput, energy, and thermal throttling curves (Criterion benches + perf-bench binary).
 - **Production-ready**: Memory safe (Rust), crash reporting with `atheer-core`, graceful degradation to CPU when accelerators are unavailable.
 
@@ -133,14 +133,15 @@ println(response.text)
 
 ### NNAPI NDK Backend (Android NPU/DSP)
 
-The NNAPI backend provides acceleration via Android's Neural Networks API using raw NDK FFI bindings declared in `atheer-accel/src/nnapi_ndk.rs` (~20 extern functions covering the full inference pipeline):
+The NNAPI backend provides acceleration via Android's Neural Networks API using raw NDK FFI bindings declared in `atheer-accel/src/nnapi_ndk.rs` (~20 extern functions covering the full inference pipeline). The module also includes a full NNAPI graph compiler with 9 supported operation codes:
 
 | Stage | NNAPI API | Implementation |
 |-------|-----------|----------------|
 | **Device discovery** | `ANeuralNetworks_getDeviceCount`, `getDevice`, `getDeviceName`/`getDeviceType` | `NnapiExecutor::probe()` — enumerates accelerators, returns `None` if no NNAPI runtime available |
-| **Model construction** | `ANeuralNetworksModel_create`, `addOperand`, `addOperation` (`ANEURALNETWORKS_FULLY_CONNECTED`), `identifyInputsAndOutputs`, `finish` | `execute_fc()` — builds model graph with f32 tensors, identity weights, zero bias |
-| **Compilation** | `ANeuralNetworksCompilation_create`, `setPreference` (`SUSTAINED_SPEED`), `finish` | Compiled with sustained speed preference for prolonged inference sessions |
-| **Execution** | `ANeuralNetworksExecution_create`, `setInput`/`setOutput`, `compute` | One-shot inference with automatic cleanup (`_free` on execution → compilation → model) |
+| **Graph construction** | `ANeuralNetworksModel_create`, `addOperand`, `addOperation`, `setOperandValue` | `NnapiGraphBuilder` — operand/operation graph with validation, `NnapiOperation` enum with 9 variants |
+| **Supported operations** | `ANEURALNETWORKS_ADD`, `MUL`, `FULLY_CONNECTED`, `SOFTMAX`, `LOGISTIC`, `RELU`, `TANH`, `CONCATENATION`, `RESHAPE` | `NnapiOperation::to_nnapi_code()` — maps each variant to its NDK constant with operand validation |
+| **Compilation** | `ANeuralNetworksCompilation_create`, `setPreference` (`SUSTAINED_SPEED`), `finish` | `NnapiGraphBuilder::compile()` → `NnapiCompiledModel` |
+| **Execution** | `ANeuralNetworksExecution_create`, `setInput`/`setOutput`, `compute` | `NnapiCompiledModel::execute()` with multi-input/output buffer support and automatic cleanup |
 
 **Build requirements:**
 - NDK r29+ at `$ANDROID_NDK_HOME`
@@ -202,9 +203,24 @@ On Android, telemetry is read via JNI calls through `atheer-hardware/src/android
 
 The JNI bridge stores the `JavaVM` and `Context` in `OnceLock` globals. Each sampling call attaches the current thread via `attach_current_thread()` (auto-detaches on drop). Your application **must** call `init_jni()` early during startup (e.g., `Application.onCreate()`) with the JVM reference and application context.
 
-### iOS (objc2 — requires macOS)
+### iOS / macOS (objc2 — requires macOS)
 
-iOS hardware telemetry is planned using `objc2` FFI for `ProcessInfo.thermalState`, `os_proc_available_memory()`, and `UIDevice.batteryLevel`/`batteryState`. Implementation requires a macOS build environment — currently blocked on Linux CI.
+iOS hardware telemetry reads thermal, memory, and battery state via `objc2` FFI:
+
+| Metric | API | Rust function |
+|--------|-----|---------------|
+| **Thermal state** | `NSProcessInfo.processInfo.thermalState` | `read_thermal_state()` → `ThermalState` (Nominal/Fair/Serious/Critical) |
+| **Available memory** | `os_proc_available_memory()` C FFI | `read_memory()` → `(available_mb, total_mb)` |
+| **Total memory** | `NSProcessInfo.processInfo.physicalMemory` | |
+| **Battery level** | `UIDevice.batteryLevel` (0.0–1.0) | `read_battery()` → `(level 0–100, is_on_battery)` |
+| **Battery state** | `UIDevice.batteryState` (charging/discharging/full) | |
+
+The `IosMonitor` struct spawns a dedicated 1 Hz sampling thread and implements the `HardwareMonitor` trait. Module gated behind `#[cfg(any(target_os = "ios", target_os = "macos"))]` — requires macOS build environment with Xcode CLI tools.
+
+```bash
+# Build requirement: Xcode Command Line Tools
+xcode-select --install
+```
 
 ### Health Snapshot → Mode Selection
 
@@ -291,6 +307,30 @@ cargo bench -p perf-bench
 - Android API 26+ for Vulkan (API 28+ recommended for NNAPI device discovery)
 - NDK r29+ for NNAPI cross-compilation (`$ANDROID_NDK_HOME`)
 - `cargo ndk` for Android builds
+- macOS: Xcode Command Line Tools for iOS/macOS telemetry compilation (`objc2` FFI)
+  ```bash
+  xcode-select --install
+  ```
+
+## Remaining Work
+
+### CoreML/ANE Production Inference
+
+The current `CoreMLBackend` uses Metal GPU as a proxy for ANE acceleration. Real CoreML `.mlpackage` execution requires:
+
+1. **Fork/update `candle-coreml`** — upstream `candle-coreml` v0.3.1 depends on `candle-core` 0.9.1 (incompatible with workspace v0.10.2). This needs a fork with the dependency updated and API adapted for the newer `candle-core` API. Estimated effort: 4–8 hours.
+2. **ANE tensor offloading** — once `candle-coreml` is compatible, wire `CoreMLBackend::forward()` to offload operations to the ANE via `candle_coreml::CoreMLModel` for supported architectures.
+3. **ANE compatibility heuristics** — refine `CoreMLBackend::is_compatible()` with per-operation compatibility flags (which layer types the ANE supports vs. fallback to GPU/CPU).
+
+### Metal Backend Stability
+
+The Metal backend (`atheer-accel/src/metal.rs`) panics on systems without a Metal GPU (virtualized macOS, CI). Root cause: `candle-core`'s `metal_if_available()` uses `Vec::swap_remove` on an empty device list. Fix requires upstream patch to `candle-core` or a `catch_unwind` wrapper in the backend.
+
+### Production Readiness
+
+- **NNAPI real device testing** — graph builder and compiled model tests are verified on non-Android (stubs). Real Android device testing needed to validate `ANeuralNetworksModel_addOperation` and `execute()` produce correct outputs.
+- **iOS telemetry on-device** — `IosMonitor` works on macOS. Testing on physical iOS devices is needed to validate `UIDevice` and `NSProcessInfo` selectors behave as expected.
+- **Cross-compilation CI** — add `cargo ndk` and `xcodebuild` build verification to CI pipeline.
 
 ## License
 

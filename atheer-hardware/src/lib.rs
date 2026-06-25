@@ -13,5 +13,5 @@ pub use thermal::ThermalState;
 
 #[cfg(target_os = "android")]
 pub mod android;
-#[cfg(target_os = "ios")]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 pub mod ios;

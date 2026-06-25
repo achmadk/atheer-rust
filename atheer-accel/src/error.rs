@@ -26,3 +26,9 @@ pub enum AccelError {
 }
 
 pub type Result<T> = std::result::Result<T, AccelError>;
+
+impl From<candle_core::Error> for AccelError {
+    fn from(e: candle_core::Error) -> Self {
+        AccelError::OperationFailed(format!("Candle core error: {e}"))
+    }
+}

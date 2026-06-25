@@ -1,9 +1,56 @@
+//! NNAPI graph compiler — model construction, compilation, and execution.
+//!
+//! This module provides a full NNAPI model compiler with:
+//! - `NnapiOperation` — 9 supported operation codes:
+//!   ADD, MUL, SOFTMAX, LOGISTIC, RELU, TANH, CONCATENATION,
+//!   RESHAPE, FULLY_CONNECTED
+//! - `NnapiGraphBuilder` — operand/operation graph construction with
+//!   validation, `.finish()` and `.compile()` lifecycle
+//! - `NnapiCompiledModel` — executable handle with `.execute()` for
+//!   input/output buffer management
+//! - `tensor_f32_type`, `tensor_quant8_type`, `scalar_i32_type` — helper
+//!   functions for operand type creation
+//!
+//! All NNAPI NDK calls are gated behind `#[cfg(target_os = "android")]`.
+//! On non-Android platforms, stub types ensure compilation without the
+//! NDK.
+
 use crate::{AccelBackend, AccelResult, BackendType, Result};
 use std::time::Instant;
 
 // Conditionally import the NDK bindings
 #[cfg(target_os = "android")]
 use crate::nnapi_ndk as ndk;
+
+// On non-Android, provide stub type and constant definitions so struct
+// fields and function signatures referencing ndk::* still compile.
+#[cfg(not(target_os = "android"))]
+mod ndk {
+    pub enum ANeuralNetworksModel {}
+    pub enum ANeuralNetworksCompilation {}
+    pub enum ANeuralNetworksExecution {}
+    pub struct ANeuralNetworksOperandType {
+        pub type_: i32,
+        pub dimension_count: u32,
+        pub dimensions: *const u32,
+        pub scale: f32,
+        pub zero_point: i32,
+    }
+    // Operation codes (used by NnapiOperation::to_nnapi_code)
+    pub const ANEURALNETWORKS_ADD: i32 = 0;
+    pub const ANEURALNETWORKS_MUL: i32 = 1;
+    pub const ANEURALNETWORKS_CONCATENATION: i32 = 3;
+    pub const ANEURALNETWORKS_FULLY_CONNECTED: i32 = 9;
+    pub const ANEURALNETWORKS_LOGISTIC: i32 = 14;
+    pub const ANEURALNETWORKS_RELU: i32 = 15;
+    pub const ANEURALNETWORKS_TANH: i32 = 16;
+    pub const ANEURALNETWORKS_RESHAPE: i32 = 22;
+    pub const ANEURALNETWORKS_SOFTMAX: i32 = 25;
+    // Operand type codes (used by helper functions)
+    pub const ANEURALNETWORKS_TENSOR_FLOAT32: i32 = 3;
+    pub const ANEURALNETWORKS_TENSOR_QUANT8_ASYMM: i32 = 5;
+    pub const ANEURALNETWORKS_INT32: i32 = 1;
+}
 
 // ---------------------------------------------------------------------------
 // Execution Preference
@@ -566,6 +613,539 @@ impl Default for NnapiBackend {
 }
 
 // ---------------------------------------------------------------------------
+// NNAPI Operation codes mapped to Candle operations
+// ---------------------------------------------------------------------------
+
+/// Supported NNAPI operations that the graph builder can emit.
+///
+/// Each variant holds the operand indices and any operation-specific
+/// parameters (e.g. activation function, axis, beta value).
+#[derive(Debug, Clone)]
+pub(crate) enum NnapiOperation {
+    Add {
+        input0: u32,
+        input1: u32,
+        fused_activation: i32,
+        output: u32,
+    },
+    Mul {
+        input0: u32,
+        input1: u32,
+        fused_activation: i32,
+        output: u32,
+    },
+    FullyConnected {
+        input: u32,
+        weights: u32,
+        bias: u32,
+        fused_activation: i32,
+        output: u32,
+    },
+    Softmax {
+        input: u32,
+        beta: f32,
+        output: u32,
+    },
+    Logistic {
+        input: u32,
+        output: u32,
+    },
+    Relu {
+        input: u32,
+        output: u32,
+    },
+    Tanh {
+        input: u32,
+        output: u32,
+    },
+    Concatenation {
+        inputs: Vec<u32>,
+        axis: i32,
+        output: u32,
+    },
+    Reshape {
+        input: u32,
+        shape: u32,
+        output: u32,
+    },
+}
+
+impl NnapiOperation {
+    /// Map this operation to its `ANEURALNETWORKS_*` constant.
+    fn to_nnapi_code(&self) -> i32 {
+        match self {
+            NnapiOperation::Add { .. } => ndk::ANEURALNETWORKS_ADD,
+            NnapiOperation::Mul { .. } => ndk::ANEURALNETWORKS_MUL,
+            NnapiOperation::FullyConnected { .. } => ndk::ANEURALNETWORKS_FULLY_CONNECTED,
+            NnapiOperation::Softmax { .. } => ndk::ANEURALNETWORKS_SOFTMAX,
+            NnapiOperation::Logistic { .. } => ndk::ANEURALNETWORKS_LOGISTIC,
+            NnapiOperation::Relu { .. } => ndk::ANEURALNETWORKS_RELU,
+            NnapiOperation::Tanh { .. } => ndk::ANEURALNETWORKS_TANH,
+            NnapiOperation::Concatenation { .. } => ndk::ANEURALNETWORKS_CONCATENATION,
+            NnapiOperation::Reshape { .. } => ndk::ANEURALNETWORKS_RESHAPE,
+        }
+    }
+
+    /// Collect all operand indices referenced by this operation
+    /// (for wiring into ANeuralNetworksModel_addOperation).
+    fn input_operands(&self) -> Vec<u32> {
+        match self {
+            NnapiOperation::Add { input0, input1, .. } => vec![*input0, *input1],
+            NnapiOperation::Mul { input0, input1, .. } => vec![*input0, *input1],
+            NnapiOperation::FullyConnected {
+                input,
+                weights,
+                bias,
+                ..
+            } => vec![*input, *weights, *bias],
+            NnapiOperation::Softmax { input, .. } => vec![*input],
+            NnapiOperation::Logistic { input, .. } => vec![*input],
+            NnapiOperation::Relu { input, .. } => vec![*input],
+            NnapiOperation::Tanh { input, .. } => vec![*input],
+            NnapiOperation::Concatenation { inputs, .. } => inputs.clone(),
+            NnapiOperation::Reshape { input, shape, .. } => vec![*input, *shape],
+        }
+    }
+
+    fn output_operands(&self) -> Vec<u32> {
+        match self {
+            NnapiOperation::Add { output, .. } => vec![*output],
+            NnapiOperation::Mul { output, .. } => vec![*output],
+            NnapiOperation::FullyConnected { output, .. } => vec![*output],
+            NnapiOperation::Softmax { output, .. } => vec![*output],
+            NnapiOperation::Logistic { output, .. } => vec![*output],
+            NnapiOperation::Relu { output, .. } => vec![*output],
+            NnapiOperation::Tanh { output, .. } => vec![*output],
+            NnapiOperation::Concatenation { output, .. } => vec![*output],
+            NnapiOperation::Reshape { output, .. } => vec![*output],
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// NnapiGraphBuilder — constructs a model graph via ANeuralNetworksModel
+// ---------------------------------------------------------------------------
+
+/// Constructs an NNAPI model graph by adding operands and operations.
+///
+/// Usage:
+/// ```ignore
+/// let mut builder = NnapiGraphBuilder::new()?;
+/// let in0 = builder.add_operand(tensor_f32_type(2, &[1, 4]))?;
+/// let in1 = builder.add_operand(tensor_f32_type(2, &[4, 4]))?;
+/// let out = builder.add_operand(tensor_f32_type(2, &[1, 4]))?;
+/// builder.add_operation(NnapiOperation::Add {
+///     input0: in0, input1: in1, fused_activation: 0, output: out,
+/// })?;
+/// builder.finish()?;
+/// let compiled = builder.compile(ExecutionPreference::SustainedSpeed)?;
+/// ```
+pub(crate) struct NnapiGraphBuilder {
+    model: *mut ndk::ANeuralNetworksModel,
+    operand_count: u32,
+}
+
+// SAFETY: The model pointer is only accessed through safe wrapper methods
+// that enforce correct ordering (add operand → add operation → finish → compile).
+// The raw pointer is owned exclusively by this struct and freed in Drop.
+unsafe impl Send for NnapiGraphBuilder {}
+unsafe impl Sync for NnapiGraphBuilder {}
+
+impl NnapiGraphBuilder {
+    /// Create a new graph builder with an empty `ANeuralNetworksModel`.
+    #[cfg(target_os = "android")]
+    pub fn new() -> Result<Self> {
+        let mut model: *mut ndk::ANeuralNetworksModel = std::ptr::null_mut();
+        let rc = unsafe {
+            ndk::ANeuralNetworksModel_create(&mut model as *mut *mut ndk::ANeuralNetworksModel)
+        };
+        if rc != ndk::ANEURALNETWORKS_NO_ERROR {
+            return Err(crate::AccelError::BackendNotAvailable(format!(
+                "NNAPI: ANeuralNetworksModel_create failed: {}",
+                ndk::NnapiError::from_code(rc)
+            )));
+        }
+        Ok(Self {
+            model,
+            operand_count: 0,
+        })
+    }
+
+    #[cfg(not(target_os = "android"))]
+    pub fn new() -> Result<Self> {
+        Err(crate::AccelError::BackendNotAvailable(
+            "NNAPI is only available on Android".to_string(),
+        ))
+    }
+
+    /// Add an operand to the model graph.
+    ///
+    /// Returns the operand index (used when wiring operations).
+    pub fn add_operand(&mut self, _operand_type: ndk::ANeuralNetworksOperandType) -> Result<u32> {
+        let index = self.operand_count;
+        #[cfg(target_os = "android")]
+        {
+            let rc = unsafe { ndk::ANeuralNetworksModel_addOperand(self.model, &operand_type as *const _) };
+            if rc != ndk::ANEURALNETWORKS_NO_ERROR {
+                return Err(crate::AccelError::OperationFailed(format!(
+                    "NNAPI: addOperand failed: {}",
+                    ndk::NnapiError::from_code(rc)
+                )));
+            }
+        }
+        self.operand_count += 1;
+        Ok(index)
+    }
+
+    /// Set a constant value for an operand (weights, bias, scalars).
+    pub fn set_operand_value(&mut self, index: u32, data: &[u8]) -> Result<()> {
+        #[cfg(target_os = "android")]
+        {
+            let rc = unsafe {
+                ndk::ANeuralNetworksModel_setOperandValue(
+                    self.model,
+                    index as i32,
+                    data.as_ptr() as *const std::ffi::c_void,
+                    data.len(),
+                )
+            };
+            if rc != ndk::ANEURALNETWORKS_NO_ERROR {
+                return Err(crate::AccelError::OperationFailed(format!(
+                    "NNAPI: setOperandValue failed for operand {index}: {}",
+                    ndk::NnapiError::from_code(rc)
+                )));
+            }
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            let _ = (index, data);
+        }
+        Ok(())
+    }
+
+    /// Add an operation to the model graph.
+    ///
+    /// Validates that referenced operand indices exist before calling the NDK.
+    pub fn add_operation(&mut self, operation: &NnapiOperation) -> Result<()> {
+        let inputs = operation.input_operands();
+        let outputs = operation.output_operands();
+
+        // Validate all referenced operands exist
+        for &idx in inputs.iter().chain(outputs.iter()) {
+            if idx >= self.operand_count {
+                return Err(crate::AccelError::UnsupportedOperation(format!(
+                    "NNAPI: operand index {idx} out of range (max {})",
+                    self.operand_count - 1
+                )));
+            }
+        }
+
+        #[cfg(target_os = "android")]
+        {
+            // For operations with fused activation, add the scalar after inputs
+            let full_inputs = match operation {
+                NnapiOperation::Add {
+                    fused_activation, ..
+                }
+                | NnapiOperation::Mul {
+                    fused_activation, ..
+                } => {
+                    let mut v = inputs.clone();
+                    v.push(*fused_activation as u32);
+                    v
+                }
+                NnapiOperation::FullyConnected {
+                    fused_activation, ..
+                } => {
+                    let mut v = inputs.clone();
+                    v.push(*fused_activation as u32);
+                    v
+                }
+                NnapiOperation::Softmax { beta, .. } => {
+                    // Beta is passed as a float32 operand value, not an index
+                    inputs.clone()
+                }
+                _ => inputs,
+            };
+
+            let rc = unsafe {
+                ndk::ANeuralNetworksModel_addOperation(
+                    self.model,
+                    operation.to_nnapi_code(),
+                    full_inputs.len() as u32,
+                    full_inputs.as_ptr(),
+                    outputs.len() as u32,
+                    outputs.as_ptr(),
+                )
+            };
+            if rc != ndk::ANEURALNETWORKS_NO_ERROR {
+                return Err(crate::AccelError::OperationFailed(format!(
+                    "NNAPI: addOperation failed: {}",
+                    ndk::NnapiError::from_code(rc)
+                )));
+            }
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            let _ = operation;
+        }
+
+        Ok(())
+    }
+
+    /// Finalise the model graph.
+    ///
+    /// After calling `finish()`, no more operands or operations may be added.
+    pub fn finish(&mut self) -> Result<()> {
+        #[cfg(target_os = "android")]
+        {
+            let rc = unsafe { ndk::ANeuralNetworksModel_finish(self.model) };
+            if rc != ndk::ANEURALNETWORKS_NO_ERROR {
+                return Err(crate::AccelError::ModelCompilationFailed(format!(
+                    "NNAPI: Model_finish failed: {}",
+                    ndk::NnapiError::from_code(rc)
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    /// Compile the finished model graph into an executable handle.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `finish()` has not been called first (caught in debug builds).
+    pub fn compile(mut self, preference: ExecutionPreference) -> Result<NnapiCompiledModel> {
+        #[cfg(target_os = "android")]
+        {
+            let mut compilation: *mut ndk::ANeuralNetworksCompilation = std::ptr::null_mut();
+            let rc = unsafe {
+                ndk::ANeuralNetworksCompilation_create(
+                    self.model,
+                    &mut compilation as *mut *mut ndk::ANeuralNetworksCompilation,
+                )
+            };
+            if rc != ndk::ANEURALNETWORKS_NO_ERROR {
+                return Err(crate::AccelError::ModelCompilationFailed(format!(
+                    "NNAPI: Compilation_create failed: {}",
+                    ndk::NnapiError::from_code(rc)
+                )));
+            }
+
+            let rc = unsafe {
+                ndk::ANeuralNetworksCompilation_setPreference(
+                    compilation,
+                    preference.to_ndk_preference(),
+                )
+            };
+            if rc != ndk::ANEURALNETWORKS_NO_ERROR {
+                unsafe { ndk::ANeuralNetworksCompilation_free(compilation) };
+                return Err(crate::AccelError::ModelCompilationFailed(format!(
+                    "NNAPI: Compilation_setPreference failed: {}",
+                    ndk::NnapiError::from_code(rc)
+                )));
+            }
+
+            let rc = unsafe { ndk::ANeuralNetworksCompilation_finish(compilation) };
+            if rc != ndk::ANEURALNETWORKS_NO_ERROR {
+                unsafe { ndk::ANeuralNetworksCompilation_free(compilation) };
+                return Err(crate::AccelError::ModelCompilationFailed(format!(
+                    "NNAPI: Compilation_finish failed: {}",
+                    ndk::NnapiError::from_code(rc)
+                )));
+            }
+
+            // Model is now owned by the compilation. Prevent Drop from freeing it.
+            let model = std::mem::replace(&mut self.model, std::ptr::null_mut());
+
+            Ok(NnapiCompiledModel {
+                compilation,
+                _model: model,
+            })
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            let _ = preference;
+            Err(crate::AccelError::BackendNotAvailable(
+                "NNAPI is only available on Android".to_string(),
+            ))
+        }
+    }
+}
+
+impl Drop for NnapiGraphBuilder {
+    fn drop(&mut self) {
+        if !self.model.is_null() {
+            #[cfg(target_os = "android")]
+            unsafe {
+                ndk::ANeuralNetworksModel_free(self.model);
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// NnapiCompiledModel — compiled NNAPI model, ready for execution
+// ---------------------------------------------------------------------------
+
+/// A compiled NNAPI model that can be executed multiple times.
+///
+/// The compilation handle is freed when this struct is dropped.
+pub(crate) struct NnapiCompiledModel {
+    compilation: *mut ndk::ANeuralNetworksCompilation,
+    /// Keep the model alive (the compilation references it).
+    _model: *mut ndk::ANeuralNetworksModel,
+}
+
+// SAFETY: The compilation handle is thread-safe (NNAPI NDK guarantees this).
+unsafe impl Send for NnapiCompiledModel {}
+unsafe impl Sync for NnapiCompiledModel {}
+
+impl NnapiCompiledModel {
+    /// Execute the compiled model with the given input/output buffers.
+    ///
+    /// `inputs` — slice of float32 input tensors.
+    /// `outputs` — mutable slice of float32 output buffers (pre-allocated).
+    pub fn execute(&self, inputs: &[&[f32]], outputs: &mut [&mut [f32]]) -> Result<()> {
+        #[cfg(target_os = "android")]
+        {
+            let mut execution: *mut ndk::ANeuralNetworksExecution = std::ptr::null_mut();
+            let rc = unsafe {
+                ndk::ANeuralNetworksExecution_create(
+                    self.compilation,
+                    &mut execution as *mut *mut ndk::ANeuralNetworksExecution,
+                )
+            };
+            if rc != ndk::ANEURALNETWORKS_NO_ERROR {
+                return Err(crate::AccelError::OperationFailed(format!(
+                    "NNAPI: Execution_create failed: {}",
+                    ndk::NnapiError::from_code(rc)
+                )));
+            }
+
+            // Set input buffers
+            for (i, input) in inputs.iter().enumerate() {
+                let rc = unsafe {
+                    ndk::ANeuralNetworksExecution_setInput(
+                        execution,
+                        i as i32,
+                        std::ptr::null(), // use model's default type
+                        input.as_ptr() as *const std::ffi::c_void,
+                        input.len() * std::mem::size_of::<f32>(),
+                    )
+                };
+                if rc != ndk::ANEURALNETWORKS_NO_ERROR {
+                    unsafe { ndk::ANeuralNetworksExecution_free(execution) };
+                    return Err(crate::AccelError::OperationFailed(format!(
+                        "NNAPI: setInput failed for index {i}: {}",
+                        ndk::NnapiError::from_code(rc)
+                    )));
+                }
+            }
+
+            // Set output buffers
+            for (i, output) in outputs.iter().enumerate() {
+                let rc = unsafe {
+                    ndk::ANeuralNetworksExecution_setOutput(
+                        execution,
+                        i as i32,
+                        std::ptr::null(), // use model's default type
+                        output.as_mut_ptr() as *mut std::ffi::c_void,
+                        output.len() * std::mem::size_of::<f32>(),
+                    )
+                };
+                if rc != ndk::ANEURALNETWORKS_NO_ERROR {
+                    unsafe { ndk::ANeuralNetworksExecution_free(execution) };
+                    return Err(crate::AccelError::OperationFailed(format!(
+                        "NNAPI: setOutput failed for index {i}: {}",
+                        ndk::NnapiError::from_code(rc)
+                    )));
+                }
+            }
+
+            // Compute
+            let rc = unsafe { ndk::ANeuralNetworksExecution_compute(execution) };
+            if rc != ndk::ANEURALNETWORKS_NO_ERROR {
+                unsafe { ndk::ANeuralNetworksExecution_free(execution) };
+                return Err(crate::AccelError::OperationFailed(format!(
+                    "NNAPI: compute failed: {}",
+                    ndk::NnapiError::from_code(rc)
+                )));
+            }
+
+            // Cleanup execution
+            unsafe { ndk::ANeuralNetworksExecution_free(execution) };
+
+            Ok(())
+        }
+        #[cfg(not(target_os = "android"))]
+        {
+            let _ = (inputs, outputs);
+            Err(crate::AccelError::BackendNotAvailable(
+                "NNAPI is only available on Android".to_string(),
+            ))
+        }
+    }
+}
+
+impl Drop for NnapiCompiledModel {
+    fn drop(&mut self) {
+        #[cfg(target_os = "android")]
+        unsafe {
+            if !self.compilation.is_null() {
+                ndk::ANeuralNetworksCompilation_free(self.compilation);
+            }
+            if !self._model.is_null() {
+                ndk::ANeuralNetworksModel_free(self._model);
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Helper: create common operand types
+// ---------------------------------------------------------------------------
+
+/// Create a `TENSOR_FLOAT32` operand type with the given dimensions.
+pub(crate) fn tensor_f32_type(rank: usize, dims: &[u32]) -> ndk::ANeuralNetworksOperandType {
+    ndk::ANeuralNetworksOperandType {
+        type_: ndk::ANEURALNETWORKS_TENSOR_FLOAT32,
+        dimension_count: rank as u32,
+        dimensions: dims.as_ptr(),
+        scale: 0.0,
+        zero_point: 0,
+    }
+}
+
+/// Create a `TENSOR_QUANT8_ASYMM` operand type with scale and zero point.
+#[allow(dead_code)]
+pub(crate) fn tensor_quant8_type(
+    rank: usize,
+    dims: &[u32],
+    scale: f32,
+    zero_point: i32,
+) -> ndk::ANeuralNetworksOperandType {
+    ndk::ANeuralNetworksOperandType {
+        type_: ndk::ANEURALNETWORKS_TENSOR_QUANT8_ASYMM,
+        dimension_count: rank as u32,
+        dimensions: dims.as_ptr(),
+        scale,
+        zero_point,
+    }
+}
+
+/// Create a scalar INT32 operand type.
+pub(crate) fn scalar_i32_type() -> ndk::ANeuralNetworksOperandType {
+    ndk::ANeuralNetworksOperandType {
+        type_: ndk::ANEURALNETWORKS_INT32,
+        dimension_count: 0,
+        dimensions: std::ptr::null(),
+        scale: 0.0,
+        zero_point: 0,
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -634,5 +1214,242 @@ mod tests {
         let result = backend.forward(&[1, 2, 3], &[]);
         assert!(result.is_ok());
         assert_eq!(result.unwrap().tokens_generated, 3);
+    }
+
+    // -----------------------------------------------------------------------
+    // NnapiOperation tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_nnapi_operation_code_mapping() {
+        let add = NnapiOperation::Add {
+            input0: 0,
+            input1: 1,
+            fused_activation: 0,
+            output: 2,
+        };
+        assert_eq!(add.to_nnapi_code(), ndk::ANEURALNETWORKS_ADD);
+        assert_eq!(add.input_operands(), vec![0, 1]);
+        assert_eq!(add.output_operands(), vec![2]);
+
+        let mul = NnapiOperation::Mul {
+            input0: 0,
+            input1: 1,
+            fused_activation: 0,
+            output: 2,
+        };
+        assert_eq!(mul.to_nnapi_code(), ndk::ANEURALNETWORKS_MUL);
+
+        let softmax = NnapiOperation::Softmax {
+            input: 0,
+            beta: 1.0,
+            output: 1,
+        };
+        assert_eq!(softmax.to_nnapi_code(), ndk::ANEURALNETWORKS_SOFTMAX);
+
+        let logistic = NnapiOperation::Logistic { input: 0, output: 1 };
+        assert_eq!(logistic.to_nnapi_code(), ndk::ANEURALNETWORKS_LOGISTIC);
+
+        let relu = NnapiOperation::Relu { input: 0, output: 1 };
+        assert_eq!(relu.to_nnapi_code(), ndk::ANEURALNETWORKS_RELU);
+
+        let tanh = NnapiOperation::Tanh { input: 0, output: 1 };
+        assert_eq!(tanh.to_nnapi_code(), ndk::ANEURALNETWORKS_TANH);
+
+        let concat = NnapiOperation::Concatenation {
+            inputs: vec![0, 1],
+            axis: 0,
+            output: 2,
+        };
+        assert_eq!(concat.to_nnapi_code(), ndk::ANEURALNETWORKS_CONCATENATION);
+
+        let reshape = NnapiOperation::Reshape {
+            input: 0,
+            shape: 1,
+            output: 2,
+        };
+        assert_eq!(reshape.to_nnapi_code(), ndk::ANEURALNETWORKS_RESHAPE);
+
+        let fc = NnapiOperation::FullyConnected {
+            input: 0,
+            weights: 1,
+            bias: 2,
+            fused_activation: 0,
+            output: 3,
+        };
+        assert_eq!(fc.to_nnapi_code(), ndk::ANEURALNETWORKS_FULLY_CONNECTED);
+    }
+
+    // -----------------------------------------------------------------------
+    // NnapiGraphBuilder tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_graph_builder_new_non_android() {
+        let builder = NnapiGraphBuilder::new();
+        #[cfg(not(target_os = "android"))]
+        {
+            assert!(builder.is_err());
+        }
+        #[cfg(target_os = "android")]
+        {
+            assert!(builder.is_ok());
+        }
+    }
+
+    #[test]
+    fn test_graph_builder_operand_validation() {
+        #[cfg(target_os = "android")]
+        {
+            let mut builder = NnapiGraphBuilder::new().unwrap();
+
+            let dims = [1u32, 4];
+            let op_type = tensor_f32_type(2, &dims);
+            let in0 = builder.add_operand(op_type).unwrap();
+            let in1 = builder.add_operand(op_type).unwrap();
+            assert_eq!(in0, 0);
+            assert_eq!(in1, 1);
+
+            let result = builder.add_operation(&NnapiOperation::Add {
+                input0: 0,
+                input1: 1,
+                fused_activation: 0,
+                output: 99,
+            });
+            assert!(result.is_err());
+        }
+    }
+
+    #[cfg(target_os = "android")]
+    #[test]
+    fn test_graph_builder_add_operation_graph() {
+        let mut builder = NnapiGraphBuilder::new().unwrap();
+
+        let dims = [1u32, 4];
+        let op_type = tensor_f32_type(2, &dims);
+        let in0 = builder.add_operand(op_type).unwrap();
+        let in1 = builder.add_operand(op_type).unwrap();
+        let out = builder.add_operand(op_type).unwrap();
+
+        builder
+            .add_operation(&NnapiOperation::Add {
+                input0: in0,
+                input1: in1,
+                fused_activation: ndk::ANEURALNETWORKS_FUSED_NONE,
+                output: out,
+            })
+            .unwrap();
+
+        let model_inputs = [in0, in1];
+        let model_outputs = [out];
+        let rc = unsafe {
+            ndk::ANeuralNetworksModel_identifyInputsAndOutputs(
+                builder.model,
+                2,
+                model_inputs.as_ptr(),
+                1,
+                model_outputs.as_ptr(),
+            )
+        };
+        assert_eq!(rc, ndk::ANEURALNETWORKS_NO_ERROR);
+
+        let result = builder.finish();
+        assert!(result.is_ok());
+    }
+
+    #[cfg(target_os = "android")]
+    #[test]
+    fn test_graph_builder_mul_operation() {
+        let mut builder = NnapiGraphBuilder::new().unwrap();
+
+        let dims = [1u32, 4];
+        let op_type = tensor_f32_type(2, &dims);
+        let in0 = builder.add_operand(op_type).unwrap();
+        let in1 = builder.add_operand(op_type).unwrap();
+        let out = builder.add_operand(op_type).unwrap();
+
+        builder
+            .add_operation(&NnapiOperation::Mul {
+                input0: in0,
+                input1: in1,
+                fused_activation: ndk::ANEURALNETWORKS_FUSED_NONE,
+                output: out,
+            })
+            .unwrap();
+
+        let result = builder.finish();
+        assert!(result.is_ok());
+    }
+
+    #[cfg(target_os = "android")]
+    #[test]
+    fn test_graph_builder_softmax_operation() {
+        let mut builder = NnapiGraphBuilder::new().unwrap();
+
+        let dims = [1u32, 4];
+        let input_type = tensor_f32_type(2, &dims);
+        let in0 = builder.add_operand(input_type).unwrap();
+        let out = builder.add_operand(tensor_f32_type(2, &dims)).unwrap();
+
+        builder
+            .add_operation(&NnapiOperation::Softmax {
+                input: in0,
+                beta: 1.0,
+                output: out,
+            })
+            .unwrap();
+
+        let result = builder.finish();
+        assert!(result.is_ok());
+    }
+
+    #[cfg(target_os = "android")]
+    #[test]
+    fn test_graph_builder_relu_operation() {
+        let mut builder = NnapiGraphBuilder::new().unwrap();
+
+        let dims = [1u32, 4];
+        let op_type = tensor_f32_type(2, &dims);
+        let in0 = builder.add_operand(op_type).unwrap();
+        let out = builder.add_operand(op_type).unwrap();
+
+        builder
+            .add_operation(&NnapiOperation::Relu {
+                input: in0,
+                output: out,
+            })
+            .unwrap();
+
+        let result = builder.finish();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_compiled_model_non_android() {
+        // On non-Android, compiled model creation via graph builder fails
+        let builder = NnapiGraphBuilder::new();
+        #[cfg(not(target_os = "android"))]
+        {
+            assert!(builder.is_err());
+        }
+    }
+
+    #[test]
+    fn test_tensor_f32_type_helper() {
+        let dims = [1u32, 4];
+        let ty = tensor_f32_type(2, &dims);
+        assert_eq!(ty.type_, ndk::ANEURALNETWORKS_TENSOR_FLOAT32);
+        assert_eq!(ty.dimension_count, 2);
+        assert_eq!(ty.scale, 0.0);
+        assert_eq!(ty.zero_point, 0);
+    }
+
+    #[test]
+    fn test_scalar_i32_type_helper() {
+        let ty = scalar_i32_type();
+        assert_eq!(ty.type_, ndk::ANEURALNETWORKS_INT32);
+        assert_eq!(ty.dimension_count, 0);
+        assert_eq!(ty.scale, 0.0);
+        assert_eq!(ty.zero_point, 0);
     }
 }

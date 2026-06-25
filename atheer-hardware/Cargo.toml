@@ -14,5 +14,9 @@ chrono = { workspace = true }
 [target.'cfg(target_os = "android")'.dependencies]
 jni = "0.21"
 
+[target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
+objc2 = { version = "0.6", features = ["alloc", "std"] }
+objc2-foundation = { version = "0.3", features = ["alloc", "std"] }
+
 [target.'cfg(target_os = "ios")'.dependencies]
 block = "0.1"
