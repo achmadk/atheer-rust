@@ -12,6 +12,7 @@ members = [
     "tests",
     "tests/benches",
     "fuzz",
+    "perf-bench",
 ]
 
 [workspace.package]

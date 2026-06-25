@@ -2,7 +2,6 @@
 target
 
 # Build artifacts
-perf-bench/
 sampleoutput/
 bindgen-tool/
 jniLibs/

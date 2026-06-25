@@ -5,39 +5,58 @@ All numbers are measured on reference hardware; actual results vary by device.
 
 ## Running Benchmarks
 
-### Criterion (microbenchmarks)
+### Criterion (model-free microbenchmarks)
 
 ```bash
-# All microbenchmarks (model-free ones run without dependencies)
+# All microbenchmarks (run without model dependencies)
+cargo bench -p atheer-benches
+
+# perf-bench Criterion harnesses (model-free ones only by default)
 cargo bench -p perf-bench
 
-# Specific benchmark
+# Specific microbenchmark
 cargo bench -p perf-bench -- kv_cache_quantize
+```
 
-# Model-dependent benchmarks (requires GGUF file)
-ATHEER_TEST_MODEL=/path/to/model.gguf cargo bench -p perf-bench
+### Criterion (model-dependent benchmarks)
+
+```bash
+# All model-dependent benchmarks (requires GGUF file + tokenizer)
+ATHEER_TEST_MODEL=/path/to/model.gguf ATHEER_TOKENIZER_PATH=/path/to/tokenizer.json cargo bench -p perf-bench
+
+# Specific model-dependent benchmark
+ATHEER_TEST_MODEL=/path/to/model.gguf ATHEER_TOKENIZER_PATH=/path/to/tokenizer.json cargo bench -p perf-bench -- latency
 ```
 
 ### Binary (sustained throughput)
 
 ```bash
-cargo run -p perf-bench -- --model-path model.gguf --duration-secs 120 --batch-sizes 1,4,8
+cargo run -p perf-bench -- --model-path model.gguf --tokenizer-path tokenizer.json --duration-secs 120 --batch-sizes 1,4,8
 ```
 
 ## Benchmark Suites
 
-| Bench | File | Model Required | Measures |
-|-------|------|---------------|---------|
-| `throughput` | `benches/throughput.rs` | Yes | Cold-start load time |
-| `sustained` | `benches/sustained.rs` | Yes | Long-run throughput, thermal drift |
-| `energy` | `benches/energy.rs` | Yes | Energy per token |
-| `mode_switching` | `benches/mode_switching.rs` | Yes | Mode transition latency |
-| `thermal_throttling` | `benches/thermal_throttling.rs` | Yes | Time-to-throttle under load |
-| `kv_cache_quantize` | `benches/kv_cache_quantize.rs` | No | Quantize/dequantize throughput (INT8, INT4) at 4K–128K element sizes |
-| `latency` | `benches/latency.rs` | Yes | P50/P95/P99 decode step latency |
-| `checkpoint` | `benches/checkpoint.rs` | Yes | Checkpoint save/restore latency at 1K/2K/4K context |
-| `memory` | `benches/memory.rs` | Yes | Peak RSS at 2K/4K/8K context |
-| `thermal_response` | `benches/thermal_response.rs` | Yes | Sustained decode under thermal pressure |
+### Model-Free (run without GGUF file)
+
+| Bench | File | Measures |
+|-------|------|----------|
+| `kv_cache_quantize` | `perf-bench/benches/kv_cache_quantize.rs` | Quantize/dequantize throughput (INT8, INT4) at 4K–128K element sizes |
+| `kv_cache` | `tests/benches/benches/kv_cache.rs` | KV cache insert/get/truncate/memory operations |
+| `ngram_cache` | `tests/benches/benches/ngram_cache.rs` | NGram cache insert/lookup/eviction/large-scale |
+| `orchestrator` | `tests/benches/benches/orchestrator.rs` | Orchestrator creation/mode switch/mode query |
+
+### Model-Dependent (require `ATHEER_TEST_MODEL` and `ATHEER_TOKENIZER_PATH`)
+
+| Bench | File | Measures |
+|-------|------|----------|
+| `throughput` | `perf-bench/benches/throughput.rs` | Cold-start load time and generation tokens/s |
+| `latency` | `perf-bench/benches/latency.rs` | P50/P95/P99 decode step latency |
+| `checkpoint` | `perf-bench/benches/checkpoint.rs` | Checkpoint save/restore latency at 1K/2K/4K context |
+| `memory` | `perf-bench/benches/memory.rs` | Peak RSS at 2K/4K/8K context |
+| `sustained` | `perf-bench/benches/sustained.rs` | Long-run throughput and thermal drift |
+| `energy` | `perf-bench/benches/energy.rs` | Energy per token |
+| `mode_switching` | `perf-bench/benches/mode_switching.rs` | Mode transition latency (Turbo/Balanced/Eco) |
+| `thermal_throttling` | `perf-bench/benches/thermal_throttling.rs` | Time-to-throttle under sustained load |
 
 ## KV Cache Quantization Throughput Baseline
 

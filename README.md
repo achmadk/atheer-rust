@@ -156,7 +156,6 @@ The Vulkan backend accelerates matrix-vector multiplication and attention using 
 |--------|------|---------|
 | GEMV | `atheer-accel/shaders/gemv.glsl` | Quantized int8 matrix-vector multiply (DP4A-style) for the decoder's feed-forward layers |
 | Attention | `atheer-accel/shaders/attention.glsl` | Flash attention-style softmax + query-key matmul |
-| Compute logits | `atheer-accel/shaders/compute_logits.glsl` | Final logit projection from hidden states to vocabulary |
 
 Shaders are compiled via a `build.rs` step and dispatched through the existing `VulkanContext` compute pipeline. The backend falls back to CPU when Vulkan is unavailable.
 
@@ -243,7 +242,7 @@ xcode-select --install
 
 ## Testing
 
-The workspace contains **~340 tests** across all crates, verified via `cargo test --workspace`:
+The workspace contains **~390 tests** across all crates, verified via `cargo test --workspace`:
 
 | Crate | Test Count | Scope |
 |-------|-----------|-------|
@@ -265,7 +264,7 @@ scripts/download-test-model.sh
 ATHEER_TEST_MODEL=./models/LFM2-700M-Q4_0.gguf cargo test -p atheer-core -- --ignored
 ```
 
-**CI**: `cargo check --workspace` must pass with zero errors. Integration tests run automatically on every push/PR to `main` — the test model is downloaded and cached via `scripts/download-test-model.sh`.
+**CI**: The `.github/workflows/ci.yml` workflow runs `cargo check`, lint, and unit tests on every push/PR to `main`. Accuracy regression tests (requires GGUF model) run on schedule and manual dispatch.
 
 ## Benchmarking
 
@@ -298,7 +297,8 @@ cargo bench -p perf-bench
 | `atheer-orchestrator` | Mode selection, grammar sampling, and agent execution loop | integration |
 | `atheer-hardware` | Platform hardware telemetry (thermal, memory, battery) | 6 |
 | `atheer-memory-bank` | KV cache hierarchy (L1/L2/L3 with handoff) | integration |
-| `perf-bench` | Performance-per-watt benchmarking binary (Criterion benches) | benches |
+| `perf-bench` | Performance-per-watt benchmarking binary and model-dependent Criterion harnesses | 1 binary + 9 benches |
+| `atheer-benches` (tests/benches) | Model-free Criterion microbenchmarks (kv_cache, ngram_cache, orchestrator) | 3 benches |
 
 ## Requirements
 
