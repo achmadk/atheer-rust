@@ -3,6 +3,10 @@ name = "atheer-accel"
 version.workspace = true
 edition.workspace = true
 
+[features]
+default = []
+coreml = []
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -16,6 +20,7 @@ candle-core = "0.10.2"
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
 candle-core = { version = "0.10.2", features = ["metal"] }
 sysctl = "0.6"
+candle-coreml = { git = "https://github.com/achmadk/candle-coreml", rev = "acb71991ef590b9d80dc184f1dd796dc556a1315" }
 
 [target.'cfg(target_os = "android")'.dependencies]
 ash = { workspace = true }
