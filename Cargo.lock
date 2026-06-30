@@ -532,7 +532,6 @@ dependencies = [
 [[package]]
 name = "candle-coreml"
 version = "0.3.1"
-source = "git+https://github.com/achmadk/candle-coreml?rev=acb71991ef590b9d80dc184f1dd796dc556a1315#acb71991ef590b9d80dc184f1dd796dc556a1315"
 dependencies = [
  "anyhow",
  "block2",
@@ -540,7 +539,6 @@ dependencies = [
  "candle-nn",
  "candle-transformers",
  "chrono",
- "clap",
  "dirs 6.0.0",
  "glob",
  "half",
@@ -553,7 +551,6 @@ dependencies = [
  "serde_json",
  "tokenizers 0.21.4",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]

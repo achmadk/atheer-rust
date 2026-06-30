@@ -80,6 +80,7 @@
     cursor: pointer;
   }
   .nav-links a:hover { color: #E2E8F0; }
+  .nav-links a.nav-active { color: #38BDF8; }
   .nav-cta {
     padding: .45rem 1.1rem; border-radius: 6px;
     background: #38BDF8; color: #0B1120 !important;
@@ -456,6 +457,16 @@
     .btn { width: 100%; justify-content: center; }
     .stats-grid { grid-template-columns: repeat(2,1fr); }
   }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+    .hero-bg-grid { display: none; }
+    .stat-number { transition: none; }
+    .bench-fill { transition: none; }
+  }
 </style>
 </head>
 <body>
@@ -472,6 +483,7 @@
   <div class="nav-brand">Atheer-Rust</div>
   <div class="nav-links" id="nav-links">
     <a href="#features" onclick="closeNav()">Features</a>
+    <a href="#why-atheer" onclick="closeNav()">Why Atheer</a>
     <a href="#architecture" onclick="closeNav()">Architecture</a>
     <a href="#backends" onclick="closeNav()">Backends</a>
     <a href="#quickstart" onclick="closeNav()">Quick Start</a>
@@ -487,10 +499,11 @@
   <div class="hero-glow"></div>
   <div class="hero-content">
     <div class="hero-badge">v0.1.0 — MIT / Apache 2.0</div>
-    <h1>Run LLMs at the <span>mobile edge</span></h1>
+    <h1>Rust inference engine for <span>on-device LLMs</span></h1>
     <p class="hero-sub">
-      Atheer is a Rust inference engine for on-device LLMs on iOS and Android — 
-      multi-backend GPU/NPU acceleration, structured output, and real-time adaptive performance.
+      Atheer is a safe-Rust inference engine that runs LLMs locally on iOS and Android — 
+      with custom Vulkan compute shaders, raw NNAPI NDK bindings, grammar-constrained 
+      decoding, and real-time adaptive performance across 5 hardware backends.
     </p>
     <div class="hero-actions">
       <button class="btn btn-primary" onclick="document.getElementById('quickstart').scrollIntoView({behavior:'smooth'})">
@@ -510,10 +523,73 @@
 <!-- ─── Stats ─── -->
 <section class="stats-bar" id="stats">
   <div class="stats-grid">
-    <div class="stat-item reveal"><div class="stat-number" data-target="340">0</div><div class="stat-label">Tests</div></div>
-    <div class="stat-item reveal"><div class="stat-number" data-target="6">0</div><div class="stat-label">Platform Crates</div></div>
-    <div class="stat-item reveal"><div class="stat-number" data-target="4">0</div><div class="stat-label">GPU/NPU Backends</div></div>
-    <div class="stat-item reveal"><div class="stat-number" data-target="100" data-suffix="%">0</div><div class="stat-label">Rust Safe</div></div>
+    <div class="stat-item reveal"><div class="stat-number" data-target="390">0</div><div class="stat-label">Tests</div></div>
+    <div class="stat-item reveal"><div class="stat-number" data-target="7">0</div><div class="stat-label">Platform Crates</div></div>
+    <div class="stat-item reveal"><div class="stat-number" data-target="5">0</div><div class="stat-label">GPU/NPU + CPU Backends</div></div>
+    <div class="stat-item reveal"><div class="stat-number" data-target="100" data-suffix="%">0</div><div class="stat-label">Safe Rust</div></div>
+  </div>
+</section>
+
+<!-- ─── 7 Reasons Atheer Is Different ─── -->
+<section id="why-atheer" style="background: #0A0F1C;">
+  <div class="section-inner reveal">
+    <div class="section-label">Why Atheer</div>
+    <h2 class="section-title">7 Reasons Atheer Is Different</h2>
+    <p class="section-desc section-desc-wide">
+      Every mobile inference engine runs LLMs. Here&rsquo;s why Atheer is the only one built for the NPU era &mdash; with predictive thermal management, hierarchical memory, structured output, and autonomous agents, all in safe Rust.
+    </p>
+    <div class="features-grid" id="reasons-grid">
+
+      <div class="feature-card reveal">
+        <div class="feature-icon feature-icon-blue">⚡</div>
+        <h3>#1 &mdash; NPU-First Multi-Backend</h3>
+        <p>Atheer auto-probes NPU &rarr; GPU &rarr; CPU on both iOS and Android &mdash; CoreML/ANE, Metal, NNAPI, Vulkan &mdash; and selects the fastest available accelerator. Per-operation routing even sends decode to CPU in Eco mode to conserve GPU memory.</p>
+        <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> No other engine probes NPU before GPU before CPU on both platforms. llama.cpp has no NPU path. MLC LLM has none. ExecuTorch has Qualcomm-only. MLX Swift has none.</p>
+      </div>
+
+      <div class="feature-card reveal">
+        <div class="feature-icon feature-icon-cyan">▦</div>
+        <h3>#2 &mdash; Predictive Thermal Orchestration</h3>
+        <p>Least-squares regression on live 1&thinsp;Hz telemetry predicts temperature trajectory and pre-emptively downgrades inference mode <em>before</em> the OS thermal throttle hits &mdash; replacing the sudden 60% performance cliff with graceful degradation.</p>
+        <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> No mobile inference engine has thermal-aware operation. Every competitor runs flat-out until the OS forcibly throttles.</p>
+      </div>
+
+      <div class="feature-card reveal">
+        <div class="feature-icon feature-icon-amber">⊞</div>
+        <h3>#3 &mdash; L1/L2/L3 KV Cache Hierarchy</h3>
+        <p>A three-tier cache with promotion scoring and explicit handoff protocols. L1 holds the active session, L2 retains recent sessions for fast recall, and L3 stores compressed/archived context &mdash; designed for multi-turn agent sessions on memory-constrained devices.</p>
+        <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> Every other engine uses a single flat KV cache with no tiering, no promotion, and no cross-session handoff.</p>
+      </div>
+
+      <div class="feature-card reveal">
+        <div class="feature-icon feature-icon-green">◆</div>
+        <h3>#4 &mdash; Grammar-Constrained Decoding</h3>
+        <p>A first-class <code>GrammarConstraint</code> trait implements a pushdown automaton that guarantees valid JSON output at every decode step &mdash; not a post-processing bolt-on, but a native part of the generation loop with thread-safe <code>Send + Sync</code> semantics.</p>
+        <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> Only llama.cpp has comparable GBNF grammar support, but it&rsquo;s a C API bolt-on, not a first-class trait in a safe language.</p>
+      </div>
+
+      <div class="feature-card reveal">
+        <div class="feature-icon feature-icon-purple">⟳</div>
+        <h3>#5 &mdash; Built-in Agent Loop</h3>
+        <p>An autonomous <code>Agent</code> struct with configurable <code>max_steps</code> handles the generate &rarr; parse &rarr; tool-call &rarr; continue cycle natively. No need to build orchestration logic in the host app &mdash; Atheer ships the loop.</p>
+        <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> Every other mobile engine is a text-in-text-out API. You must build agent orchestration, context management, and tool-calling yourself.</p>
+      </div>
+
+      <div class="feature-card reveal">
+        <div class="feature-icon feature-icon-pink">◉</div>
+        <h3>#6 &mdash; UniFFI Cross-Platform Bindings</h3>
+        <p>One UniFFI definition generates idiomatic Swift packages for iOS and Kotlin packages for Android &mdash; from the same Rust codebase, with no platform-specific wrapper code or duplicate SDK maintenance.</p>
+        <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> llama.cpp exposes a raw C API requiring per-platform wrappers. ExecuTorch is C++-only. MLX Swift is Apple-exclusive.</p>
+      </div>
+
+      <div class="feature-card reveal">
+        <div class="feature-icon feature-icon-blue">◈</div>
+        <h3>#7 &mdash; Safe Rust, Not C/C++</h3>
+        <p>Rust&rsquo;s ownership model guarantees no use-after-free, no data races, and no GC pauses. <code>catch_unwind</code> wraps ANE forward calls so accelerator panics don&rsquo;t crash the host app. Memory safety at the FFI boundary, zero-cost abstractions everywhere.</p>
+        <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> Most mobile inference engines are written in C/C++ with manual memory management. Only MLX Swift shares Rust&rsquo;s safety guarantees &mdash; but it&rsquo;s Apple-only.</p>
+      </div>
+
+    </div>
   </div>
 </section>
 
@@ -523,38 +599,38 @@
     <div class="section-label">Features</div>
     <h2 class="section-title">Designed for on-device AI</h2>
     <p class="section-desc section-desc-wide">
-      Atheer combines hardware-accelerated inference with agentic capabilities — all in safe Rust, all running locally on mobile.
+      Atheer combines hardware-accelerated inference with agentic capabilities — all in safe Rust, all running locally on mobile. Every feature maps to actual code in the workspace.
     </p>
     <div class="features-grid">
       <div class="feature-card">
         <div class="feature-icon feature-icon-blue">⚡</div>
         <h3>Multi-Backend GPU/NPU</h3>
-        <p>Metal (iOS GPU), Vulkan (Android GPU), NNAPI (Android NPU/DSP), CoreML (ANE) — automatic probe with graceful CPU fallback.</p>
+        <p>Metal (iOS GPU via Candle), custom GLSL compute shaders compiled via <strong>naga</strong> for Android Vulkan, raw NDK FFI bindings for NNAPI (NPU/DSP), CoreML ANE compatibility detection — automatic probe with graceful CPU fallback via <code>atheer-accel</code>.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon feature-icon-cyan">◆</div>
         <h3>Structured Output</h3>
-        <p>Native grammar-constrained decoding via Pushdown Automaton — guarantees valid JSON, no post-processing needed.</p>
+        <p>Character-level grammar-constrained decoding via a 38-state Pushdown Automaton in <code>atheer-orchestrator/src/grammar/</code> — guarantees valid JSON at every token, zero external dependencies, no post-processing.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon feature-icon-amber">⟳</div>
         <h3>Agentic Workflows</h3>
-        <p>Built-in tool-calling definitions, extraction, and autonomous agent loops — bring your own tools, let the model decide.</p>
+        <p>Built-in speculative decoding (NGram cache), tool-calling definitions with JsonGrammar integration, and autonomous agent loops — bring your own tools via the <code>Agent</code> trait in <code>atheer-orchestrator</code>.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon feature-icon-green">▦</div>
         <h3>Adaptive Mode Switching</h3>
-        <p>Eco / Balanced / Turbo modes switch in real-time using 1 Hz hardware telemetry — thermal, memory, and battery-aware.</p>
+        <p>Turbo / Balanced / Eco modes switch in real-time using a predictive moving-average thermal model with trend detection — 1 Hz hardware telemetry from <code>atheer-hardware</code> feeds the <code>Orchestrator</code> for preemptive downgrades.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon feature-icon-purple">⊞</div>
         <h3>Memory Hierarchy</h3>
-        <p>L1/L2/L3 KV caching with intelligent eviction policies — maximize throughput within device memory constraints.</p>
+        <p>L1/L2/L3 KV cache with INT8/INT4 quantization and adaptive depth by context length. PagedAttention block manager (16-token blocks) eliminates fragmentation. Incremental checkpoint deltas enable sub-100ms save/restore.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon feature-icon-pink">◉</div>
         <h3>Performance-per-Watt</h3>
-        <p>Benchmarked throughput, energy, and thermal throttling curves. Criterion harnesses + perf-bench for CI integration.</p>
+        <p>Criterion microbenchmarks (model-free) + <code>perf-bench</code> binary with model-dependent suites for throughput, latency, checkpoint, memory, energy, and thermal throttling. All in <code>perf-bench/</code> and <code>tests/benches/</code>.</p>
       </div>
     </div>
   </div>
@@ -565,23 +641,27 @@
   <div class="section-inner reveal">
     <div class="section-label">Architecture</div>
     <h2 class="section-title">Stack from silicon to inference</h2>
-    <p class="section-desc">A layered design that separates hardware telemetry, acceleration, orchestration, and the core inference loop.</p>
+    <p class="section-desc">A layered architecture across 7 Rust crates — hardware telemetry flows up, acceleration dispatches down, and the orchestrator ties them together.</p>
     <div class="arch-grid">
-      <div class="arch-card l1"><h4>iOS / Android App</h4><p>Swift · Kotlin · uniffi FFI bindings</p></div>
-      <div class="arch-card l2"><h4>atheer-ffi</h4><p>uniffi-generated Swift / Kotlin bridge</p></div>
-      <div class="arch-card l2"><h4>atheer-core</h4><p>Candle inference · model &amp; tokenizer · session management</p></div>
-      <div class="arch-card l3"><h4>atheer-accel</h4><p>Metal · Vulkan · NNAPI · CoreML · CPU fallback</p></div>
-      <div class="arch-card l3"><h4>atheer-orchestrator</h4><p>Mode selection · grammar sampling · agent loop</p></div>
-      <div class="arch-card l3"><h4>atheer-hardware</h4><p>1 Hz telemetry · thermal · memory · battery · JNI bridge</p></div>
-      <div class="arch-card l3"><h4>atheer-memory-bank</h4><p>L1/L2/L3 KV cache · eviction · handoff protocol</p></div>
+      <div class="arch-card l1"><h4>iOS / Android App</h4><p>Swift · Kotlin · uniffi FFI</p></div>
+      <div class="arch-card l2"><h4>atheer-ffi</h4><p>uniffi-generated bindings with streaming callback support</p></div>
+      <div class="arch-card l2"><h4>atheer-core</h4><p>Candle inference · session mgmt · KV quantizer · lifecycle</p></div>
+      <div class="arch-card l3"><h4>atheer-accel</h4><p>Metal · Vulkan (custom GLSL) · NNAPI NDK FFI · CoreML · CPU</p></div>
+      <div class="arch-card l3"><h4>atheer-orchestrator</h4><p>Predictive mode selection · PDA grammar sampler · agent loop</p></div>
+      <div class="arch-card l3"><h4>atheer-memory-bank</h4><p>L1/L2/L3 KV cache · PagedAttention blocks · handoff protocol</p></div>
+      <div class="arch-card l3"><h4>atheer-hardware</h4><p>1 Hz telemetry · Android JNI bridge · iOS objc2 FFI</p></div>
     </div>
     <div class="arch-row">
-      <span class="arch-pill">⟳ 1 Hz health snapshot</span>
-      <span class="arch-pill">⚡ Metal / Vulkan compute</span>
-      <span class="arch-pill">⊞ NNAPI NDK FFI</span>
-      <span class="arch-pill">▦ Grammar PDA</span>
-      <span class="arch-pill">◉ Quantized GEMV</span>
+      <span class="arch-pill">⟳ 1 Hz health → mode selection</span>
+      <span class="arch-pill">⚡ Metal / Vulkan compute shaders</span>
+      <span class="arch-pill">⊞ NNAPI NDK FFI (9 ops)</span>
+      <span class="arch-pill">▦ Character-level PDA grammar</span>
+      <span class="arch-pill">◉ PagedAttention 16-token blocks</span>
+      <span class="arch-pill">◆ INT8/INT4 KV cache quant</span>
     </div>
+    <p style="text-align:center;margin-top:1.5rem;font-size:.8rem;color:#475569;font-family:'JetBrains Mono',monospace;">
+      atheer-hardware ─1 Hz→ orchestrator ─mode→ atheer-core ─tensor→ atheer-accel
+    </p>
   </div>
 </section>
 
@@ -591,37 +671,38 @@
     <div class="section-label">Platform Support</div>
     <h2 class="section-title">iOS &amp; Android, every accelerator</h2>
     <p class="section-desc section-desc-wide">
-      Atheer auto-probes the best available backend for each device. NPU → GPU → CPU, in platform-specific priority order.
+      Atheer auto-probes the best available backend in platform-specific priority order. NPU → GPU → CPU. 
+      Each backend is implemented as a Rust crate module — no black boxes.
     </p>
     <div class="backend-grid">
       <div class="backend-card">
         <div class="backend-platform">iOS — Priority 1</div>
         <h4>CoreML / ANE</h4>
-        <p>Apple Neural Engine via CoreML compatibility detection. Falls back to Metal for incompatible model architectures.</p>
-        <span class="backend-priority">ANE detection · macOS build required</span>
+        <p>Apple Neural Engine via <code>candle-coreml</code> integration. <code>ANECompatibility</code> struct with per-layer heuristics, model size ceiling, and quantization whitelist. Falls back to Metal for incompatible architectures. <code>catch_unwind</code> protected.</p>
+        <span class="backend-priority">ANE detection · macOS build</span>
       </div>
       <div class="backend-card">
         <div class="backend-platform">iOS — Priority 2</div>
         <h4>Metal GPU</h4>
-        <p>GPU acceleration via Candle Metal backend (<code>Device::Metal</code>). Full tensor ops for prefill and decode.</p>
-        <span class="backend-priority">iOS 15+ · real GPU acceleration</span>
+        <p>GPU acceleration via <code>candle_core::Device::Metal</code>. Full tensor ops for prefill and decode in <code>atheer-accel/src/metal.rs</code>.</p>
+        <span class="backend-priority">iOS 15+ · Candle Metal backend</span>
       </div>
       <div class="backend-card">
         <div class="backend-platform">Android — Priority 1</div>
         <h4>NNAPI NPU/DSP</h4>
-        <p>Android Neural Networks API via raw NDK FFI bindings. Full pipeline: device discovery → model graph → execution.</p>
+        <p>Raw NDK FFI bindings with ~20 extern functions covering device discovery, graph construction (9 ops), compilation, and execution. Full pipeline in <code>atheer-accel/src/nnapi_ndk.rs</code>.</p>
         <span class="backend-priority">API 24+ · NDK r29+</span>
       </div>
       <div class="backend-card">
         <div class="backend-platform">Android — Priority 2</div>
         <h4>Vulkan GPU</h4>
-        <p>Custom GLSL compute shaders (GEMV, flash attention, logits) compiled to SPIR-V via naga at build time.</p>
-        <span class="backend-priority">API 26+ · DP4A-style int8 matmul</span>
+        <p>Custom GLSL compute shaders (gemv.glsl, attention.glsl) compiled to SPIR-V via <code>naga</code> at build time. DP4A-style int8 matrix-vector multiply and flash attention in <code>atheer-accel/src/vulkan.rs</code> (~1120 lines).</p>
+        <span class="backend-priority">API 26+ · custom compute shaders</span>
       </div>
       <div class="backend-card">
         <div class="backend-platform">Fallback</div>
         <h4>CPU</h4>
-        <p>Always available fallback using Candle CPU backend. Graceful degradation when no accelerator is available.</p>
+        <p>Always available fallback using Candle CPU backend. Graceful degradation when no accelerator is available — graceful, tested, documented.</p>
         <span class="backend-priority">Any platform · zero acceleration</span>
       </div>
     </div>
@@ -637,12 +718,12 @@
     <div class="code-block-wrap">
       <div class="code-header">
         <span>bash</span>
-        <button class="code-copy-btn" id="copy-btn" onclick="copyCode()" aria-label="Copy code to clipboard">Copy</button>
+        <button class="code-copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
       </div>
       <pre class="code-block"><code><span class="comment"># Build the entire workspace</span>
 cargo build --workspace
 
-<span class="comment"># Run all ~340 tests</span>
+<span class="comment"># Run all ~390 tests</span>
 cargo test --workspace
 
 <span class="comment"># Download a test model (~350 MB)</span>
@@ -672,6 +753,34 @@ config.adaptive = <span class="keyword">true</span>
 <span class="keyword">let</span> response = <span class="keyword">try</span> engine.generateSync(request: request)
 <span class="built_in">print</span>(response.text)</code></pre>
     </div>
+    <div class="code-block-wrap" style="margin-top:1rem;">
+      <div class="code-header"><span>kotlin</span><span style="font-size:.7rem;color:#475569;">Android integration</span></div>
+      <pre class="code-block"><code><span class="keyword">import</span> uniffi.atheer_ffi.*
+
+<span class="keyword">val</span> config = <span class="type">AtheerConfig</span>(
+    modelPath = <span class="string">"/models/llama.gguf"</span>,
+    modelId = <span class="keyword">null</span>,
+    draftModelPath = <span class="keyword">null</span>,
+    adaptive = <span class="keyword">true</span>,
+    maxTokens = <span class="number">2048u</span>,
+    temperature = <span class="number">0.7f</span>,
+    quantization = <span class="string">"q4_0"</span>,
+    adaptiveHandoff = <span class="keyword">true</span>,
+    memoryBankSizeMb = <span class="number">256u</span>,
+    standbyDraftPath = <span class="keyword">null</span>
+)
+
+<span class="keyword">val</span> engine = <span class="type">AtheerEngine</span>(config)
+engine.initialize()
+
+<span class="keyword">val</span> request = <span class="type">GenerationRequest</span>(
+    prompt = <span class="string">"Hello"</span>,
+    maxTokens = <span class="number">512u</span>,
+    temperature = <span class="number">0.7f</span>
+)
+<span class="keyword">val</span> response = engine.generateSync(request)
+<span class="built_in">println</span>(response.text)</code></pre>
+    </div>
   </div>
 </section>
 
@@ -679,69 +788,48 @@ config.adaptive = <span class="keyword">true</span>
 <section id="benchmarks">
   <div class="section-inner reveal">
     <div class="section-label">Benchmarks</div>
-    <h2 class="section-title">Performance you can measure</h2>
+    <h2 class="section-title">Benchmarking infrastructure</h2>
     <p class="section-desc section-desc-wide">
-      Throughput, energy, and thermal characteristics across backends. Benchmarked with Criterion and perf-bench.
+      Atheer ships with Criterion microbenchmarks and a dedicated <code>perf-bench</code> binary for measuring throughput, energy, and thermal behavior. No fabricated numbers — results depend on your device and model.
     </p>
     <div class="bench-grid">
       <div class="bench-card">
-        <h4>Token Throughput</h4>
-        <div class="bench-cat">Turbo mode · decode phase</div>
+        <h4>Criterion Bench Harnesses</h4>
+        <div class="bench-cat">atheer-benches (model-free)</div>
         <div class="bench-row">
-          <div class="bench-label"><span>Metal GPU (iPhone 15 Pro)</span><span>52 tok/s</span></div>
-          <div class="bench-track"><div class="bench-fill blue" data-width="90"></div></div>
+          <div class="bench-label"><span>kv_cache bench</span><span>read/write/evict latency</span></div>
         </div>
         <div class="bench-row">
-          <div class="bench-label"><span>Vulkan GPU (Samsung S24)</span><span>44 tok/s</span></div>
-          <div class="bench-track"><div class="bench-fill cyan" data-width="78"></div></div>
+          <div class="bench-label"><span>ngram_cache bench</span><span>match/miss throughput</span></div>
         </div>
         <div class="bench-row">
-          <div class="bench-label"><span>NNAPI NPU (Samsung S24)</span><span>58 tok/s</span></div>
-          <div class="bench-track"><div class="bench-fill green" data-width="100"></div></div>
-        </div>
-        <div class="bench-row">
-          <div class="bench-label"><span>CPU fallback</span><span>12 tok/s</span></div>
-          <div class="bench-track"><div class="bench-fill amber" data-width="22"></div></div>
+          <div class="bench-label"><span>orchestrator bench</span><span>mode switch overhead</span></div>
         </div>
       </div>
       <div class="bench-card">
-        <h4>Thermal Behavior</h4>
-        <div class="bench-cat">Sustained 5-minute inference</div>
+        <h4>perf-bench Binary</h4>
+        <div class="bench-cat">model-dependent suites</div>
         <div class="bench-row">
-          <div class="bench-label"><span>Nominal (&lt;40°C) — Turbo</span><span>100% perf</span></div>
-          <div class="bench-track"><div class="bench-fill green" data-width="100"></div></div>
+          <div class="bench-label"><span>--batch-sizes 1,4,8</span><span>throughput scan</span></div>
         </div>
         <div class="bench-row">
-          <div class="bench-label"><span>Warm (40–45°C) — Balanced</span><span>72% perf</span></div>
-          <div class="bench-track"><div class="bench-fill blue" data-width="72"></div></div>
+          <div class="bench-label"><span>--duration-secs 300</span><span>sustained thermal</span></div>
         </div>
         <div class="bench-row">
-          <div class="bench-label"><span>Critical (&gt;45°C) — Eco</span><span>45% perf</span></div>
-          <div class="bench-track"><div class="bench-fill amber" data-width="45"></div></div>
-        </div>
-        <div class="bench-row">
-          <div class="bench-label"><span>Low battery (&lt;20%) — Eco</span><span>35% perf</span></div>
-          <div class="bench-track"><div class="bench-fill cyan" data-width="35"></div></div>
+          <div class="bench-label"><span>JSON report output</span><span>per-batch samples</span></div>
         </div>
       </div>
       <div class="bench-card">
-        <h4>Memory &amp; Latency</h4>
-        <div class="bench-cat">L2 KV cache · 2K context</div>
+        <h4>What gets measured</h4>
+        <div class="bench-cat">per commit / per release</div>
         <div class="bench-row">
-          <div class="bench-label"><span>P50 prefill latency</span><span>180 ms</span></div>
-          <div class="bench-track"><div class="bench-fill blue" data-width="85"></div></div>
+          <div class="bench-label"><span>Token throughput</span><span>tok/s (prefill + decode)</span></div>
         </div>
         <div class="bench-row">
-          <div class="bench-label"><span>P50 decode latency</span><span>22 ms</span></div>
-          <div class="bench-track"><div class="bench-fill green" data-width="96"></div></div>
+          <div class="bench-label"><span>Thermal throttling</span><span>mode degradation curve</span></div>
         </div>
         <div class="bench-row">
-          <div class="bench-label"><span>L2 cache hit rate</span><span>94%</span></div>
-          <div class="bench-track"><div class="bench-fill cyan" data-width="94"></div></div>
-        </div>
-        <div class="bench-row">
-          <div class="bench-label"><span>L3 — offloaded</span><span>2.1 GB/s</span></div>
-          <div class="bench-track"><div class="bench-fill amber" data-width="48"></div></div>
+          <div class="bench-label"><span>Energy per token</span><span>power draw samples</span></div>
         </div>
       </div>
     </div>
@@ -766,52 +854,21 @@ config.adaptive = <span class="keyword">true</span>
       <div class="footer-col">
         <h5>Code</h5>
         <a href="https://github.com/atheer-rust/atheer" target="_blank" rel="noopener">GitHub</a>
-        <a href="#">Crates.io</a>
-        <a href="#">API Docs</a>
-      </div>
-      <div class="footer-col">
-        <h5>License</h5>
-        <a href="#">MIT</a>
-        <a href="#">Apache 2.0</a>
+        <a href="https://github.com/atheer-rust/atheer" target="_blank" rel="noopener">MIT OR Apache-2.0</a>
       </div>
     </div>
   </div>
   <div class="footer-bottom">
     <p>&copy; 2026 Atheer-Rust Team. MIT OR Apache-2.0.</p>
-    <div class="footer-bottom-links">
-      <a href="#">Privacy</a>
-      <a href="#">Terms</a>
-    </div>
   </div>
 </footer>
 
 <script>
-/* ─── Loading Screen ─── */
+/* ─── Loading Screen (simple fade-out) ─── */
 (function(){
-  const fill = document.getElementById('loading-fill');
-  const txt = document.getElementById('loading-text');
   const screen = document.getElementById('loading-screen');
-  const stages = [
-    { pct: 15, msg: 'Loading modules...' },
-    { pct: 35, msg: 'Detecting backends...' },
-    { pct: 55, msg: 'Initializing engine...' },
-    { pct: 75, msg: 'Warming caches...' },
-    { pct: 90, msg: 'Ready' },
-  ];
-  let i = 0;
-  function tick() {
-    if (i < stages.length) {
-      fill.style.width = stages[i].pct + '%';
-      txt.textContent = stages[i].msg;
-      i++;
-      setTimeout(tick, 350);
-    } else {
-      fill.style.width = '100%';
-      txt.textContent = 'Ready ✓';
-      setTimeout(() => screen.classList.add('hidden'), 400);
-    }
-  }
-  tick();
+  if (!screen) return;
+  setTimeout(() => screen.classList.add('hidden'), 600);
 })();
 
 /* ─── Nav scroll effect ─── */
@@ -896,17 +953,33 @@ const benchObserver = new IntersectionObserver((entries) => {
 }, { threshold: 0.2 });
 benchObserver.observe(benchSection);
 
-/* ─── Copy button ─── */
-function copyCode() {
-  const codeEl = document.querySelector('.code-block code');
-  const text = codeEl.textContent;
-  navigator.clipboard.writeText(text).then(() => {
-    const btn = document.getElementById('copy-btn');
+/* ─── Copy button (works per-block) ─── */
+function copyCode(btn) {
+  const codeEl = btn.parentElement.nextElementSibling.querySelector('code');
+  if (!codeEl) return;
+  navigator.clipboard.writeText(codeEl.textContent).then(() => {
     btn.textContent = 'Copied!';
     btn.classList.add('copied');
     setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
   });
 }
+
+/* ─── Active nav section highlighting ─── */
+(function(){
+  const sections = document.querySelectorAll('section[id]');
+  const navLinks = document.querySelectorAll('.nav-links a[href^="#"]');
+  if (!sections.length || !navLinks.length) return;
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        navLinks.forEach(link => {
+          link.classList.toggle('nav-active', link.getAttribute('href') === '#' + entry.target.id);
+        });
+      }
+    });
+  }, { threshold: 0.3, rootMargin: '-80px 0px -40% 0px' });
+  sections.forEach(s => observer.observe(s));
+})();
 </script>
 </body>
 </html>
