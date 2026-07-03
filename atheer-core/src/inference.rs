@@ -10,7 +10,6 @@ use candle_core::Tensor;
 use std::io::Write;
 use std::time::Instant;
 use uuid::Uuid;
-use chrono::Utc;
 
 fn f32_vec_to_bytes(vec: &[f32]) -> Vec<u8> {
     vec.iter()
@@ -241,7 +240,7 @@ impl InferenceEngine {
         let keep_base = self.system_prompt_len;
         while !self.turn_history.is_empty() {
             let first = self.turn_history.first().unwrap();
-            let turn_len = first.1 - first.0;
+            let _turn_len = first.1 - first.0;
             let remaining_tokens: usize =
                 self.turn_history.iter().skip(1).map(|t| t.1 - t.0).sum::<usize>()
                     + keep_base;
@@ -302,10 +301,10 @@ impl InferenceEngine {
             .unwrap_or_else(|| model_device.clone());
 
         #[cfg(not(feature = "auto-backend"))]
-        let prefill_device = model_device.clone();
+        let _prefill_device = model_device.clone();
 
         #[cfg(not(feature = "auto-backend"))]
-        let decode_device = model_device.clone();
+        let _decode_device = model_device.clone();
 
         let device = model_device.clone();
 

@@ -244,7 +244,7 @@ impl PiiRedactor {
         // Simple phone detection: 7+ consecutive digits
         let mut i = 0;
         let bytes = result.clone().into_bytes();
-        let mut digit_runs: Vec<(usize, usize)> = Vec::new();
+        let _digit_runs: Vec<(usize, usize)> = Vec::new();
         while i < bytes.len() {
             if bytes[i].is_ascii_digit() || bytes[i] == b'+' || bytes[i] == b'-' || bytes[i] == b' ' {
                 // Allow separators but count only digits
