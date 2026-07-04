@@ -337,6 +337,54 @@ The Metal backend (`atheer-accel/src/metal.rs`) panics on systems without a Meta
 - **iOS telemetry on-device** — `IosMonitor` works on macOS. Testing on physical iOS devices is needed to validate `UIDevice` and `NSProcessInfo` selectors behave as expected.
 - **Cross-compilation CI** — add `cargo ndk` and `xcodebuild` build verification to CI pipeline.
 
+## Vendored Dependencies
+
+Atheer vendors specific upstream crates that require patches for stability or platform compatibility. These are managed via `git subtree` and live in-tree as workspace members with `[patch.crates-io]` entries in the root `Cargo.toml`.
+
+### `candle-core`
+
+The vendored `candle-core` crate at `candle-core/` includes a stability fix for the Metal backend — on systems without a Metal GPU (virtualized macOS, CI), `MetalDevice::new()` returns `Err` instead of panicking on an empty device list.
+
+**Upstream:** `https://github.com/huggingface/candle`  
+**Fork:** `github.com/achmadk/candle` (branch `patched-v0.10.2`)  
+**Remote:** `candle-core-upstream`
+
+**Update procedure:**
+
+```bash
+# Pull latest from the fork
+git subtree pull --prefix=candle-core --squash candle-core-upstream crate-candle-core
+
+# Re-apply the Metal stability patch if it was not in the pulled revision
+# The fix lives in candle-core/src/metal_backend/mod.rs ~line 1927
+```
+
+After pulling, run `cargo check -p candle-core` to verify the vendored crate compiles, then `cargo test --workspace --exclude candle-coreml` to verify the full workspace.
+
+### `candle-coreml`
+
+The vendored `candle-coreml` crate at `candle-coreml/` provides Apple CoreML/ANE integration for inference. It is vendored from a fork that maintains compatibility with the workspace's Cargo.toml conventions (no downstream deps like `clap`, `tokio`, `hf-hub`, `git2`, etc.).
+
+**Upstream:** `https://github.com/mazhewitt/candle-cormel`  
+**Fork:** `github.com/achmadk/candle-coreml` (branch `main`)  
+**Remote:** `candle-coreml-upstream`
+
+**Update procedure:**
+
+```bash
+# Pull latest from the fork
+git subtree pull --prefix=candle-coreml --squash candle-coreml-upstream main
+
+# Re-apply Cargo.toml customizations:
+# - Simplified description and metadata
+# - Strip unused deps: clap, tokio, hf-hub, git2, tracing-subscriber, criterion, which
+# - Keep only: candle-core, candle-nn, candle-transformers, tokenizers, anyhow,
+#   serde, serde_json, rand, dirs, half, tracing, once_cell, glob, chrono,
+#   objc2/objc2-foundation/objc2-core-ml/block2 (macOS), tempfile (dev-dep)
+```
+
+After pulling, run `cargo check -p candle-coreml` to verify the vendored crate compiles, then `cargo test -p candle-coreml` to run its unit tests.
+
 ## License
 
 MIT OR Apache-2.0

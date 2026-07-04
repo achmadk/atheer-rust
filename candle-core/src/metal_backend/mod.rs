@@ -1927,9 +1927,9 @@ impl BackendDevice for MetalDevice {
     fn new(ordinal: usize) -> Result<Self> {
         let mut devices = Device::all();
         if ordinal >= devices.len() {
-            return Err(MetalError::new(format!(
+            return Err(crate::Error::Metal(MetalError::Message(format!(
                 "no Metal device available at ordinal {ordinal}"
-            )));
+            ))));
         }
         let device = devices.swap_remove(ordinal);
         let command_queue = device.new_command_queue().map_err(MetalError::from)?;

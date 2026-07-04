@@ -708,7 +708,8 @@ impl QwenModel {
     /// Decoded text string ready for use
     ///
     /// # Example
-    /// ```
+    /// ```ignore
+    /// let mut model = /* ... */;
     /// let response = model.complete_text("What is the capital of France?", 50)?;
     /// println!("Response: {}", response);
     /// ```
@@ -739,7 +740,8 @@ impl QwenModel {
     /// Decoded text string ready for use
     ///
     /// # Example
-    /// ```
+    /// ```ignore
+    /// let mut model = /* ... */;
     /// let response = model.generate_text_with_params(
     ///     "What is the capital of France?",
     ///     50,

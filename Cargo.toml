@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "candle-core",
     "candle-transformers",
     "candle-coreml",
     "atheer-core",
@@ -31,8 +32,8 @@ rust-version = "1.75"
 #   - ModelWeights::kv_cache_snapshot()
 #   - ModelWeights::kv_cache_restore()
 [patch.crates-io]
+candle-core = { path = "candle-core" }
 candle-transformers = { path = "candle-transformers" }
-# candle-core = { path = "/tmp/candle-core-0.10.2" }
 # candle-nn = { path = "/tmp/candle-nn-0.10.2" }
 
 [workspace.dependencies]

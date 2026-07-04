@@ -1,4 +1,5 @@
 use crate::error::Result;
+use crate::kv_cache_bridge::KvCacheBridge;
 use crate::Model;
 use candle_core::Tensor;
 use sha2::{Digest, Sha256};
