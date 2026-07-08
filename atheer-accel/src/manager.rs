@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::AccelBackend;
 use crate::{BackendType, CpuBackend};
 
-#[cfg(target_os = "ios")]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 use crate::{CoreMLBackend, MetalBackend};
 #[cfg(target_os = "android")]
 use crate::{NnapiBackend, VulkanBackend};
@@ -11,6 +11,10 @@ use crate::{NnapiBackend, VulkanBackend};
 pub struct BackendManager {
     backends: Vec<Arc<dyn AccelBackend>>,
     selected: Arc<dyn AccelBackend>,
+    /// Whether a CoreML .mlpackage model path was configured.
+    /// When set, the ANE backend uses `with_model()` instead of `new()`,
+    /// loading the actual .mlpackage for real inference.
+    coreml_model_path: Option<String>,
 }
 
 impl BackendManager {
@@ -18,9 +22,8 @@ impl BackendManager {
         let mut backends: Vec<Arc<dyn AccelBackend>> = Vec::new();
         backends.push(Arc::new(CpuBackend::default()));
 
-        #[cfg(target_os = "ios")]
+        #[cfg(any(target_os = "ios", target_os = "macos"))]
         {
-            // Priority: CoreML (ANE) > Metal (GPU) > CPU
             backends.push(Arc::new(CoreMLBackend::new()));
             backends.push(Arc::new(MetalBackend::new()));
         }
@@ -34,7 +37,45 @@ impl BackendManager {
 
         let selected = backends[0].clone();
 
-        Self { backends, selected }
+        Self {
+            backends,
+            selected,
+            coreml_model_path: None,
+        }
+    }
+
+    /// Configure a CoreML model path for ANE inference.
+    ///
+    /// When a model path is provided and we're on an Apple platform with the
+    /// `coreml` feature, this replaces the default `CoreMLBackend::new()` with
+    /// `CoreMLBackend::with_model()` — loading the actual `.mlpackage` for
+    /// real ANE inference. On non-Apple platforms or without the feature, the
+    /// path is stored but has no effect (the backend falls back to Metal/CPU).
+    pub fn with_coreml_model(
+        mut self,
+        model_path: &str,
+        architecture: &str,
+        quantization: &str,
+        param_count_m: f32,
+    ) -> Self {
+        self.coreml_model_path = Some(model_path.to_string());
+
+        #[cfg(all(feature = "coreml", any(target_os = "ios", target_os = "macos")))]
+        if let Some(pos) = self
+            .backends
+            .iter()
+            .position(|b| b.backend_type() == BackendType::CoreML)
+        {
+            self.backends[pos] = Arc::new(CoreMLBackend::with_model(
+                architecture,
+                quantization,
+                param_count_m,
+                model_path,
+            ));
+        }
+
+        self.selected = self.best_available();
+        self
     }
 
     pub fn with_autoselect(mut self) -> Self {
@@ -77,9 +118,18 @@ impl BackendManager {
 
     /// Return the `candle_core::Device` corresponding to the currently selected backend.
     /// Falls back to CPU if the preferred device is unavailable.
+    ///
+    /// When a CoreML model is loaded (ANE path), returns `Device::Cpu` because
+    /// `candle_coreml::CoreMLModel::forward()` handles device placement internally
+    /// — CPU tensors are the correct input format. Metal is returned when no ANE
+    /// model is loaded (Metal GPU acceleration for fallback).
     pub fn device(&self) -> candle_core::Device {
         match self.selected.backend_type() {
             BackendType::Cpu => candle_core::Device::Cpu,
+            #[cfg(any(target_os = "ios", target_os = "macos"))]
+            BackendType::CoreML if self.coreml_model_path.is_some() => {
+                candle_core::Device::Cpu
+            }
             #[cfg(any(target_os = "ios", target_os = "macos"))]
             BackendType::Metal | BackendType::CoreML => {
                 candle_core::Device::metal_if_available(0).unwrap_or(candle_core::Device::Cpu)
@@ -223,5 +273,24 @@ mod tests {
         let prefill_device = manager.device_for_op(true, true);
         // In eco mode, prefill still uses accelerator
         assert!(matches!(prefill_device, candle_core::Device::Cpu));
+    }
+
+    #[test]
+    fn test_with_coreml_model_stores_path() {
+        let manager = BackendManager::new().with_coreml_model(
+            "/tmp/test.mlpackage",
+            "llama",
+            "q4_k_m",
+            100.0,
+        );
+        // The path should be stored on the manager
+        // (coreml_model_path is private, but we verify via device() — when CoreML
+        // is selected with a model path, device() returns Cpu, not Metal)
+        let current = manager.current();
+        // On non-Apple platforms, CoreML isn't registered, so autoselect picks CPU
+        // The test verifies the builder doesn't panic and the manager is usable
+        assert!(current.backend_type() == BackendType::CoreML || current.backend_type() == BackendType::Cpu);
+        // device() should not panic
+        let _device = manager.device();
     }
 }

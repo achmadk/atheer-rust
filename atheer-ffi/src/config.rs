@@ -15,6 +15,7 @@ pub struct AtheerConfig {
     pub memory_bank_size_mb: u32,
     pub standby_draft_path: Option<String>,
     pub backend_type: Option<AtheerBackendType>,
+    pub coreml_model_path: Option<String>,
 }
 
 impl Default for AtheerConfig {
@@ -32,6 +33,7 @@ impl Default for AtheerConfig {
             memory_bank_size_mb: 512,
             standby_draft_path: None,
             backend_type: None,
+            coreml_model_path: None,
         }
     }
 }

@@ -1,6 +1,6 @@
 use crate::{
-    AtheerConfig, AtheerError, AtheerInferenceMode, EngineStatus, GenerationRequest,
-    GenerationResponse,
+    AtheerConfig, AtheerBackendType, AtheerError, AtheerInferenceMode, EngineStatus,
+    GenerationRequest, GenerationResponse,
 };
 use atheer_accel::BackendManager;
 use atheer_core::{CrashReporter, InferenceEngine, SamplingConfig};
@@ -38,14 +38,31 @@ impl AtheerEngine {
             ..Default::default()
         };
 
-        // Probe backends — respect configured preference if set
-        let backend_manager = match config.backend_type {
-            Some(bt) => {
-                let mut bm = BackendManager::new();
-                bm.set_backend(bt.into());
-                bm
+        // Probe backends — respect configured preference if set,
+        // and wire CoreML model path if provided.
+        let backend_manager = {
+            let mut bm = match config.backend_type {
+                Some(bt) => {
+                    let mut b = BackendManager::new();
+                    b.set_backend(bt.into());
+                    b
+                }
+                None => BackendManager::new().with_autoselect(),
+            };
+
+            // If a CoreML .mlpackage path was provided, pass it through
+            // so the ANE backend loads the real model instead of probing.
+            if let Some(ref path) = config.coreml_model_path {
+                // Extract architecture and param count from config.
+                // Default to "llama" architecture and q4_k_m quantization.
+                let architecture = config.model_id.as_deref().unwrap_or("llama");
+                let quantization = &config.quantization;
+                // Derive param count from model_id if possible, default to ~100M
+                let param_count_m = parse_param_count(architecture);
+                bm = bm.with_coreml_model(path, architecture, quantization, param_count_m);
             }
-            None => BackendManager::new().with_autoselect(),
+
+            bm
         };
 
         Self {
@@ -65,7 +82,41 @@ impl AtheerEngine {
             stream_done: Arc::new(AtomicBool::new(false)),
         }
     }
+}
 
+/// Parse a parameter count from a model ID string.
+///
+/// Heuristic: looks for patterns like "700M", "1.5B", "7B" in the model ID.
+/// Returns the count in millions (e.g., "1.5B" → 1500.0).
+/// Defaults to ~100M if no pattern is found — a conservative default for
+/// ANE compatibility heuristics.
+fn parse_param_count(model_id: &str) -> f32 {
+    let lower = model_id.to_lowercase();
+    if let Some(end) = lower.rfind('b') {
+        let prefix = &lower[..end].trim_end();
+        if let Some(start) = prefix.rfind(|c: char| !c.is_ascii_digit() && c != '.') {
+            if let Ok(v) = prefix[start + 1..].parse::<f32>() {
+                return v * 1000.0;
+            }
+        } else if let Ok(v) = prefix.parse::<f32>() {
+            return v * 1000.0;
+        }
+    }
+    if let Some(end) = lower.rfind('m') {
+        let prefix = &lower[..end].trim_end();
+        if let Some(start) = prefix.rfind(|c: char| !c.is_ascii_digit() && c != '.') {
+            if let Ok(v) = prefix[start + 1..].parse::<f32>() {
+                return v;
+            }
+        } else if let Ok(v) = prefix.parse::<f32>() {
+            return v;
+        }
+    }
+    100.0 // fallback
+}
+
+#[uniffi::export]
+impl AtheerEngine {
     pub fn initialize(&self) -> std::result::Result<(), AtheerError> {
         let model_path = self
             .config

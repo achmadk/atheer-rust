@@ -506,6 +506,44 @@ mod tests {
     }
 
     #[test]
+    fn test_ffi_config_coreml_model_path_default() {
+        let config = crate::AtheerConfig::default();
+        assert!(config.coreml_model_path.is_none());
+    }
+
+    #[test]
+    fn test_ffi_config_coreml_model_path_set_and_get() {
+        let mut config = crate::AtheerConfig::default();
+        config.coreml_model_path = Some("/tmp/model.mlpackage".to_string());
+        assert_eq!(
+            config.coreml_model_path,
+            Some("/tmp/model.mlpackage".to_string())
+        );
+    }
+
+    #[test]
+    fn test_ffi_config_coreml_model_path_serialization_roundtrip() {
+        let mut config = crate::AtheerConfig::default();
+        config.coreml_model_path = Some("/models/llama.mlpackage".to_string());
+        config.model_path = Some("/models/llama.gguf".to_string());
+        config.model_id = Some("llama-3.2-3b".to_string());
+
+        let json = serde_json::to_string(&config).expect("serialization should succeed");
+        let deserialized: crate::AtheerConfig =
+            serde_json::from_str(&json).expect("deserialization should succeed");
+
+        assert_eq!(
+            deserialized.coreml_model_path,
+            Some("/models/llama.mlpackage".to_string())
+        );
+        assert_eq!(
+            deserialized.model_path,
+            Some("/models/llama.gguf".to_string())
+        );
+        assert_eq!(deserialized.model_id, Some("llama-3.2-3b".to_string()));
+    }
+
+    #[test]
     fn test_ffi_backend_type_conversion() {
         use atheer_accel::BackendType;
 

@@ -117,13 +117,20 @@ fn read_memory() -> (u64, u64) {
 ///
 /// Battery monitoring is enabled on the device for the duration of the sample
 /// and restored to its previous state afterwards (good citizenship).
+///
+/// On macOS, `UIDevice` is unavailable — returns safe defaults `(0, true)`.
 fn read_battery() -> (u32, bool) {
     // SAFETY: UIDevice is always available on iOS. `currentDevice` returns
     // the shared singleton. We enable battery monitoring temporarily.
+    // On macOS, UIDevice does not exist, so we detect it via AnyClass::get
+    // and return safe defaults without entering the unsafe block.
+    let _cls = match objc2::runtime::AnyClass::get(c"UIDevice") {
+        Some(cls) => cls,
+        None => return (0, true), // macOS fallback — no UIDevice
+    };
+
     unsafe {
-        let cls = objc2::runtime::AnyClass::get(c"UIDevice")
-            .expect("UIDevice class not found — this code requires iOS");
-        let device: *mut NSObject = msg_send![cls, currentDevice];
+        let device: *mut NSObject = msg_send![_cls, currentDevice];
 
         // Save previous battery monitoring state
         let was_monitoring: bool = msg_send![device, isBatteryMonitoringEnabled];
@@ -405,5 +412,16 @@ mod tests {
         running.store(false, Ordering::Relaxed);
         handle.join().unwrap();
         // Test passes if thread joins without hanging
+    }
+
+    #[test]
+    fn test_read_battery_macos_fallback() {
+        // On any platform, read_battery() must never panic.
+        // On macOS, it returns (0, true) because UIDevice is unavailable.
+        // On iOS, it reads from the actual device.
+        let (level, on_battery) = read_battery();
+        assert!(level <= 100, "battery level must be 0-100, got {level}");
+        // on_battery must be a valid boolean
+        let _ = on_battery;
     }
 }
