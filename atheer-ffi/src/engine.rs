@@ -1,12 +1,19 @@
 use crate::{
-    AtheerConfig, AtheerBackendType, AtheerError, AtheerInferenceMode, EngineStatus,
+    AtheerConfig, AtheerError, AtheerInferenceMode, EngineStatus,
     GenerationRequest, GenerationResponse,
 };
 use atheer_accel::BackendManager;
+use atheer_core::model_credential::ModelCredential;
+use atheer_core::model_encryption::{
+    aes256_gcm::Aes256GcmEncryption, ModelEncryption,
+};
 use atheer_core::{CrashReporter, InferenceEngine, SamplingConfig};
 use atheer_hardware::{monitor::GenericMonitor, HardwareMonitor};
 use atheer_memory_bank::MemoryBank;
 use atheer_orchestrator::{Orchestrator, OrchestratorConfig};
+use sha2::{Digest, Sha256};
+use hkdf::Hkdf;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -23,6 +30,10 @@ pub struct AtheerEngine {
     monitor: Arc<dyn HardwareMonitor>,
     crash_reporter: CrashReporter,
     session_id: Arc<Mutex<Option<String>>>,
+    // Encryption scheme registry for Custom credentials
+    encryption_schemes: Mutex<HashMap<String, Box<dyn ModelEncryption>>>,
+    // Device-derived key support
+    device_uid: Mutex<Option<String>>,
     // Streaming state
     stream_tokens: Arc<Mutex<Vec<String>>>,
     stream_index: Arc<AtomicUsize>,
@@ -76,7 +87,8 @@ impl AtheerEngine {
             monitor: Arc::new(GenericMonitor::new()),
             crash_reporter: CrashReporter::new(),
             session_id: Arc::new(Mutex::new(None)),
-            // Streaming state
+            encryption_schemes: Mutex::new(HashMap::new()),
+            device_uid: Mutex::new(None),
             stream_tokens: Arc::new(Mutex::new(Vec::new())),
             stream_index: Arc::new(AtomicUsize::new(0)),
             stream_done: Arc::new(AtomicBool::new(false)),
@@ -130,11 +142,26 @@ impl AtheerEngine {
             .unwrap_or("tokenizer.json");
 
         let device = self.backend_manager.device();
-        let model = atheer_core::Model::from_gguf(model_path, &device).map_err(|e| {
-            AtheerError::ModelLoadFailed {
-                message: format!("{e}"),
-            }
-        })?;
+
+        // --- Decryption pipeline ---
+        let model = if let Some(ref credential) = self.config.model_credential {
+            let bytes = self.decrypt_with_credential(credential, model_path)?;
+
+            let mut cursor = std::io::Cursor::new(bytes);
+            atheer_core::Model::from_gguf_reader(&mut cursor, &device).map_err(|e| {
+                AtheerError::ModelLoadFailed {
+                    message: format!("{e}"),
+                }
+            })?
+        } else {
+            // Original cleartext path
+            atheer_core::Model::from_gguf(model_path, &device).map_err(|e| {
+                AtheerError::ModelLoadFailed {
+                    message: format!("{e}"),
+                }
+            })?
+        };
+
         let tokenizer = atheer_core::Tokenizer::from_file(tokenizer_path).map_err(|e| {
             AtheerError::TokenizerLoadFailed {
                 message: format!("{e}"),
@@ -351,4 +378,185 @@ impl AtheerEngine {
     pub fn stream_done(&self) -> bool {
         self.stream_done.load(Ordering::Relaxed)
     }
+}
+
+// ── Private helpers ──────────────────────────────────────────────
+impl AtheerEngine {
+    /// Select and run the decryption pipeline for the given credential.
+    ///
+    /// Handles key resolution (ServerDistributed via wrapped_key,
+    /// DeviceDerived via HKDF, Custom via registered schemes),
+    /// catch_unwind protection, and crash reporter scrubbing.
+    fn decrypt_with_credential(
+        &self,
+        credential: &ModelCredential,
+        model_path: &str,
+    ) -> std::result::Result<Vec<u8>, AtheerError> {
+        match credential {
+            ModelCredential::ServerDistributed {
+                key_id,
+                nonce: _,
+                wrapped_key,
+            } => {
+                let key_bytes = wrapped_key.as_ref().ok_or_else(|| {
+                    AtheerError::ModelDecryptionFailed {
+                        message: format!(
+                            "ServerDistributed key '{key_id}': key not provided. \
+                             Resolve from Keychain/Keystore and pass as wrapped_key."
+                        ),
+                    }
+                })?;
+                if key_bytes.len() != 32 {
+                    return Err(AtheerError::ModelDecryptionFailed {
+                        message: format!(
+                            "ServerDistributed key for {key_id}: expected 32 bytes, got {}",
+                            key_bytes.len()
+                        ),
+                    });
+                }
+                let mut arr = [0u8; 32];
+                arr.copy_from_slice(key_bytes);
+                let enc = Aes256GcmEncryption::new(arr);
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    enc.decrypt_reader(model_path)
+                }));
+                match result {
+                    Ok(Ok(bytes)) => Ok(bytes),
+                    Ok(Err(e)) => {
+                        enc.scrub();
+                        self.record_scrubbed_crash("ModelDecryptFailed", model_path);
+                        Err(AtheerError::ModelDecryptionFailed {
+                            message: format!("{e}"),
+                        })
+                    }
+                    Err(panic) => {
+                        enc.scrub();
+                        let msg = extract_panic_msg(&panic);
+                        self.record_scrubbed_crash("ModelDecryptPanic", "");
+                        Err(AtheerError::ModelDecryptionFailed {
+                            message: format!("decrypt panicked: {msg}"),
+                        })
+                    }
+                }
+            }
+            ModelCredential::DeviceDerived { salt, nonce: _ } => {
+                let uid = self
+                    .device_uid
+                    .lock()
+                    .map_err(|_| AtheerError::ModelDecryptionFailed {
+                        message: "device_uid lock poisoned".into(),
+                    })?
+                    .clone()
+                    .ok_or_else(|| AtheerError::ModelDecryptionFailed {
+                        message:
+                            "DeviceDerived: device_uid not set. Call set_device_uid() first."
+                                .into(),
+                    })?;
+
+                let mut hasher = Sha256::new();
+                hasher.update(model_path.as_bytes());
+                let model_hash = hasher.finalize();
+
+                let prk = Hkdf::<Sha256>::new(None, uid.as_bytes());
+                let mut key = [0u8; 32];
+                let info = [model_hash.as_slice(), salt.as_slice()].concat();
+                prk.expand(&info, &mut key)
+                    .map_err(|e| AtheerError::ModelDecryptionFailed {
+                        message: format!("DeviceDerived HKDF expand failed: {e}"),
+                    })?;
+
+                let enc = Aes256GcmEncryption::new(key);
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    enc.decrypt_reader(model_path)
+                }));
+                match result {
+                    Ok(Ok(bytes)) => Ok(bytes),
+                    Ok(Err(e)) => {
+                        enc.scrub();
+                        Err(AtheerError::ModelDecryptionFailed {
+                            message: format!("{e}"),
+                        })
+                    }
+                    Err(panic) => {
+                        enc.scrub();
+                        let msg = extract_panic_msg(&panic);
+                        Err(AtheerError::ModelDecryptionFailed {
+                            message: format!("decrypt panicked: {msg}"),
+                        })
+                    }
+                }
+            }
+            ModelCredential::Custom {
+                scheme_name,
+                config: _,
+            } => {
+                let schemes = self.encryption_schemes.lock().map_err(|_| {
+                    AtheerError::ModelDecryptionFailed {
+                        message: "encryption_schemes lock poisoned".into(),
+                    }
+                })?;
+                let scheme = schemes.get(scheme_name).ok_or_else(|| {
+                    AtheerError::ModelDecryptionFailed {
+                        message: format!(
+                            "Custom encryption scheme '{scheme_name}' not registered. \
+                             Call register_encryption_scheme() before initialize()."
+                        ),
+                    }
+                })?;
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    scheme.decrypt_reader(model_path)
+                }));
+                match result {
+                    Ok(Ok(bytes)) => Ok(bytes),
+                    Ok(Err(e)) => Err(AtheerError::ModelDecryptionFailed {
+                        message: format!("{e}"),
+                    }),
+                    Err(panic) => {
+                        let msg = extract_panic_msg(&panic);
+                        Err(AtheerError::ModelDecryptionFailed {
+                            message: format!("Custom scheme '{scheme_name}' panicked: {msg}"),
+                        })
+                    }
+                }
+            }
+        }
+    }
+
+    /// Register a custom encryption scheme for `Custom` credentials.
+    /// Rust-only (not UniFFI-exported because `Box<dyn ModelEncryption>` cannot
+    /// cross the FFI boundary directly).
+    pub fn register_encryption_scheme(
+        &self,
+        scheme_name: String,
+        scheme: Box<dyn ModelEncryption>,
+    ) {
+        if let Ok(mut schemes) = self.encryption_schemes.lock() {
+            schemes.insert(scheme_name, scheme);
+        }
+    }
+} // end #[uniffi::export] impl AtheerEngine
+
+// Non-UniFFI public methods (used from Rust)
+impl AtheerEngine {
+    /// Set the device UID used for `DeviceDerived` key derivation.
+    pub fn set_device_uid(&self, uid: String) {
+        if let Ok(mut guard) = self.device_uid.lock() {
+            *guard = Some(uid);
+        }
+    }
+}
+
+impl AtheerEngine {
+    fn record_scrubbed_crash(&self, error: &str, key_id_to_redact: &str) {
+        self.crash_reporter
+            .record_crash_scrubbed(error, "", key_id_to_redact);
+    }
+}
+
+fn extract_panic_msg(panic: &Box<dyn std::any::Any + Send>) -> String {
+    panic
+        .downcast_ref::<&str>()
+        .map(|s| s.to_string())
+        .or_else(|| panic.downcast_ref::<String>().map(|s| s.to_string()))
+        .unwrap_or_else(|| "unknown panic".to_string())
 }

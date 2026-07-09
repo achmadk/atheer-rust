@@ -9,6 +9,7 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 tokio = { workspace = true }
+uniffi = { workspace = true }
 memmap2 = { workspace = true }
 tracing = { workspace = true }
 
@@ -22,6 +23,10 @@ rand = "0.8"
 regex = "1"
 sha2 = "0.10"
 hex = "0.4"
+tempfile = "3.27"
+aes-gcm = "0.10"
+zeroize = { version = "1", features = ["zeroize_derive"] }
+hkdf = "0.12"
 dirs = "5.0"
 filetime = "0.2"
 reqwest = { workspace = true, features = ["blocking"], optional = true }
@@ -36,4 +41,3 @@ mmap = []
 model-registry = ["dep:reqwest"]
 
 [dev-dependencies]
-tempfile = "3.27"

@@ -50,6 +50,19 @@ impl CrashReporter {
         self.crash_count.load(Ordering::SeqCst)
     }
 
+    /// Record a crash with sensitive key identifiers redacted.
+    ///
+    /// Any occurrence of `key_id_to_redact` in `context` is replaced with
+    /// `"KEY_REDACTED"` before the entry is written to the crash log.
+    pub fn record_crash_scrubbed(&self, error: &str, context: &str, key_id_to_redact: &str) -> u64 {
+        let scrubbed = if key_id_to_redact.is_empty() {
+            context.to_string()
+        } else {
+            context.replace(key_id_to_redact, "KEY_REDACTED")
+        };
+        self.record_crash(error, &scrubbed)
+    }
+
     pub fn reset_crashes(&self) {
         self.crash_count.store(0, Ordering::SeqCst);
     }

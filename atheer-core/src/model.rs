@@ -1,6 +1,7 @@
 use crate::kv_cache_bridge::KvCacheBridge;
 use crate::quantization_resolver::QuantizationResolver;
 use crate::{AtheerCoreError, Result};
+use std::io::{Read, Seek};
 use std::path::Path;
 
 /// Wrapper around a candle-transformers quantized model.
@@ -30,6 +31,34 @@ impl Model {
         resolver: &mut QuantizationResolver,
     ) -> Result<Self> {
         Self::from_gguf_inner(path, device, Some(resolver))
+    }
+
+    /// Load a model from an arbitrary `Read + Seek` source (e.g. a
+    /// `Cursor<Vec<u8>>` of decrypted bytes) rather than a file path.
+    ///
+    /// This is the primary entry point for the decryption pipeline: after
+    /// `Aes256GcmEncryption` produces plaintext bytes, they are passed to
+    /// this constructor as a `Cursor<Vec<u8>>`.
+    pub fn from_gguf_reader<R: Read + Seek>(
+        reader: &mut R,
+        device: &candle_core::Device,
+    ) -> Result<Self> {
+        let device = device.clone();
+        let gguf = candle_core::quantized::gguf_file::Content::read(reader)
+            .map_err(|e| AtheerCoreError::ModelLoadFailed(format!("GGUF parse: {e}")))?;
+
+        // Architecture-aware dispatch: reads general.architecture from GGUF
+        // metadata and selects the appropriate ModelWeights implementation.
+        let variant = crate::weights::WeightsVariant::from_gguf(gguf, reader, &device)
+            .map_err(|e| AtheerCoreError::ModelLoadFailed(format!("ModelWeights: {e}")))?;
+
+        Ok(Self {
+            weights: variant,
+            device,
+            context_size: 4096,
+            resolved_quant_format: None,
+            quant_format_warning: None,
+        })
     }
 
     fn from_gguf_inner(

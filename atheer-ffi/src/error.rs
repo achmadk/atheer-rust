@@ -14,4 +14,7 @@ pub enum AtheerError {
     NotInitialized,
     #[error("Invalid mode: {0}")]
     InvalidMode(String),
+
+    #[error("Model decryption failed: {message}")]
+    ModelDecryptionFailed { message: String },
 }

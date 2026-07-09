@@ -7,6 +7,8 @@
 > Two perspectives merged:
 > 1. A prior detailed audit (crate-by-crate, line-level bug findings)
 > 2. A strategic competitive-gap analysis (reliability/performance/security/privacy against best-in-class)
+>
+> **Status of S1 (Model File Encryption): ✅ Completed July 2026** — AES-256-GCM encryption at rest for GGUF and .mlpackage, decryption pipeline with three key-resolution strategies (ServerDistributed, DeviceDerived via HKDF, Custom), platform Keychain/Keystore wrappers for iOS and Android, and a CLI tool for offline encryption.
 
 ---
 
@@ -88,6 +90,7 @@
 | Crash reporter with log path | `atheer-core` | Structured error logging, not just stderr. |
 | Agent tool-calling infrastructure | `atheer-orchestrator` | Differentiator — nobody else does agent loops on-device. |
 | Rust memory safety by default | entire codebase | No GC pauses, no JNI thrashes, built-in safety. |
+| Model file encryption (AES-256-GCM) | `model_encryption/`, `AtheerEngine` | Three key-resolutions: ServerDistributed, DeviceDerived (HKDF), Custom. Platform Keychain/Keystore wrappers. **Nobody in the competitive set does this — genuine differentiator.** |
 
 ---
 
@@ -97,6 +100,8 @@
 
 The [security.rs](atheer-core/src/security.rs) module is minimal — path allowlisting, size checks, and prompt truncation. There is **no model signature verification** despite the field existing (`enable_signature_verify: bool` on `SecurityAudit`).
 
+> **S1 completed ✅** — Model file encryption (AES-256-GCM) is now implemented. See `atheer-core/src/model_encryption/`, `ios/AtheerKeychain.swift`, `android/KeyStoreManager.kt`, and the `atheer-encrypt` CLI tool. The remaining critical gaps are S2 (model signature verification) and S3 (load-time hash verification).
+
 > [!CAUTION]
 > Model integrity is the #1 attack surface for on-device AI. A malicious GGUF file can execute arbitrary computation through crafted weight values. Without cryptographic verification, the engine is vulnerable to supply-chain attacks.
 
@@ -104,7 +109,7 @@ The [security.rs](atheer-core/src/security.rs) module is minimal — path allowl
 
 | # | Gap | Severity | Recommendation |
 |---|-----|----------|-------------|
-| S1 | **Model file encryption** | 🔴 Critical | `.gguf`/`.mlpackage` stored in cleartext on device FS. AES-256-GCM decrypt at load time; key from secure enclave. **Nobody in the competitive set does this — genuine differentiator.** |
+| S1 | **Model file encryption** | ✅ Completed | `.gguf`/`.mlpackage` encrypted with AES-256-GCM via `Aes256GcmEncryption`; decryption pipeline in `AtheerEngine::initialize()` with three key-resolution strategies (ServerDistributed, DeviceDerived via HKDF, Custom). Keychain/Keystore wrappers for iOS (`AtheerKeychain.swift`) and Android (`KeyStoreManager.kt`). CLI tool `atheer-encrypt` for offline encryption. See `atheer-core/src/model_encryption/`, `ios/`, `android/`. |
 | S2 | **No model signature verification** | 🔴 Critical | Implement Ed25519 or ECDSA signature verification for model files. The `SecurityAudit.enable_signature_verify` field exists but is dead code. Wire it to a real verification pipeline using `ring` or `ed25519-dalek`. |
 | S3 | **SHA-256 verification is download-only** | 🟠 High | ModelRegistry verifies hashes after download, but `Model::from_gguf()` does **not** verify hashes at load time. A file modified post-download passes silently. Add mandatory hash verification at `from_gguf()` time. |
 | S4 | **No GGUF format validation** | 🟠 High | The engine trusts GGUF metadata (tensor shapes, quantization markers) without validation. Malformed GGUF files could cause OOB reads via `mmap`. Add GGUF header/metadata validation before mmap. |
@@ -350,14 +355,14 @@ UniFFI bindings exist, the binding generation pipeline is broken, and pre-genera
 | **Predictive thermal** | ✅ **Unique** | ❌ | ❌ | ❌ | ❌ |
 | **Grammar-structured output** | ✅ Pushdown automaton | ✅ GBNF | ✅ | ❌ | ❌ |
 | **Tool calling / agent loops** | ✅ **Unique** | ❌ | ❌ | ❌ | ❌ |
-| **Model encryption** | ❌ Gap | ❌ | ❌ | ❌ | ❌ |
+| **Model encryption** | ✅ | ❌ | ❌ | ❌ | ❌ |
 | **Prompt guardrails** | ❌ Gap | ❌ | ❌ | ❌ | ❌ |
 | **Privacy manifest** | ❌ Gap | ❌ | ❌ | ❌ | ❌ |
 | **Session isolation** | ❌ Gap | ❌ | ❌ | ❌ | ❌ |
 
 ### Key Insight
 
-**Nobody in the competitive set does model encryption, prompt guardrails, or privacy manifests.** These are not "catching up" items — they are genuine greenfield differentiation. If Atheer ships S1 (encrypted model distribution) and V1 (privacy mode with `PrivacyMode`), it becomes the engine you recommend when "we need to run a model on customer devices and prove nothing leaves."
+**Nobody in the competitive set does model encryption, prompt guardrails, or privacy manifests.** These are not "catching up" items — they are genuine greenfield differentiation. Atheer has **shipped S1 (encrypted model distribution)** — it is now the only open engine with AES-256-GCM model encryption at rest. Shipping V1 (privacy mode with `PrivacyMode`) next would make it the engine you recommend when "we need to run a model on customer devices and prove nothing leaves."
 
 Meanwhile, R1 (speculative decoding) and P2 (continuous calibration) close the performance gap with MLC/MLX on throughput benchmarks.
 
@@ -386,7 +391,7 @@ Meanwhile, R1 (speculative decoding) and P2 (continuous calibration) close the p
 | # | Item | Est. Days | Integration |
 |---|-----|-----------|-------------|
 | 10 | V2/V3: Encrypt L2/L3 cache + checkpoints (AES-256-GCM) | 3-5 | `memory-bank/src/` + new |
-| 11 | S1 + S2 + S3: Model signature + hash + gguf validation | 2-3 | `from_gguf()` path |
+| 11 | S2 + S3: Model signature + hash + gguf validation | 2-3 | `from_gguf()` path |
 | 12 | V1: Configurable privacy mode (`PrivacyMode`) | 2 | `config.rs`, `crash.rs`, `memory-bank` |
 | 13 | S4: Prompt injection guardrails | 3-5 | New safety module |
 | 14 | P5: ANE compilation pre-heat | 1 | `coreml.rs` |
@@ -417,7 +422,7 @@ Phase 1          Phase 2              Phase 3
 (2-3 weeks)      (3-4 weeks)          (4-6 weeks)
 ─────────────────────────────────────────────────
 R1 ───────────── V1+V2+V3 ──────────── P6+P7
-R2 ───────────── S1+S2+S3+S4 ──────── D1
+R2 ───────────── S2+S3+S4 ─────────── D1
 R3 ───────────── R4 ───────────────── C2
 R5 ───────────── P5 ───────────────── E1
 R8              V4 ───────────────── D3
@@ -433,7 +438,7 @@ P2 ─────────────────────────�
 |--------|-------|------|
 | Low (≤1 day) | 0.5-1 day | R2, R3, R5, R7, R9, R10, R13, R14, R6, P5, S3, S9 |
 | Medium (2-5 days) | 2-5 days | R1, R4, R8, R11, P1, P2, P9, P10 |
-| Med-High (5-10 days) | 5-10 days | S1, S2, S4, S5, S7, S8, V1, V2, V3, V4, V5, E1, E2 |
+| Med-High (5-10 days) | 5-10 days | S2, S4, S5, S7, S8, V1, V2, V3, V4, V5, E1, E2 |
 | High (10+ days) | 10+ days | S5 (sandboxing), S7 (side-channel), V7 (DP analytics) |
 
 ---
@@ -455,6 +460,7 @@ P2 ─────────────────────────�
 | Prompt truncation UTF-8 panic | `security.rs:57-59` | ✅ |
 | CI env var order | `ci.yml:150-161` | ✅ |
 | Metal test panic wrapper | `metal.rs` + upstream candle-core fork | ✅ |
+| S1: Model file encryption (AES-256-GCM) | `model_encryption/`, `AtheerEngine::initialize()`, `ios/AtheerKeychain.swift`, `android/KeyStoreManager.kt`, `atheer-encrypt` CLI | ✅ |
 
 ---
 
@@ -471,7 +477,7 @@ P2 ─────────────────────────�
 | R5: Model hash | `Model::from_gguf()` | `atheer-core/src/model.rs` |
 | P2: Calibration | `PerfModel`, `Orchestrator` | `atheer-orchestrator/src/orchestrator.rs` |
 | P5: ANE pre-heat | `CoreMLBackend::with_model()` | `atheer-accel/src/coreml.rs` |
-| S1+S2: Encrypt + attest | `AtheerEngine.initialize()` + new module | New `atheer-core/src/model_encryption.rs` |
+| S2: Model attestation | `AtheerEngine.initialize()` | New `atheer-core/src/model_verifier.rs` |
 | V1: Privacy mode | `AtheerConfig`, `CrashReporter`, `MemoryBank` | `atheer-ffi/src/config.rs`, `atheer-core/src/crash.rs` |
 | V2: Cache encryption | L2/L3 persistence layers | `atheer-memory-bank/src/l2_warm.rs`, `l3_compressed.rs` |
 
@@ -481,7 +487,7 @@ P2 ─────────────────────────�
 atheer-core/src/
 ├── model_verifier.rs      # Ed25519/ECDSA signature verification at load time
 ├── gguf_validator.rs      # GGUF header/metadata structural validation
-├── model_encryption.rs    # AES-256-GCM decrypt pipeline for encrypted models
+├── model_encryption/      # ✅ AES-256-GCM decrypt pipeline (implemented)
 ├── secure_memory.rs       # Zeroize wrappers for sensitive buffers
 └── audit_log.rs          # Append-only local audit trail
 

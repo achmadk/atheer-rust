@@ -1,3 +1,5 @@
+uniffi::setup_scaffolding!();
+
 pub mod accuracy;
 pub mod block_manager;
 pub mod crash;
@@ -8,6 +10,8 @@ pub mod kv_cache;
 pub mod kv_cache_quantizer;
 pub mod latency_budget;
 pub mod lifecycle;
+pub mod model_credential;
+pub mod model_encryption;
 pub mod model;
 #[cfg(feature = "mmap")]
 pub mod mmap_model;
@@ -34,6 +38,8 @@ pub use lifecycle::{
     CheckpointHeader, EngineLifecycle, IncrementalCheckpoint, LifecycleConfig, LifecycleObserver,
 };
 pub use model::Model;
+pub use model_credential::ModelCredential;
+pub use model_encryption::{ModelEncryption, aes256_gcm::Aes256GcmEncryption};
 pub use production::{ConfigError, ProductionConfig};
 pub use quantization_resolver::{GpuTier, QuantizationResolver};
 pub use safety::{

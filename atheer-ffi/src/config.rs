@@ -1,4 +1,5 @@
 use crate::AtheerBackendType;
+use atheer_core::model_credential::ModelCredential;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, uniffi::Record)]
@@ -16,6 +17,8 @@ pub struct AtheerConfig {
     pub standby_draft_path: Option<String>,
     pub backend_type: Option<AtheerBackendType>,
     pub coreml_model_path: Option<String>,
+    #[serde(skip)]
+    pub model_credential: Option<ModelCredential>,
 }
 
 impl Default for AtheerConfig {
@@ -34,6 +37,7 @@ impl Default for AtheerConfig {
             standby_draft_path: None,
             backend_type: None,
             coreml_model_path: None,
+            model_credential: None,
         }
     }
 }

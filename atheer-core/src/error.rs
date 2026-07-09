@@ -40,6 +40,9 @@ pub enum AtheerCoreError {
         elapsed_ms: u64,
         tokens_generated: usize,
     },
+
+    #[error("Model decryption failed: {0}")]
+    ModelDecryptionFailed(String),
 }
 
 pub type Result<T> = std::result::Result<T, AtheerCoreError>;

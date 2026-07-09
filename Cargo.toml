@@ -11,6 +11,7 @@ members = [
     "atheer-accel",
     "atheer-ffi",
     "atheer-bindgen",
+    "atheer-encrypt",
     "tests",
     "tests/benches",
     "fuzz",

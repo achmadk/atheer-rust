@@ -1,0 +1,13 @@
+[package]
+name = "atheer-encrypt"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+aes-gcm = "0.10"
+rand = "0.8"
+serde = { workspace = true }
+serde_json = { workspace = true }
+hex = "0.4"
+typenum = "1"
