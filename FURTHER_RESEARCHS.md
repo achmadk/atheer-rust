@@ -9,6 +9,10 @@
 > 2. A strategic competitive-gap analysis (reliability/performance/security/privacy against best-in-class)
 >
 > **Status of S1 (Model File Encryption): ✅ Completed July 2026** — AES-256-GCM encryption at rest for GGUF and .mlpackage, decryption pipeline with three key-resolution strategies (ServerDistributed, DeviceDerived via HKDF, Custom), platform Keychain/Keystore wrappers for iOS and Android, and a CLI tool for offline encryption.
+>
+> **Status of R1 (Draft Speculation): ✅ Completed July 2026** — `load_draft()`/`unload_draft()` reimplemented to load a real GGUF draft model, `standby_draft_path` consumed in `initialize()` for auto-loading, `generate_speculative()` on `InferenceEngine` implements the draft proposal + target verification loop with acceptance callback, `AtheerEngine::generate_sync()` dispatches to speculative decoding when a draft model is loaded and speculation is active. Orchestrator tracks results via `record_speculative_result()`. Tests for `extract_log_prob` utility pass.
+>
+> **Status of P2 (Continuous Runtime Calibration): ✅ Completed July 2026** — `PerfCalibrator` struct in `atheer-orchestrator/src/calibrator.rs` (new module) dynamically adjusts speculation depth, mode thresholds, NGram cache size, and temperature based on recent generation history, throughput trend slope, and hardware health snapshot. Calibration runs after each generation in `generate_sync()`, with tunable parameters per performance regime. Orchestrator tracks stats via `CalibrationReport`. Includes unit tests.
 
 ---
 
@@ -198,7 +202,7 @@ The project has a strong architecture for graceful degradation (ANE → Metal �
 
 | # | Gap | Current State | Best-in-Class | Impact |
 |---|-----|---------------|---------------|--------|
-| R1 | **Draft speculation un-stubbed** | `load_Draft()`/`unload_Draft()` return `Ok(())` with no work | Load draught model, run speculative decoding, merge KV caches | 🔴 High |
+| R1 | **Draft speculation un-stubbed** | ✅ Completed — `load_draft()`/`unload_draft()` load real GGUF models, `generate_speculative()` on InferenceEngine, speculative dispatch in `generate_sync()` | Load draft model, run speculative decoding, merge KV caches | 🔴 High |
 | R2 | **Model loading retry with degradation** | Single attempt — if `.mlpackage` or GGUF fails, error is terminal | Retry chain: full ANE → Metal-only → CPU-only → report cause | 🔴 High |
 | R3 | **Sampling thread watchdog** | `IosMonitor`/`GenericMonitor` spawn single thread with no heartbeat | Detect thread death via missed heartbeats, restart, log to crash reporter | 🟡 Medium |
 | R4 | **KV cache checkpointing not wired** | `kv_cache_snapshot()`/`kv_cache_restore()` exist but no persistence trigger | Auto-checkpoint on mode switch/background signal; restore on session resume | 🟡 Medium |
@@ -213,21 +217,22 @@ The project has a strong architecture for graceful degradation (ANE → Metal �
 | R13 | **`atheer-bindgen` dead code** | Expects UDL file that doesn't exist | Remove or rewrite | 🟢 Low |
 | R14 | **`generate-bindings.sh` no-op** | All binding generation code commented out | Fix or remove | 🟢 Low |
 
-### R1 Deep Dive: Draft Speculation
+### R1 Deep Dive: Draft Speculation — ✅ Completed July 2026
 
-This is the single highest-ROI reliability+performance item. The architecture already supports it (`speculation_depth` per mode, draft model path in `AtheerConfig`) but the wiring is missing:
+This was the single highest-ROI reliability+performance item. The architecture already supported it (`speculation_depth` per mode, draft model path in `AtheerConfig`) but the wiring was missing. Implemented:
 
-```rust
-// Current (engine.rs:232-233)
-pub fn load_draft(&self, _path: &str) -> std::result::Result<(), AtheerError> {
-    Ok(())
-}
-```
+- **`load_draft()`/`unload_draft()`** reimplemented in `atheer-ffi/src/engine.rs` — loads a real GGUF draft model, tokenizer, and InferenceEngine, spawns into draft_engine field, signals orchestrator via set_draft_model_loaded()
+- **`standby_draft_path` auto-loading** in AtheerEngine::initialize() — when specified, the draft model is loaded automatically after the primary engine initializes (error tolerated — engine is usable without draft)
+- **`generate_speculative()`** in `atheer-core/src/inference.rs` — full speculative decoding algorithm: draft proposal phase (K candidate tokens from draft model), target verification phase (forward all candidates through target, sample, compare), acceptance/rejection with dynamic draft depth adjustment
+- **Speculative dispatch** in `generate_sync()` — when is_draft_loaded() && speculation_depth() > 0 && json_schema.is_none(), routes to generate_speculative() instead of generate()
+- **`extract_log_prob()` helper** — extracts log probability of a specific token from logits tensor (manual softmax, no candle dependency)
+- **Orchestrator tracking** — record_speculative_result() dispatches to TurboMode.record_acceptance() for stats tracking, is_draft_loaded() / set_draft_model_loaded() in orchestrator state
+- **Unit tests** — test_extract_log_prob_returns_correct_token, test_extract_log_prob_negative_but_not_nan pass
 
-The draft model file path (`standby_draft_path` in `AtheerConfig`) is stored but never consumed. Complete speculative decoding would:
-- Verify draught model compatibility at load time
-- Run draught + target models in parallel for verified speculation
-- Reject draught if acceptance rate drops below threshold (fall back gracefully)
+Outstanding (next iteration):
+- Verify draft model compatibility at load time (architecture, quantization)
+- Run draft + target models truly in parallel (currently sequential draft → verify)
+- Reject draft if acceptance rate drops below threshold (graceful fallback)
 
 ### R2: Model Loading Retry — Recommended Strategy
 
@@ -275,7 +280,7 @@ Architecture is strong (speculative decoding framework, NGram cache, per-op devi
 | # | Gap | Current State | Best-in-Class | Impact |
 |---|-----|---------------|---------------|--------|
 | P1 | **Draft speculation (see R1)** | Stubbed — speculation depth field exists but nothing loaded | 1.5–2.5× throughput on compatible models | 🔴 High |
-| P2 | **Continuous runtime calibration** | `PerfModel::default_calibrated()` never updates after init | After N inferences, re-measure actual tok/s, adjust speculation depth + mode thresholds | 🔴 High |
+| P2 | **Continuous runtime calibration** | ✅ Completed July 2026 — new `calibrator.rs` module in orchestrator, integrated into `generate_sync()` | After N OKs, auto-adjust speculation, NGram, mode thresholds | 🔴 High |
 | P3 | **KV cache checkpoint persistence** | Snapshot/restore implemented but no trigger | Background checkpoint to L3 (LZ4-compressed disk), restore on resume | 🟡 Medium |
 | P4 | **Quantization profiler** | No per-layer performance measurement | Profile at load time → suggest optimal quantization per layer type | 🟡 Medium |
 | P5 | **ANE model compilation at startup** | `CoreMLBackend::with_model()` loads .mlpackage synchronously | Background compilation thread pre-heats ANE, avoid cold-start latency | 🟢 Low |
@@ -285,7 +290,7 @@ Architecture is strong (speculative decoding framework, NGram cache, per-op devi
 | P9 | **Context window eviction naive** | `maybe_evict()` drops oldest turns and clears entire KV cache | Incremental eviction — only remove evicted turn's KV entries | 🟡 Medium |
 | P10 | **No WASM/WebGPU backend** | No browser deployment path | `AccelBackend` trait makes extensible | 🟡 Medium |
 
-### P1 + P2: The Calibration-Speculation Flywheel
+### P1 + P2: The Calibration-Speculation Flywheel — ✅ Completed July 2026
 
 ```
 More calibration data → better speculation depth → higher throughput → more data
@@ -350,7 +355,7 @@ UniFFI bindings exist, the binding generation pipeline is broken, and pre-genera
 | **All 4 backends** | ✅ | ❌ | ❌ | ❌ | ❌ |
 | **Cross-platform** | ✅ iOS + Android | ✅ All | ✅ All | ❌ Apple only | ✅ Android |
 | **Rust** | ✅ | 🟡 C/C++ | 🟡 Python/C++ | 🟡 Swift/ObjC | 🟡 Java/C++ |
-| **Speculative decoding** | ⚠️ Stubbed | ❌ | ✅ | ❌ | ❌ |
+| **Speculative decoding** | ✅ | ❌ | ✅ | ❌ | ❌ |
 | **KV cache management** | ✅ L1/L2/L3 | ✅ Simple | ❌ | ❌ | ❌ |
 | **Predictive thermal** | ✅ **Unique** | ❌ | ❌ | ❌ | ❌ |
 | **Grammar-structured output** | ✅ Pushdown automaton | ✅ GBNF | ✅ | ❌ | ❌ |
@@ -378,13 +383,13 @@ Meanwhile, R1 (speculative decoding) and P2 (continuous calibration) close the p
 | 2 | Fix PII redactor infinite loop bug | 0.5 | `safety.rs:249-253` |
 | 3 | Fix prompt truncation UTF-8 panic | 0.5 | `security.rs:57-59` |
 | 4 | Fix CI env var bug + add macOS runner | 1 | `ci.yml` |
-| 5 | R1: Un-stub draft speculation | 3-5 | `engine.rs:232-233` |
-| 6 | P2: Continuous runtime calibration | 1-2 | `orchestrator.rs`, `PerfModel` |
+| 5 | R1: Un-stub draft speculation | ✅ Completed | `engine.rs`, `inference.rs`, `orchestrator.rs` |
+| 6 | P2: Continuous runtime calibration | ✅ Completed | `orchestrator.rs`, `PerfModel` |
 | 7 | R2: Model loading retry with degradation | 1 | `model.rs` |
 | 8 | R3: Sampling thread heartbeat watchdog | 1 | `monitor.rs`, `ios.rs` |
 | 9 | Implement model signature verification | 2-3 | New: `model_verifier.rs` |
 
-**Total: ~12-18 days**
+**Total: ~7-11 days** (R1, P2 ✅ completed)
 
 ### Phase 2: Security & Privacy Hardening (3-4 weeks)
 

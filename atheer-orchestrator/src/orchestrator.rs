@@ -1,7 +1,9 @@
+use crate::calibrator::{CalibrationSample, Calibrator};
 use crate::modes::{BalancedMode, EcoMode, TurboMode};
 use crate::thermal_model::{PerfModel, ThermalModel};
 use crate::{InferenceMode, OrchestratorConfig};
 use atheer_memory_bank::MemoryBank;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -19,6 +21,10 @@ pub struct Orchestrator {
     mode_change_count: u32,
     thermal_model: ThermalModel,
     perf_model: PerfModel,
+    calibrator: Calibrator,
+    /// Calibrated speculation depth bounds per mode, applied on top of
+    /// the mode's native defaults.  Updated by `record_generation_metrics`.
+    depth_bounds: HashMap<InferenceMode, (usize, usize)>,
 }
 
 impl Orchestrator {
@@ -44,6 +50,8 @@ impl Orchestrator {
                 config.thermal_trend_window,
             ),
             perf_model: PerfModel::default_calibrated(),
+            calibrator: Calibrator::new(),
+            depth_bounds: HashMap::new(),
         }
     }
 
@@ -226,7 +234,41 @@ impl Orchestrator {
     }
 
     pub fn speculation_depth(&self) -> usize {
-        self.current_mode.speculation_depth()
+        let default_depth = self.current_mode.speculation_depth();
+        // Clamp within calibrated bounds if they exist for this mode.
+        match self.depth_bounds.get(&self.current_mode) {
+            Some(&(min, max)) => default_depth.clamp(min, max),
+            None => default_depth,
+        }
+    }
+
+    /// Record the result of a speculative decoding cycle.
+    /// Dispatches to the appropriate mode's acceptance tracking.
+    pub fn record_speculative_result(&mut self, accepted: usize, total: usize) {
+        match self.current_mode {
+            InferenceMode::Turbo => {
+                self.turbo.record_acceptance(accepted, total);
+            }
+            InferenceMode::Balanced => {
+                // BalancedMode self-adjusts via logit consistency (update_logits).
+                // No additional tracking needed here — the generate loop calls
+                // update_logits() directly as part of self-speculation.
+            }
+            InferenceMode::Eco => {
+                // Eco mode does not speculate
+            }
+        }
+    }
+
+    /// Set whether a draft model is loaded in the engine.
+    /// This enables TurboMode's draft-based speculation path.
+    pub fn set_draft_model_loaded(&mut self, loaded: bool) {
+        self.turbo.set_draft_model_loaded(loaded);
+    }
+
+    /// Returns whether a draft model is loaded and ready.
+    pub fn is_draft_loaded(&self) -> bool {
+        self.turbo.is_draft_loaded()
     }
 
     pub fn mode_change_count(&self) -> u32 {
@@ -272,6 +314,68 @@ impl Orchestrator {
                 threshold_bytes / (1024 * 1024),
             );
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Calibration plumbing (tasks 3.x)
+    // ------------------------------------------------------------------
+
+    /// Feed a generation sample into the calibrator, and — if enough
+    /// generations have elapsed — run a recalibration cycle and apply
+    /// the resulting updates to `perf_model`, speculation depth bounds,
+    /// and config thresholds.
+    ///
+    /// This is an **internal** method — it is NOT exported via
+    /// `#[uniffi::export]` and will never cross the FFI boundary.
+    pub fn record_generation_metrics(&mut self, sample: CalibrationSample) {
+        self.calibrator.feed(sample);
+
+        if !self.calibrator.should_recalibrate() {
+            return;
+        }
+
+        let update = self.calibrator.recalibrate();
+
+        // 1. Update energy model
+        self.perf_model.calibrate(update.turbo_mj, update.balanced_mj, update.eco_mj);
+
+        // 2. Update speculation depth bounds
+        for (mode, &(min, max)) in &update.depth_bounds {
+            self.depth_bounds.insert(*mode, (min, max));
+        }
+
+        // 3. Nudge mode-switch thresholds (conservatively)
+        self.config.thermal_threshold_c = (self.config.thermal_threshold_c + update.threshold_delta_c)
+            .min(OrchestratorConfig::default().thermal_threshold_c + 3.0);
+
+        self.config.memory_threshold_mb = self
+            .config
+            .memory_threshold_mb
+            .saturating_add(update.threshold_delta_mb);
+
+        self.config.battery_threshold_percent = self
+            .config
+            .battery_threshold_percent
+            .saturating_add(update.threshold_delta_battery);
+
+        self.calibrator.finish_recalibration();
+
+        tracing::info!(
+            target: "atheer::orchestrator::calibration",
+            "Recalibration applied: turbo_mj={:.1} balanced_mj={:.1} eco_mj={:.1} depth_bounds={:?} thermal_delta={:.1} mem_delta={} battery_delta={}",
+            update.turbo_mj,
+            update.balanced_mj,
+            update.eco_mj,
+            update.depth_bounds,
+            update.threshold_delta_c,
+            update.threshold_delta_mb,
+            update.threshold_delta_battery,
+        );
+    }
+
+    /// Mutable access to the calibrator (testing only).
+    pub fn calibrator_mut(&mut self) -> &mut Calibrator {
+        &mut self.calibrator
     }
 }
 
@@ -434,5 +538,68 @@ mod tests {
         // With default MemoryBank at 0 usage, it won't exceed 1MB threshold
         // So this tests the method works, not that pressure is detected at 0 usage
         assert!(!has_pressure || memory_bank.total_allocated_bytes() > 0);
+    }
+
+    // -- 5.8: record_generation_metrics integration test --------------
+
+    #[test]
+    fn test_record_generation_metrics_triggers_recalibration_after_interval() {
+        let config = OrchestratorConfig::default();
+        let mut orchestrator = Orchestrator::new(config);
+
+        let cal = orchestrator.calibrator_mut();
+        cal.set_recalibrate_interval(3);
+        cal.set_min_samples(1);
+
+        // Sanity: default perf model values
+        let default_turbo_mj = crate::thermal_model::PerfModel::DEFAULT_MJ_TURBO;
+        let default_bal_mj = crate::thermal_model::PerfModel::DEFAULT_MJ_BALANCED;
+        let default_eco_mj = crate::thermal_model::PerfModel::DEFAULT_MJ_ECO;
+
+        // Feed 4 samples (should trigger recalibration after the 3rd)
+        for i in 0..4 {
+            orchestrator.record_generation_metrics(CalibrationSample {
+                tok_s: 20.0 + i as f32,
+                tokens_gen: 10,
+                mode: InferenceMode::Turbo,
+                speculation_depth: 4,
+                acceptance_rate: None,
+            });
+        }
+
+        // After recalibration, turbo_mj should have been updated from default
+        let mj = orchestrator.perf_model.mj_per_token(&InferenceMode::Turbo);
+        assert!(
+            (mj - default_turbo_mj).abs() > 0.01,
+            "expected turbo_mj to change from {default_turbo_mj} after recalibration, got {mj}"
+        );
+
+        // Balanced and Eco should have been recalibrated too
+        let mj_bal = orchestrator.perf_model.mj_per_token(&InferenceMode::Balanced);
+        assert!(
+            (mj_bal - default_bal_mj).abs() < 0.01,
+            "expected balanced unchanged (no samples), got {mj_bal}"
+        );
+        let mj_eco = orchestrator.perf_model.mj_per_token(&InferenceMode::Eco);
+        assert!(
+            (mj_eco - default_eco_mj).abs() < 0.01,
+            "expected eco unchanged (no samples), got {mj_eco}"
+        );
+    }
+
+    // -- 5.9: generation failure does not record metrics (tested at
+    //         the orchestrator level: no metrics means no recalibration)
+
+    #[test]
+    fn test_no_recalibration_without_metrics_feed() {
+        let config = OrchestratorConfig::default();
+        let mut orchestrator = Orchestrator::new(config);
+
+        // Do NOT call record_generation_metrics — verify no recalibration
+        // was triggered (should_recalibrate returns false because no
+        // samples were fed)
+        let cal = orchestrator.calibrator_mut();
+        assert!(!cal.should_recalibrate());
+        assert!(cal.average_tok_s(InferenceMode::Turbo).is_none());
     }
 }

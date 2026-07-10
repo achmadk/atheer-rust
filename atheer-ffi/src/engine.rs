@@ -10,6 +10,7 @@ use atheer_core::model_encryption::{
 use atheer_core::{CrashReporter, InferenceEngine, SamplingConfig};
 use atheer_hardware::{monitor::GenericMonitor, HardwareMonitor};
 use atheer_memory_bank::MemoryBank;
+use atheer_orchestrator::calibrator::CalibrationSample;
 use atheer_orchestrator::{Orchestrator, OrchestratorConfig};
 use sha2::{Digest, Sha256};
 use hkdf::Hkdf;
@@ -25,6 +26,7 @@ pub struct AtheerEngine {
     config: AtheerConfig,
     backend_manager: BackendManager,
     inference_engine: Arc<Mutex<Option<InferenceEngine>>>,
+    draft_engine: Arc<Mutex<Option<InferenceEngine>>>,
     orchestrator: Arc<Mutex<Orchestrator>>,
     memory_bank: Arc<Mutex<MemoryBank>>,
     monitor: Arc<dyn HardwareMonitor>,
@@ -78,6 +80,7 @@ impl AtheerEngine {
 
         Self {
             inference_engine: Arc::new(Mutex::new(None)),
+            draft_engine: Arc::new(Mutex::new(None)),
             config: config.clone(),
             backend_manager,
             orchestrator: Arc::new(Mutex::new(Orchestrator::new(orch_config))),
@@ -178,11 +181,25 @@ impl AtheerEngine {
                 message: format!("Device validation: {e}"),
             })?;
 
-        let mut guard = self
-            .inference_engine
-            .lock()
-            .map_err(|_| AtheerError::NotInitialized)?;
-        *guard = Some(engine);
+        {
+            let mut guard = self
+                .inference_engine
+                .lock()
+                .map_err(|_| AtheerError::NotInitialized)?;
+            *guard = Some(engine);
+        }
+
+        // Auto-load draft model if standby_draft_path is configured
+        if let Some(ref draft_path) = self.config.standby_draft_path {
+            if !draft_path.is_empty() {
+                tracing::info!(
+                    target: "atheer::engine",
+                    "Auto-loading draft model from standby_draft_path: {draft_path}"
+                );
+                // Ignore error — engine is usable without a draft model
+                let _ = self.load_draft(draft_path);
+            }
+        }
 
         Ok(())
     }
@@ -255,11 +272,81 @@ impl AtheerEngine {
             }
         }
 
+        let use_speculation = orch.is_draft_loaded()
+            && orch.speculation_depth() > 0
+            && request.json_schema.is_none();
+        // JSON-schema-constrained output currently uses grammar sampling which
+        // is incompatible with draft-model speculation.
+
+        if use_speculation {
+            let mut draft_guard = self
+                .draft_engine
+                .lock()
+                .map_err(|_| AtheerError::NotInitialized)?;
+            let draft_engine = draft_guard.as_mut().ok_or(AtheerError::NotInitialized)?;
+            let spec_depth = orch.speculation_depth();
+
+            let accepted_tokens = std::sync::atomic::AtomicUsize::new(0);
+            let total_draft = std::sync::atomic::AtomicUsize::new(0);
+
+            let (text, tokens_gen, time_ms) = engine
+                .generate_speculative(
+                    &request.prompt,
+                    request.max_tokens,
+                    draft_engine,
+                    spec_depth,
+                    None,
+                    |accepted: usize, total: usize| {
+                        accepted_tokens.store(accepted, std::sync::atomic::Ordering::Relaxed);
+                        total_draft.store(total, std::sync::atomic::Ordering::Relaxed);
+                    },
+                )
+                .map_err(|e| AtheerError::GenerationFailed {
+                    message: format!("{e}"),
+                })?;
+
+            let acc = accepted_tokens.load(std::sync::atomic::Ordering::Relaxed);
+            let tot = total_draft.load(std::sync::atomic::Ordering::Relaxed);
+            orch.record_speculative_result(acc, tot);
+
+            // Feed generation metrics for calibration (task 4.2)
+            let tok_s = compute_tok_s(tokens_gen, time_ms);
+            let acceptance_rate = if tot > 0 {
+                Some(acc as f32 / tot as f32)
+            } else {
+                None
+            };
+            orch.record_generation_metrics(CalibrationSample {
+                tok_s,
+                tokens_gen,
+                mode,
+                speculation_depth: spec_depth,
+                acceptance_rate,
+            });
+
+            return Ok(GenerationResponse::new(
+                text,
+                tokens_gen,
+                time_ms,
+                mode.as_str(),
+            ));
+        }
+
         let (text, tokens_gen, time_ms) = engine
             .generate(&request.prompt, request.max_tokens, None)
             .map_err(|e| AtheerError::GenerationFailed {
                 message: format!("{e}"),
             })?;
+
+        // Feed generation metrics for calibration (task 4.1)
+        let tok_s = compute_tok_s(tokens_gen, time_ms);
+        orch.record_generation_metrics(CalibrationSample {
+            tok_s,
+            tokens_gen,
+            mode,
+            speculation_depth: 0,
+            acceptance_rate: None,
+        });
 
         Ok(GenerationResponse::new(
             text,
@@ -277,7 +364,7 @@ impl AtheerEngine {
         EngineStatus {
             mode: orch.current_mode().as_str().to_string(),
             tokens_per_second: 0.0,
-            draft_loaded: false,
+            draft_loaded: orch.is_draft_loaded(),
             hardware_health: crate::status::HardwareHealth {
                 thermal: health.thermal.as_str().to_string(),
                 available_ram_mb: health.available_ram_mb,
@@ -303,11 +390,78 @@ impl AtheerEngine {
         Ok(())
     }
 
-    pub fn unload_draft(&self) -> std::result::Result<(), AtheerError> {
+    pub fn load_draft(&self, path: &str) -> std::result::Result<(), AtheerError> {
+        if path.is_empty() {
+            return Err(AtheerError::NotInitialized);
+        }
+
+        let device = self.backend_manager.device();
+        let tokenizer_path = self
+            .config
+            .tokenizer_path
+            .as_deref()
+            .unwrap_or("tokenizer.json");
+
+        let model = atheer_core::Model::from_gguf(path, &device).map_err(|e| {
+            AtheerError::ModelLoadFailed {
+                message: format!("Failed to load draft model: {e}"),
+            }
+        })?;
+
+        let tokenizer = atheer_core::Tokenizer::from_file(tokenizer_path).map_err(|e| {
+            AtheerError::TokenizerLoadFailed {
+                message: format!("{e}"),
+            }
+        })?;
+
+        let sampling_config = SamplingConfig {
+            temperature: self.config.temperature as f64,
+            ..Default::default()
+        };
+
+        let engine = InferenceEngine::new(model, tokenizer, sampling_config, 4096)
+            .map_err(|e| AtheerError::ModelLoadFailed {
+                message: format!("Draft engine init: {e}"),
+            })?;
+
+        {
+            let mut guard = self
+                .draft_engine
+                .lock()
+                .map_err(|_| AtheerError::NotInitialized)?;
+            *guard = Some(engine);
+        }
+
+        {
+            let mut orch = self
+                .orchestrator
+                .lock()
+                .map_err(|_| AtheerError::NotInitialized)?;
+            orch.set_draft_model_loaded(true);
+        }
+
+        tracing::info!(target: "atheer::engine", "Draft model loaded from {path}");
         Ok(())
     }
 
-    pub fn load_draft(&self, _path: &str) -> std::result::Result<(), AtheerError> {
+    pub fn unload_draft(&self) -> std::result::Result<(), AtheerError> {
+        {
+            let mut guard = self
+                .draft_engine
+                .lock()
+                .map_err(|_| AtheerError::NotInitialized)?;
+            *guard = None;
+        }
+
+        {
+            let mut orch = self
+                .orchestrator
+                .lock()
+                .map_err(|_| AtheerError::NotInitialized)?;
+            orch.set_draft_model_loaded(false);
+        }
+
+        tracing::info!(target: "atheer::engine", "Draft model unloaded");
         Ok(())
     }
 
@@ -559,4 +713,13 @@ fn extract_panic_msg(panic: &Box<dyn std::any::Any + Send>) -> String {
         .map(|s| s.to_string())
         .or_else(|| panic.downcast_ref::<String>().map(|s| s.to_string()))
         .unwrap_or_else(|| "unknown panic".to_string())
+}
+
+/// Compute tokens-per-second from generation results.
+/// Returns 0.0 when time_ms is zero (avoids division by zero).
+fn compute_tok_s(tokens_gen: u32, time_ms: u64) -> f32 {
+    if time_ms == 0 {
+        return 0.0;
+    }
+    (tokens_gen as f32) / (time_ms as f32 / 1000.0)
 }

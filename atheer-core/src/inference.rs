@@ -24,6 +24,23 @@ fn bytes_to_f32_vec(bytes: &[u8]) -> Vec<f32> {
         .collect()
 }
 
+fn extract_log_prob(logits: &candle_core::Tensor, token: u32) -> Option<f32> {
+    let logits = logits.squeeze(0).ok()?;
+    let p: Vec<f32> = logits.to_vec1().ok()?;
+    let max_logit = p.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+    let shifted: Vec<f32> = p.iter().map(|x| (x - max_logit).exp()).collect();
+    let sum: f32 = shifted.iter().sum();
+    if sum <= 0.0 {
+        return Some(-10.0);
+    }
+    let prob = *shifted.get(token as usize)? / sum;
+    if prob <= 0.0 {
+        Some(-10.0)
+    } else {
+        Some(prob.ln())
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct InferenceEngineConfig {
     pub max_generation_time_ms: Option<u64>,
@@ -425,6 +442,264 @@ impl InferenceEngine {
         let text = self.tokenizer.decode(&generated_tokens, true);
 
         // Content moderation: check output
+        self.check_output_blocked(&text, &generated_tokens)?;
+
+        Ok((text, generated_tokens.len() as u32, elapsed))
+    }
+
+    // ── Speculative decoding ──────────────────────────────────────────
+
+    /// Generate text speculatively using a draft model.
+    ///
+    /// The draft model proposes `max_draft_depth` candidate tokens per cycle.
+    /// The target (this) model verifies all candidates in a single forward pass
+    /// and either accepts or rejects them. Accepted tokens are kept; the first
+    /// rejected token is replaced by the target model's own sampled token.
+    ///
+    /// `acceptance_callback(accepted, total_draft)` is called after each cycle
+    /// so the orchestrator can track statistics via `SpeculativeDecoder`.
+    pub fn generate_speculative(
+        &mut self,
+        prompt: &str,
+        max_tokens: u32,
+        draft_engine: &mut InferenceEngine,
+        max_draft_depth: usize,
+        max_generation_time_ms: Option<u64>,
+        mut acceptance_callback: impl FnMut(usize, usize),
+    ) -> Result<(String, u32, u64)> {
+        let start = Instant::now();
+        let device = self.model.device.clone();
+
+        self.check_input_blocked(prompt)?;
+
+        let input_ids = self.tokenizer.encode(prompt, true);
+        let prompt_len = input_ids.len();
+        let mut generated_tokens: Vec<u32> = Vec::new();
+        let turn_start = self.last_pos;
+
+        self.maybe_evict(prompt_len);
+
+        let input_tensor = Tensor::new(
+            input_ids
+                .iter()
+                .map(|x| *x as i64)
+                .collect::<Vec<_>>()
+                .as_slice(),
+            &device,
+        )
+        .map_err(|e| AtheerCoreError::GenerationFailed(e.to_string()))?
+        .unsqueeze(0)
+        .map_err(|e| AtheerCoreError::GenerationFailed(e.to_string()))?;
+
+        let _logits = self
+            .model
+            .weights
+            .forward(&input_tensor, self.last_pos)
+            .map_err(|e| AtheerCoreError::GenerationFailed(format!("Prompt forward: {e}")))?;
+
+        let mut next_token = self
+            .sampler
+            .sample(&_logits, &generated_tokens)
+            .map_err(|e| AtheerCoreError::GenerationFailed(format!("Sampling: {e}")))?;
+        generated_tokens.push(next_token);
+
+        let draft_device = draft_engine.model.device.clone();
+        let draft_input_tensor = Tensor::new(
+            input_ids
+                .iter()
+                .map(|x| *x as i64)
+                .collect::<Vec<_>>()
+                .as_slice(),
+            &draft_device,
+        )
+        .map_err(|e| AtheerCoreError::GenerationFailed(e.to_string()))?
+        .unsqueeze(0)
+        .map_err(|e| AtheerCoreError::GenerationFailed(e.to_string()))?;
+
+        draft_engine
+            .model
+            .weights
+            .forward(&draft_input_tensor, draft_engine.last_pos)
+            .map_err(|e| AtheerCoreError::GenerationFailed(format!("Draft prefill: {e}")))?;
+
+        let mut target_pos = self.last_pos + prompt_len;
+        let mut draft_pos = draft_engine.last_pos + prompt_len;
+
+        let tok_tensor = Tensor::new(&[next_token as i64][..], &device)
+            .map_err(|e| AtheerCoreError::GenerationFailed(e.to_string()))?
+            .unsqueeze(0)
+            .map_err(|e| AtheerCoreError::GenerationFailed(e.to_string()))?;
+
+        let _target_logit = self
+            .model
+            .weights
+            .forward(&tok_tensor, target_pos - 1)
+            .map_err(|e| AtheerCoreError::GenerationFailed(format!("Forward: {e}")))?;
+
+        let draft_tok_tensor = Tensor::new(&[next_token as i64][..], &draft_device)
+            .map_err(|e| AtheerCoreError::GenerationFailed(e.to_string()))?
+            .unsqueeze(0)
+            .map_err(|e| AtheerCoreError::GenerationFailed(e.to_string()))?;
+
+        draft_engine
+            .model
+            .weights
+            .forward(&draft_tok_tensor, draft_pos - 1)
+            .map_err(|e| AtheerCoreError::GenerationFailed(format!("Draft forward: {e}")))?;
+
+
+        while (generated_tokens.len() as u32) < max_tokens {
+            // Timeout check
+            if let Some(timeout_ms) = max_generation_time_ms {
+                let elapsed = start.elapsed().as_millis() as u64;
+                if elapsed >= timeout_ms {
+                    self.maybe_auto_checkpoint(generated_tokens.len());
+                    return Err(AtheerCoreError::Timeout {
+                        elapsed_ms: elapsed,
+                        tokens_generated: generated_tokens.len(),
+                    });
+                }
+            }
+
+            if self.is_stop_token(next_token) {
+                break;
+            }
+
+            let draft_depth = max_draft_depth.min(
+                (max_tokens - generated_tokens.len() as u32) as usize,
+            );
+
+            let mut draft_tokens: Vec<u32> = Vec::with_capacity(draft_depth);
+            let mut draft_log_probs: Vec<f32> = Vec::with_capacity(draft_depth);
+
+            for _ in 0..draft_depth {
+                let dt_tensor = Tensor::new(&[next_token as i64][..], &draft_device)
+                    .map_err(|e| AtheerCoreError::GenerationFailed(e.to_string()))?
+                    .unsqueeze(0)
+                    .map_err(|e| AtheerCoreError::GenerationFailed(e.to_string()))?;
+
+                let d_logits = draft_engine
+                    .model
+                    .weights
+                    .forward(&dt_tensor, draft_pos)
+                    .map_err(|e| {
+                        AtheerCoreError::GenerationFailed(format!("Draft propose: {e}"))
+                    })?;
+
+                let d_token = draft_engine
+                    .sampler
+                    .sample(&d_logits, &draft_tokens)
+                    .map_err(|e| {
+                        AtheerCoreError::GenerationFailed(format!("Draft sample: {e}"))
+                    })?;
+
+                let d_log_prob = extract_log_prob(&d_logits, d_token).unwrap_or(-0.1);
+
+                draft_tokens.push(d_token);
+                draft_log_probs.push(d_log_prob);
+                next_token = d_token;
+                draft_pos += 1;
+            }
+
+            next_token = *generated_tokens.last().unwrap_or(&0);
+
+            let mut target_tokens: Vec<u32> = Vec::with_capacity(draft_depth);
+            for &draft_tok in &draft_tokens {
+                let t_tensor = Tensor::new(&[draft_tok as i64][..], &device)
+                    .map_err(|e| AtheerCoreError::GenerationFailed(e.to_string()))?
+                    .unsqueeze(0)
+                    .map_err(|e| AtheerCoreError::GenerationFailed(e.to_string()))?;
+
+                let t_logits = self
+                    .model
+                    .weights
+                    .forward(&t_tensor, target_pos)
+                    .map_err(|e| {
+                        AtheerCoreError::GenerationFailed(format!("Target verify: {e}"))
+                    })?;
+
+                let t_token = self
+                    .sampler
+                    .sample(&t_logits, &generated_tokens)
+                    .map_err(|e| {
+                        AtheerCoreError::GenerationFailed(format!("Target sample: {e}"))
+                    })?;
+
+                target_tokens.push(t_token);
+                target_pos += 1;
+            }
+
+            let accepted_count = draft_tokens
+                .iter()
+                .zip(target_tokens.iter())
+                .take_while(|(d, t)| d == t)
+                .count();
+
+            let accepted_slice = &draft_tokens[..accepted_count];
+            generated_tokens.extend_from_slice(accepted_slice);
+
+            if accepted_count < target_tokens.len() {
+                generated_tokens.push(target_tokens[accepted_count]);
+                target_pos += 1;
+
+                draft_pos = draft_engine.last_pos + prompt_len + generated_tokens.len();
+            } else {
+                let extra_tensor = Tensor::new(&[draft_tokens[draft_depth - 1] as i64][..], &device)
+                    .map_err(|e| AtheerCoreError::GenerationFailed(e.to_string()))?
+                    .unsqueeze(0)
+                    .map_err(|e| AtheerCoreError::GenerationFailed(e.to_string()))?;
+
+                let extra_logits = self
+                    .model
+                    .weights
+                    .forward(&extra_tensor, target_pos - 1)
+                    .map_err(|e| {
+                        AtheerCoreError::GenerationFailed(format!("Target extra: {e}"))
+                    })?;
+
+                let extra_token = self
+                    .sampler
+                    .sample(&extra_logits, &generated_tokens)
+                    .map_err(|e| {
+                        AtheerCoreError::GenerationFailed(format!("Target sample: {e}"))
+                    })?;
+
+                generated_tokens.push(extra_token);
+                target_pos += 1;
+
+                let sync_tensor =
+                    Tensor::new(&[extra_token as i64][..], &draft_device)
+                        .map_err(|e| AtheerCoreError::GenerationFailed(e.to_string()))?
+                        .unsqueeze(0)
+                        .map_err(|e| AtheerCoreError::GenerationFailed(e.to_string()))?;
+
+                draft_engine
+                    .model
+                    .weights
+                    .forward(&sync_tensor, draft_pos - 1)
+                    .map_err(|e| {
+                        AtheerCoreError::GenerationFailed(format!("Draft sync: {e}"))
+                    })?;
+                draft_pos += 1;
+
+                self.maybe_auto_checkpoint(generated_tokens.len());
+                continue;
+            };
+
+            let total_draft = draft_tokens.len();
+            acceptance_callback(accepted_count, total_draft);
+
+            self.maybe_auto_checkpoint(generated_tokens.len());
+        }
+
+        self.maybe_auto_checkpoint(generated_tokens.len());
+
+        self.last_pos = target_pos;
+        self.turn_history.push((turn_start, target_pos));
+
+        let elapsed = start.elapsed().as_millis() as u64;
+        let text = self.tokenizer.decode(&generated_tokens, true);
+
         self.check_output_blocked(&text, &generated_tokens)?;
 
         Ok((text, generated_tokens.len() as u32, elapsed))
@@ -1097,6 +1372,7 @@ impl InferenceEngine {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use candle_core::Device;
 
     /// Structural test: verify that the InferenceEngine builder methods
     /// can be chained without a real model (pure unit test).
@@ -1113,6 +1389,34 @@ mod tests {
         // The method exists and accepts Option<ContentModeration>.
         // Full test requires a real model to construct InferenceEngine.
         assert!(true);
+    }
+
+    #[test]
+    fn test_extract_log_prob_returns_correct_token() {
+        // Logits with highest value at index 2
+        let logits = Tensor::from_vec(
+            vec![0.1_f32, 0.2, 5.0, 0.3, 0.05],
+            (1, 5),
+            &Device::Cpu,
+        )
+        .unwrap();
+        let prob = extract_log_prob(&logits, 2).unwrap();
+        // Index 2 should have the highest probability (positive ln after softmax)
+        assert!(prob < 0.0, "log prob of max token should be negative: {prob}");
+        // And it should be greater (less negative) than for a non-max token
+        let prob_other = extract_log_prob(&logits, 0).unwrap();
+        assert!(prob > prob_other, "max token log prob should be highest: {prob} > {prob_other}");
+    }
+
+    #[test]
+    fn test_extract_log_prob_negative_but_not_nan() {
+        // All logits equal → uniform distribution
+        let logits = Tensor::from_vec(vec![0.0_f32; 6], (1, 6), &Device::Cpu).unwrap();
+        for i in 0..6 {
+            let prob = extract_log_prob(&logits, i).unwrap();
+            assert!(prob.is_finite(), "log prob must be finite");
+            assert!(prob < 0.0, "uniform prob must be negative: {prob}");
+        }
     }
 
     /// Unit test: verify InferenceEngineConfig default values.

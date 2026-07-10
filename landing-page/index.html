@@ -536,9 +536,9 @@
 <section id="why-atheer" style="background: #0A0F1C;">
   <div class="section-inner reveal">
     <div class="section-label">Why Atheer</div>
-    <h2 class="section-title">7 Reasons Atheer Is Different</h2>
+    <h2 class="section-title">8 Reasons Atheer Is Different</h2>
     <p class="section-desc section-desc-wide">
-      Every mobile inference engine runs LLMs. Here&rsquo;s why Atheer is the only one built for the NPU era &mdash; with predictive thermal management, hierarchical memory, structured output, and autonomous agents, all in safe Rust.
+      Every mobile inference engine runs LLMs. Here&rsquo;s why Atheer is the only one built for the NPU era &mdash; with predictive thermal management, hierarchical memory, structured output, model-level encryption, and autonomous agents, all in safe Rust.
     </p>
     <div class="features-grid" id="reasons-grid">
 
@@ -589,6 +589,13 @@
         <h3>#7 &mdash; Safe Rust, Not C/C++</h3>
         <p>Rust&rsquo;s ownership model guarantees no use-after-free, no data races, and no GC pauses. <code>catch_unwind</code> wraps ANE forward calls so accelerator panics don&rsquo;t crash the host app. Memory safety at the FFI boundary, zero-cost abstractions everywhere.</p>
         <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> Most mobile inference engines are written in C/C++ with manual memory management. Only MLX Swift shares Rust&rsquo;s safety guarantees &mdash; but it&rsquo;s Apple-only.</p>
+      </div>
+
+      <div class="feature-card reveal">
+        <div class="feature-icon feature-icon-green">🔐</div>
+        <h3>#8 &mdash; Model-Level Encryption</h3>
+        <p>AES-256-GCM encryption for GGUF and .mlpackage model files at rest, with a three-strategy decryption pipeline &mdash; ServerDistributed keys, DeviceDerived via HKDF-SHA256, or Custom provider. Platform-native Keychain (<code>AtheerKeychain.swift</code>) and Android Keystore (<code>KeyStoreManager.kt</code>) wrappers for secure key storage. Offline encryption via the <code>atheer-encrypt</code> CLI tool.</p>
+        <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> No other open engine encrypts models at rest. llama.cpp, MLC, MLX Swift, and Google AI Edge all load models in plaintext. This is the only engine where you can prove model files never leave device storage unencrypted.</p>
       </div>
 
     </div>
@@ -674,15 +681,15 @@
           </tr>
           <tr style="border-bottom: 1px solid rgba(56,189,248,.06);">
             <td style="padding: .7rem 1rem; color: #94A3B8;">Speculative decoding</td>
-            <td style="text-align:center; padding: .7rem .5rem;"><span style="color:#F59E0B; font-weight: 500;">⚡ Stubbed</span></td>
+            <td style="text-align:center; padding: .7rem .5rem;"><span style="color:#22C55E; font-weight: 600;">✅</span></td>
             <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
             <td style="text-align:center; padding: .7rem .5rem; color: #22C55E;">✅</td>
             <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
             <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
           </tr>
           <tr style="border-bottom: 1px solid rgba(56,189,248,.06); background: rgba(56,189,248,.03);">
-            <td style="padding: .7rem 1rem; color: #F59E0B; font-weight: 500;">Model encryption</td>
-            <td style="text-align:center; padding: .7rem .5rem;"><span style="color:#F59E0B; font-weight: 600;">📋 Planned</span></td>
+            <td style="padding: .7rem 1rem; color: #22C55E; font-weight: 500;">Model encryption</td>
+            <td style="text-align:center; padding: .7rem .5rem;"><span style="color:#22C55E; font-weight: 600;">✅ Unique</span></td>
             <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
             <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
             <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
@@ -716,10 +723,10 @@
       </table>
     </div>
     <p style="margin-top: 1rem; font-size: .8rem; color: #475569; text-align: center; font-family: 'JetBrains Mono', monospace;">
-      📋 Planned = gap identified, prioritized in roadmap below ⬇️
+      ✅ Shipped &mdash; 📋 Planned = gap identified, prioritized in roadmap below ⬇️
     </p>
     <p style="margin-top: 1.5rem; font-size: .9rem; color: #94A3B8; text-align: center; max-width: 650px; margin-left: auto; margin-right: auto; line-height: 1.7;">
-      <strong style="color: #38BDF8;">Key insight:</strong> The gaps we've identified (model encryption, prompt guardrails, privacy manifesto, session isolation) are not "catching up" items — <strong style="color: #E2E8F0;">nobody else does them either</strong>. These are genuine greenfield differentiation opportunities. If Atheer ships model encryption + privacy mode, it becomes the engine you choose when you need to "run AI on customer devices and prove nothing leaves."
+      <strong style="color: #38BDF8;">Key insight:</strong> The gaps we&rsquo;ve identified (prompt guardrails, privacy manifesto, session isolation) are not "catching up" items — <strong style="color: #E2E8F0;">nobody else does them either</strong>. These are genuine greenfield differentiation opportunities. Atheer has <strong style="color: #22C55E;">already shipped model file encryption (AES-256-GCM)</strong> and speculative decoding — the only open engine with either. Adding privacy mode next makes it the engine you choose when you need to "run AI on customer devices and prove nothing leaves."
     </p>
   </div>
 </section>
@@ -746,7 +753,7 @@
       <div class="feature-card">
         <div class="feature-icon feature-icon-amber">⟳</div>
         <h3>Agentic Workflows</h3>
-        <p>Built-in speculative decoding (NGram cache), tool-calling definitions with JsonGrammar integration, and autonomous agent loops — bring your own tools via the <code>Agent</code> trait in <code>atheer-orchestrator</code>.</p>
+        <p>Draft-model speculative decoding with fallback NGram cache, tool-calling definitions with JsonGrammar integration, and autonomous agent loops — bring your own tools via the <code>Agent</code> trait in <code>atheer-orchestrator</code>.</p>
       </div>
       <div class="feature-card">
         <div class="feature-icon feature-icon-green">▦</div>
@@ -994,10 +1001,10 @@ engine.initialize()
             <span style="color: #22C55E;">✓</span> Fix PII redactor + UTF-8 bugs
           </li>
           <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #F59E0B;">⚡</span> Un-stub draft speculation
+            <span style="color: #22C55E;">✓</span> Un-stub draft speculation
           </li>
           <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #F59E0B;">⚡</span> Continuous runtime calibration
+            <span style="color: #22C55E;">✓</span> Continuous runtime calibration
           </li>
           <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
             <span style="color: #F59E0B;">⚡</span> Model loading retry + degrade chain
