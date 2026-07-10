@@ -42,6 +42,16 @@ pub struct LifecycleConfig {
     pub checkpoint_on_background: bool,
     /// Whether to auto-restore from checkpoint on `on_foreground()`.
     pub restore_on_foreground: bool,
+    /// Whether to auto-save a checkpoint on `on_low_memory()`.
+    pub checkpoint_on_low_memory: bool,
+    /// Whether to auto-save a checkpoint on `on_terminate()`.
+    pub checkpoint_on_terminate: bool,
+    /// Whether to clear GPU-side KV cache after low-memory checkpoint.
+    pub clear_on_low_memory: bool,
+    /// Maximum number of checkpoint generations to retain.
+    pub max_checkpoints: u32,
+    /// Checkpoint TTL in hours (0 = no TTL-based expiry).
+    pub checkpoint_ttl_hours: u32,
     /// Whether to quantize-down the KV cache on `on_low_memory()`.
     pub quantize_on_low_memory: bool,
     /// Whether to evict L2→L3 on low memory.
@@ -55,6 +65,11 @@ impl Default for LifecycleConfig {
         Self {
             checkpoint_on_background: true,
             restore_on_foreground: true,
+            checkpoint_on_low_memory: true,
+            checkpoint_on_terminate: true,
+            clear_on_low_memory: true,
+            max_checkpoints: 3,
+            checkpoint_ttl_hours: 0,
             quantize_on_low_memory: true,
             evict_on_low_memory: true,
             compact_on_low_memory: true,

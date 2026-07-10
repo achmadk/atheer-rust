@@ -17,6 +17,22 @@ pub struct AtheerConfig {
     pub standby_draft_path: Option<String>,
     pub backend_type: Option<AtheerBackendType>,
     pub coreml_model_path: Option<String>,
+    /// Directory for KV cache checkpoint files. When set, enables checkpoint persistence.
+    pub checkpoint_dir: Option<String>,
+    /// Maximum number of checkpoint generations to retain (default: 3).
+    pub max_checkpoints: u32,
+    /// Checkpoint TTL in hours (0 = no TTL-based expiry).
+    pub checkpoint_ttl_hours: u32,
+    /// Enable checkpoint save on app background.
+    pub checkpoint_on_background: bool,
+    /// Enable KV cache restore on app foreground.
+    pub restore_on_foreground: bool,
+    /// Enable LZ4-compressed checkpoint on low memory.
+    pub checkpoint_on_low_memory: bool,
+    /// Enable final checkpoint on app terminate.
+    pub checkpoint_on_terminate: bool,
+    /// Clear GPU-side KV cache after low-memory checkpoint.
+    pub clear_on_low_memory: bool,
     #[serde(skip)]
     pub model_credential: Option<ModelCredential>,
 }
@@ -37,6 +53,14 @@ impl Default for AtheerConfig {
             standby_draft_path: None,
             backend_type: None,
             coreml_model_path: None,
+            checkpoint_dir: None,
+            max_checkpoints: 3,
+            checkpoint_ttl_hours: 0,
+            checkpoint_on_background: true,
+            restore_on_foreground: true,
+            checkpoint_on_low_memory: true,
+            checkpoint_on_terminate: true,
+            clear_on_low_memory: true,
             model_credential: None,
         }
     }

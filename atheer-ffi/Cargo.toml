@@ -23,5 +23,8 @@ atheer-accel = { path = "../atheer-accel" }
 [lib]
 crate-type = ["rlib", "staticlib", "cdylib"] # staticlib for iOS, cdylib for Android, rlib for Rust dependencies
 
+[dev-dependencies]
+tempfile = "3"
+
 [build-dependencies]
 uniffi = { workspace = true, features = ["build"] }
