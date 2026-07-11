@@ -159,24 +159,54 @@ impl AtheerEngine {
             .unwrap_or("tokenizer.json");
 
         let device = self.backend_manager.device();
+        let cpu_device = candle_core::Device::Cpu;
 
-        // --- Decryption pipeline ---
-        let model = if let Some(ref credential) = self.config.model_credential {
-            let bytes = self.decrypt_with_credential(credential, model_path)?;
+        let model = {
+            let try_load = |dev: &candle_core::Device| -> std::result::Result<atheer_core::Model, AtheerError> {
+                if let Some(ref credential) = self.config.model_credential {
+                    let bytes = self.decrypt_with_credential(credential, model_path)?;
+                    let mut cursor = std::io::Cursor::new(bytes);
+                    atheer_core::Model::from_gguf_reader(&mut cursor, dev).map_err(|e| {
+                        AtheerError::ModelLoadFailed {
+                            message: format!("{e}"),
+                        }
+                    })
+                } else {
+                    atheer_core::Model::from_gguf(model_path, dev).map_err(|e| {
+                        AtheerError::ModelLoadFailed {
+                            message: format!("{e}"),
+                        }
+                    })
+                }
+            };
 
-            let mut cursor = std::io::Cursor::new(bytes);
-            atheer_core::Model::from_gguf_reader(&mut cursor, &device).map_err(|e| {
-                AtheerError::ModelLoadFailed {
-                    message: format!("{e}"),
+            match try_load(&device) {
+                Ok(m) => m,
+                Err(first_err) => {
+                    tracing::warn!(
+                        target: "atheer::engine",
+                        "Model load failed on {device:?}: {first_err}. Retrying on CPU."
+                    );
+                    match try_load(&cpu_device) {
+                        Ok(m) => {
+                            tracing::info!(
+                                target: "atheer::engine",
+                                "Model loaded on CPU (degraded mode — inference will be slower)"
+                            );
+                            m
+                        }
+                        Err(second_err) => {
+                            return Err(AtheerError::ModelLoadFailed {
+                                message: format!(
+                                    "All device attempts failed. \
+                                     Preferred ({device:?}): {first_err}. \
+                                     CPU fallback: {second_err}"
+                                ),
+                            })
+                        }
+                    }
                 }
-            })?
-        } else {
-            // Original cleartext path
-            atheer_core::Model::from_gguf(model_path, &device).map_err(|e| {
-                AtheerError::ModelLoadFailed {
-                    message: format!("{e}"),
-                }
-            })?
+            }
         };
 
         let tokenizer = atheer_core::Tokenizer::from_file(tokenizer_path).map_err(|e| {

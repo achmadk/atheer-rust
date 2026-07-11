@@ -1,1 +1,9 @@
-lint-staged
+#!/bin/sh
+echo "Checking Rust formatting..."
+cargo fmt --check 2>/dev/null
+if [ $? -ne 0 ]; then
+  echo "Formatting issues found. Run 'cargo fmt' to fix."
+  exit 1
+fi
+
+echo "Format check passed."

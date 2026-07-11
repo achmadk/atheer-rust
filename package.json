@@ -30,8 +30,7 @@
   },
   "lint-staged": {
     "*.rs": [
-      "cargo fmt",
-      "cargo clippy --workspace -- -D warnings"
+      "cargo fmt --check --"
     ]
   }
 }

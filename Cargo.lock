@@ -316,6 +316,7 @@ dependencies = [
  "atheer-hardware",
  "atheer-memory-bank",
  "atheer-orchestrator",
+ "candle-core",
  "hkdf",
  "serde",
  "serde_json",

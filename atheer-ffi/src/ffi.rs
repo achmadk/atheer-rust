@@ -577,6 +577,54 @@ mod tests {
     }
 
     #[test]
+    fn test_initialize_degradation_both_devices_fail() {
+        let mut config = crate::AtheerConfig::default();
+        config.backend_type = Some(crate::AtheerBackendType::Cpu);
+        config.model_path = Some("/nonexistent/model.gguf".to_string());
+
+        let engine = crate::AtheerEngine::new(config);
+        let result = engine.initialize();
+        assert!(result.is_err());
+
+        match result.unwrap_err() {
+            crate::AtheerError::ModelLoadFailed { message } => {
+                assert!(
+                    message.contains("failed") || message.contains("error"),
+                    "Expected error message about failure, got: {message}"
+                );
+            }
+            other => panic!("Expected ModelLoadFailed, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_initialize_degradation_metal_unavailable_both_fail() {
+        let mut config = crate::AtheerConfig::default();
+        // Metal backend — on non-macOS CI this will resolve to Device::Cpu via
+        // metal_if_available().unwrap_or(Device::Cpu), so both the "preferred"
+        // and fallback attempts fail on CPU with the same nonexistent-model error.
+        config.backend_type = Some(crate::AtheerBackendType::Metal);
+        config.model_path = Some("/nonexistent/model.gguf".to_string());
+
+        let engine = crate::AtheerEngine::new(config);
+        let result = engine.initialize();
+        assert!(result.is_err());
+
+        match result.unwrap_err() {
+            crate::AtheerError::ModelLoadFailed { message } => {
+                // On Metal-unavailable systems, device() returns Cpu for Metal,
+                // so both attempts produce the same error. Still exercises the
+                // degradation retry code path.
+                assert!(
+                    message.contains("failed") || message.contains("error"),
+                    "Expected error message about failure, got: {message}"
+                );
+            }
+            other => panic!("Expected ModelLoadFailed, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn test_ffi_status_null() {
         // SAFETY: Calling with null pointers to verify graceful handling of invalid input
         let mode = unsafe { aether_engine_get_mode(ptr::null()) };
