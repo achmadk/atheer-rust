@@ -14,8 +14,11 @@ env:
 
 jobs:
   check:
-    name: cargo check
-    runs-on: ubuntu-latest
+    name: cargo check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v6
 
@@ -38,8 +41,11 @@ jobs:
         run: cargo check --workspace
 
   lint:
-    name: Lint & format
-    runs-on: ubuntu-latest
+    name: Lint & format (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v6
 
@@ -67,8 +73,11 @@ jobs:
         run: cargo clippy --workspace -- -D warnings
 
   unit-tests:
-    name: Unit tests
-    runs-on: ubuntu-latest
+    name: Unit tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v6
 
