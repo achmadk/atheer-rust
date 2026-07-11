@@ -19,8 +19,7 @@ pub struct BackendManager {
 
 impl BackendManager {
     pub fn new() -> Self {
-        let mut backends: Vec<Arc<dyn AccelBackend>> = Vec::new();
-        backends.push(Arc::new(CpuBackend::default()));
+        let mut backends: Vec<Arc<dyn AccelBackend>> = vec![Arc::new(CpuBackend::default())];
 
         #[cfg(any(target_os = "ios", target_os = "macos"))]
         {

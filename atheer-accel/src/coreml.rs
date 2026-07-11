@@ -455,6 +455,7 @@ fn ane_forward(model: &SafeCoreMLModel, input_ids: &[u32], start: Instant) -> Re
 /// Runs a small tensor compute on the Metal device to verify availability
 /// and measure latency. Actual Metal inference uses `atheer-accel`'s
 /// dedicated `MetalBackend`.
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 fn metal_forward(input_ids: &[u32], start: Instant) -> Result<AccelResult> {
     match candle_core::Device::metal_if_available(0) {
         Ok(device) if !matches!(device, candle_core::Device::Cpu) => {
