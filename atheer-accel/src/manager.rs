@@ -18,6 +18,7 @@ pub struct BackendManager {
 }
 
 impl BackendManager {
+    #[allow(unused_mut)]
     pub fn new() -> Self {
         let mut backends: Vec<Arc<dyn AccelBackend>> = vec![Arc::new(CpuBackend::default())];
 
