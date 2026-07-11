@@ -711,6 +711,7 @@ impl CoreMLModel {
     }
 
     /// Get the cache path for a compiled model
+    #[cfg(target_os = "macos")]
     fn get_compiled_cache_path(source_path: &Path) -> Result<std::path::PathBuf, CandleError> {
         // Use the CacheManager to get a consistent cache directory
         use crate::CacheManager;
@@ -733,6 +734,7 @@ impl CoreMLModel {
     }
 
     /// Recursively copy a directory
+    #[cfg(target_os = "macos")]
     fn copy_recursive(from: &Path, to: &Path) -> std::io::Result<()> {
         if from.is_dir() {
             std::fs::create_dir_all(to)?;
