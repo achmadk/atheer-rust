@@ -1,0 +1,37 @@
+{
+  "name": "atheer-rust",
+  "version": "0.1.0",
+  "description": "Rust inference engine for on-device LLMs",
+  "keywords": [
+    "AI_inference_engine"
+  ],
+  "homepage": "https://atheer.achmadk.com",
+  "bugs": {
+    "url": "https://github.com/achmadk/atheer-rust/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/achmadk/atheer-rust.git"
+  },
+  "license": "MIT",
+  "author": "Achmad Kurnianto",
+  "type": "module",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "cargo test --workspace --lib",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.8"
+  },
+  "lint-staged": {
+    "*.rs": [
+      "cargo fmt",
+      "cargo clippy --workspace -- -D warnings"
+    ]
+  }
+}

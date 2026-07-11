@@ -47,3 +47,5 @@ __pycache__/
 
 .omo
 */.wrangler
+
+node_modules
