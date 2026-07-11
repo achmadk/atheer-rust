@@ -202,7 +202,7 @@ The project has a strong architecture for graceful degradation (ANE → Metal �
 | # | Gap | Current State | Best-in-Class | Impact |
 |---|-----|---------------|---------------|--------|
 | R1 | **Draft speculation un-stubbed** | ✅ Completed — `load_draft()`/`unload_draft()` load real GGUF models, `generate_speculative()` on InferenceEngine, speculative dispatch in `generate_sync()` | Load draft model, run speculative decoding, merge KV caches | 🔴 High |
-| R2 | **Model loading retry with degradation** | Single attempt — if `.mlpackage` or GGUF fails, error is terminal | Retry chain: full ANE → Metal-only → CPU-only → report cause | 🔴 High |
+| R2 | **Model loading retry with degradation** | ✅ Completed — `initialize()` retries on CPU after preferred device fails before propagating the error. `tracing::warn!`/`info!` events emitted. Aggregated error message on total failure. | Retry chain: preferred accelerator → CPU → report cause | 🔴 High |
 | R3 | **Sampling thread watchdog** | `IosMonitor`/`GenericMonitor` spawn single thread with no heartbeat | Detect thread death via missed heartbeats, restart, log to crash reporter | 🟡 Medium |
 | R4 | **KV cache checkpoint persistence** | ✅ Completed — `AtheerEngine` wired with `on_background`, `on_foreground`, `on_low_memory`, `on_terminate` lifecycle + LZ4 L3 snapshot + sidecar tracking | Auto-checkpoint on background/low-memory; restore on foreground/resume with model-id verification | 🟡 Medium |
 | R5 | **Model integrity verification** | No checksum validation at load time | Verify SHA-256 of model file before loading; reject on mismatch | 🟡 Medium |
@@ -233,17 +233,18 @@ Outstanding (next iteration):
 - Run draft + target models truly in parallel (currently sequential draft → verify)
 - Reject draft if acceptance rate drops below threshold (graceful fallback)
 
-### R2: Model Loading Retry — Recommended Strategy
+### R2: Model Loading Retry — ✅ Completed July 2026
 
-Current: `initialize()` calls `Model::from_gguf()` once. If it fails, the error propagates and the engine is dead.
+`AtheerEngine::initialize()` now retries model loading on CPU after the preferred accelerator device fails, before propagating the error. Implemented in `atheer-ffi/src/engine.rs`:
 
-Better:
-1. First attempt with configured precision/device
-2. If that fails, retry with CPU device (avoid Metal device issues)
-3. If that fails, retry with lower precision (q4_0 instead of q4_k_m)
-4. If all fail, generate a structured error report with model path, file size, hash
+- **Device fallback**: A `try_load` closure handles both encrypted (`from_gguf_reader`) and cleartext (`from_gguf`) paths. After a failure on `backend_manager.device()`, the engine retries on `candle_core::Device::Cpu`.
+- **Degradation observability**: `tracing::warn!` on fallback, `tracing::info!` on successful CPU recovery — both with target `"atheer::engine"`.
+- **Aggregated error**: On total failure, the error message includes both the preferred-device error and the CPU fallback error in a single `AtheerError::ModelLoadFailed`.
+- **No BackendManager mutation**: Safe because `device_for_op()` is unused in inference (all ops use `model.device`).
+- **Tests**: 2 new unit tests (`test_initialize_degradation_both_devices_fail`, `test_initialize_degradation_metal_unavailable_both_fail`) — 488 tests, 0 failures.
 
-Cheap implementation for a directly better UX when models are corrupted or devices are marginal.
+Outstanding (low priority):
+- "Retry with lower precision" excluded — quantization is baked into each GGUF file; different quantizations require different model files, which is an app-level concern.
 
 ### R12: Watchdog — Design
 
@@ -384,11 +385,11 @@ Meanwhile, R1 (speculative decoding) and P2 (continuous calibration) close the p
 | 4 | Fix CI env var bug + add macOS runner | ✅ Completed (env var) · 1 (macOS runner) | `ci.yml` |
 | 5 | R1: Un-stub draft speculation | ✅ Completed | `engine.rs`, `inference.rs`, `orchestrator.rs` |
 | 6 | P2: Continuous runtime calibration | ✅ Completed | `orchestrator.rs`, `PerfModel` |
-| 7 | R2: Model loading retry with degradation | 1 | `model.rs` |
+| 7 | R2: Model loading retry with degradation | ✅ Completed | `atheer-ffi/src/engine.rs` |
 | 8 | R3: Sampling thread heartbeat watchdog | 1 | `monitor.rs`, `ios.rs` |
 | 9 | Implement model signature verification | 2-3 | New: `model_verifier.rs` |
 
-**Total remaining: ~5-7 days** (R1, P2, R8, R9, B1, B3 ✅ completed)
+**Total remaining: ~4-6 days** (R1, P2, R8, R9, B1, B3, R2 ✅ completed)
 
 ### Phase 2: Security & Privacy Hardening (3-4 weeks)
 
@@ -426,7 +427,7 @@ Phase 1          Phase 2              Phase 3
 (2-3 weeks)      (3-4 weeks)          (4-6 weeks)
 ─────────────────────────────────────────────────
 R1 ───────────── V1+V2+V3 ──────────── P6+P7
-R2 ───────────── S2+S3+S4 ─────────── D1
+R2 ✓ ─────────── S2+S3+S4 ─────────── D1
 R3 ───────────── R4 ───────────────── C2
 R5 ───────────── P5 ───────────────── E1
 R8              V4 ───────────────── D3
@@ -440,7 +441,7 @@ P2 ─────────────────────────�
 
 | Effort | Range | Items |
 |--------|-------|------|
-| Low (≤1 day) | 0.5-1 day | R2, R3, R5, R7, R9, R10, R13, R14, R6, P5, S3, S9 |
+| Low (≤1 day) | 0.5-1 day | R2 ✅, R3, R5, R7, R9 ✅, R10, R13, R14, R6, P5, S3, S9 |
 | Medium (2-5 days) | 2-5 days | R1, R4, R8, R11, P1, P2, P9, P10 |
 | Med-High (5-10 days) | 5-10 days | S2, S4, S5, S7, S8, V1, V2, V3, V4, V5, E1, E2 |
 | High (10+ days) | 10+ days | S5 (sandboxing), S7 (side-channel), V7 (DP analytics) |
@@ -480,7 +481,7 @@ P2 ─────────────────────────�
 | Item | Integrates With | Key File(s) |
 |------|----------------|-------------|
 | R1: Draft speculation | `AtheerEngine.load_draft()`, `InferenceEngine` spec decode | `atheer-ffi/src/engine.rs`, `atheer-core/src/inference.rs` |
-| R2: Retry with degrade | `AtheerEngine.initialize()` | `atheer-ffi/src/engine.rs`, `atheer-core/src/model.rs` |
+| R2: Retry with degrade | ✅ Completed — CPU fallback on model load failure | `atheer-ffi/src/engine.rs` (initialize) |
 | R3: Thread watchdog | `GenericMonitor`, `IosMonitor` | `atheer-hardware/src/monitor.rs`, `atheer-hardware/src/ios.rs` |
 | R4: KV cache checkpoint | ✅ Completed — `AtheerEngine` lifecycle FFI, sidecar, L3 snapshot/thaw | `atheer-core/src/lifecycle.rs`, `atheer-ffi/src/engine.rs` |
 | R5: Model hash | `Model::from_gguf()` | `atheer-core/src/model.rs` |

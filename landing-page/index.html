@@ -525,7 +525,7 @@
 <!-- ─── Stats ─── -->
 <section class="stats-bar" id="stats">
   <div class="stats-grid">
-    <div class="stat-item reveal"><div class="stat-number" data-target="394">0</div><div class="stat-label">Tests</div></div>
+    <div class="stat-item reveal"><div class="stat-number" data-target="488">0</div><div class="stat-label">Tests</div></div>
     <div class="stat-item reveal"><div class="stat-number" data-target="7">0</div><div class="stat-label">Platform Crates</div></div>
     <div class="stat-item reveal"><div class="stat-number" data-target="5">0</div><div class="stat-label">GPU/NPU + CPU Backends</div></div>
     <div class="stat-item reveal"><div class="stat-number" data-target="100" data-suffix="%">0</div><div class="stat-label">Safe Rust</div></div>
@@ -861,7 +861,7 @@
       <pre class="code-block"><code><span class="comment"># Build the entire workspace</span>
 cargo build --workspace
 
-<span class="comment"># Run all ~394 tests</span>
+<span class="comment"># Run all 488 tests</span>
 cargo test --workspace
 
 <span class="comment"># Download a test model (~350 MB)</span>
@@ -1007,7 +1007,7 @@ engine.initialize()
             <span style="color: #22C55E;">✓</span> Continuous runtime calibration
           </li>
           <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #F59E0B;">⚡</span> Model loading retry + degrade chain
+            <span style="color: #22C55E;">✓</span> Model loading retry + CPU degrade fallback
           </li>
           <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
             <span style="color: #F59E0B;">⚡</span> Sampling thread watchdog + heartbeat
