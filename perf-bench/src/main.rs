@@ -14,7 +14,10 @@ use atheer_core::InferenceEngine;
 
 /// Atheer performance benchmarking tool.
 #[derive(Parser, Debug)]
-#[command(name = "perf-bench", about = "Benchmark Atheer inference engine throughput and energy")]
+#[command(
+    name = "perf-bench",
+    about = "Benchmark Atheer inference engine throughput and energy"
+)]
 struct Cli {
     /// Path to GGUF model file (or set ATHEER_TEST_MODEL env var)
     #[arg(long, env = "ATHEER_TEST_MODEL")]
@@ -90,14 +93,14 @@ fn main() {
 
     // Load model via auto-backend
     let config = SamplingConfig::default();
-    let mut engine = match InferenceEngine::new_auto(&model_path, tokenizer, config, cli.max_seq_len)
-    {
-        Ok(e) => e,
-        Err(e) => {
-            eprintln!("ERROR: Failed to load model: {e}");
-            std::process::exit(1);
-        }
-    };
+    let mut engine =
+        match InferenceEngine::new_auto(&model_path, tokenizer, config, cli.max_seq_len) {
+            Ok(e) => e,
+            Err(e) => {
+                eprintln!("ERROR: Failed to load model: {e}");
+                std::process::exit(1);
+            }
+        };
 
     let backend_name = "auto".to_string();
     let device_name = "auto".to_string();

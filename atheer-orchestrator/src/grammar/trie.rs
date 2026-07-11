@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use atheer_core::Tokenizer;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct TrieNode {
@@ -68,7 +68,10 @@ impl GrammarTrie {
             root.insert(&token_text);
             token_ids.push(token_id as u32);
             token_strings.push(token_text.clone());
-            string_to_ids.entry(token_text).or_default().push(token_id as u32);
+            string_to_ids
+                .entry(token_text)
+                .or_default()
+                .push(token_id as u32);
         }
 
         Self {

@@ -16,16 +16,11 @@ fn maybe_bench_mode_switching(c: &mut Criterion) {
         return;
     }
 
-    let tokenizer =
-        atheer_core::tokenizer::Tokenizer::from_file(&tokenizer_path).expect("Failed to load tokenizer");
+    let tokenizer = atheer_core::tokenizer::Tokenizer::from_file(&tokenizer_path)
+        .expect("Failed to load tokenizer");
     let config = atheer_core::sampler::SamplingConfig::default();
-    let _engine = atheer_core::InferenceEngine::new_auto(
-        &model_path,
-        tokenizer,
-        config,
-        4096,
-    )
-    .expect("Failed to load model");
+    let _engine = atheer_core::InferenceEngine::new_auto(&model_path, tokenizer, config, 4096)
+        .expect("Failed to load model");
 
     c.bench_function("mode_switch_turbo_to_eco", |b| {
         b.iter(|| {

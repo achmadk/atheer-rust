@@ -637,12 +637,10 @@ impl ModelWeights {
 
 #[cfg(test)]
 mod tests {
+    use super::{LayerWeights, Mlp, MlpOrMoe, ModelWeights, QMatMul};
+    use crate::quantized_nn::RmsNorm;
     use crate::utils::build_causal_mask;
     use candle::{Device, Result, Tensor};
-    use super::{
-        LayerWeights, Mlp, MlpOrMoe, ModelWeights, QMatMul,
-    };
-    use crate::quantized_nn::RmsNorm;
     use candle_nn::Embedding;
 
     // ── Helpers ───────────────────────────────────────────────────────────────
@@ -653,9 +651,7 @@ mod tests {
 
         // Shared quantized tensor for weight matrices
         let qt = Tensor::rand(-1f32, 1f32, (64, 64), &device)?;
-        let qq = candle::quantized::QTensor::quantize(
-            &qt, candle::quantized::GgmlDType::Q4_0,
-        )?;
+        let qq = candle::quantized::QTensor::quantize(&qt, candle::quantized::GgmlDType::Q4_0)?;
         let qw = QMatMul::from_qtensor(qq)?;
 
         // Shared norm
@@ -668,10 +664,7 @@ mod tests {
         )?;
 
         // Embedding table
-        let tok = Embedding::new(
-            Tensor::rand(-1f32, 1f32, (1, 64), &device)?,
-            64,
-        );
+        let tok = Embedding::new(Tensor::rand(-1f32, 1f32, (1, 64), &device)?, 64);
 
         // Rotary embeddings
         let cos = Tensor::rand(-1f32, 1f32, (128, 32), &device)?;
@@ -724,10 +717,7 @@ mod tests {
     #[test]
     fn restore_rejects_wrong_layer_count() -> Result<()> {
         let mut m = single_layer_model()?;
-        let snap = vec![
-            (vec![], vec![]),
-            (vec![], vec![]),
-        ];
+        let snap = vec![(vec![], vec![]), (vec![], vec![])];
         let err = m.kv_cache_restore(&snap).unwrap_err();
         let msg = format!("{err}");
         assert!(msg.contains("expected 1"), "got: {msg}");

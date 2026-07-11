@@ -5,7 +5,7 @@
 //!
 //! Run: `ATHEER_TEST_MODEL=... ATHEER_TOKENIZER_PATH=... cargo bench -p perf-bench -- latency`
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
 
 fn maybe_bench_latency(c: &mut Criterion) {
     let model_path = std::env::var("ATHEER_TEST_MODEL").unwrap_or_default();
@@ -16,16 +16,11 @@ fn maybe_bench_latency(c: &mut Criterion) {
         return;
     }
 
-    let tokenizer =
-        atheer_core::tokenizer::Tokenizer::from_file(&tokenizer_path).expect("Failed to load tokenizer");
+    let tokenizer = atheer_core::tokenizer::Tokenizer::from_file(&tokenizer_path)
+        .expect("Failed to load tokenizer");
     let config = atheer_core::sampler::SamplingConfig::default();
-    let mut engine = atheer_core::InferenceEngine::new_auto(
-        &model_path,
-        tokenizer,
-        config,
-        4096,
-    )
-    .expect("Failed to load model");
+    let mut engine = atheer_core::InferenceEngine::new_auto(&model_path, tokenizer, config, 4096)
+        .expect("Failed to load model");
 
     let prompt = "Hello, world!";
     let max_tokens = 512u32;
@@ -55,7 +50,10 @@ fn maybe_bench_latency(c: &mut Criterion) {
     let p99 = latencies[(latencies.len() as f64 * 0.99) as usize];
 
     let group = c.benchmark_group("decode_latency");
-    eprintln!("P50: {p50:.2}ms, P95: {p95:.2}ms, P99: {p99:.2}ms, Samples: {}", latencies.len());
+    eprintln!(
+        "P50: {p50:.2}ms, P95: {p95:.2}ms, P99: {p99:.2}ms, Samples: {}",
+        latencies.len()
+    );
     drop(group);
 }
 

@@ -176,8 +176,16 @@ impl NnapiExecutor {
         self.devices
             .iter()
             .find(|d| d.device_type == NnapiDeviceKind::Accelerator)
-            .or_else(|| self.devices.iter().find(|d| d.device_type == NnapiDeviceKind::Gpu))
-            .or_else(|| self.devices.iter().find(|d| d.device_type == NnapiDeviceKind::Cpu))
+            .or_else(|| {
+                self.devices
+                    .iter()
+                    .find(|d| d.device_type == NnapiDeviceKind::Gpu)
+            })
+            .or_else(|| {
+                self.devices
+                    .iter()
+                    .find(|d| d.device_type == NnapiDeviceKind::Cpu)
+            })
             .or_else(|| self.devices.first())
     }
 
@@ -205,7 +213,9 @@ impl NnapiExecutor {
         // -- Step 1: Create model --
         let mut model: *mut ANeuralNetworksModel = ptr::null_mut();
         unsafe {
-            nnapi_result(ANeuralNetworksModel_create(&mut model as *mut *mut ANeuralNetworksModel))?;
+            nnapi_result(ANeuralNetworksModel_create(
+                &mut model as *mut *mut ANeuralNetworksModel,
+            ))?;
         }
 
         // -- Step 2: Define operand types --
@@ -265,11 +275,26 @@ impl NnapiExecutor {
         // Operand 3: fused activation scalar
         // Operand 4: output
         unsafe {
-            nnapi_result(ANeuralNetworksModel_addOperand(model, &input_type as *const _))?;
-            nnapi_result(ANeuralNetworksModel_addOperand(model, &weights_type as *const _))?;
-            nnapi_result(ANeuralNetworksModel_addOperand(model, &bias_type as *const _))?;
-            nnapi_result(ANeuralNetworksModel_addOperand(model, &act_type as *const _))?;
-            nnapi_result(ANeuralNetworksModel_addOperand(model, &output_type as *const _))?;
+            nnapi_result(ANeuralNetworksModel_addOperand(
+                model,
+                &input_type as *const _,
+            ))?;
+            nnapi_result(ANeuralNetworksModel_addOperand(
+                model,
+                &weights_type as *const _,
+            ))?;
+            nnapi_result(ANeuralNetworksModel_addOperand(
+                model,
+                &bias_type as *const _,
+            ))?;
+            nnapi_result(ANeuralNetworksModel_addOperand(
+                model,
+                &act_type as *const _,
+            ))?;
+            nnapi_result(ANeuralNetworksModel_addOperand(
+                model,
+                &output_type as *const _,
+            ))?;
         }
 
         // -- Step 4: Set operand values for constants (weights, bias, activation) --
@@ -401,11 +426,7 @@ impl NnapiExecutor {
     /// For the initial implementation, this builds a new model graph for
     /// each call. We use the input token to construct a one-hot-like
     /// input vector and simulate the weight matrix with a diagonal bias.
-    pub fn forward(
-        &self,
-        input_ids: &[u32],
-        vocab_size: usize,
-    ) -> Result<AccelResult> {
+    pub fn forward(&self, input_ids: &[u32], vocab_size: usize) -> Result<AccelResult> {
         let start = Instant::now();
 
         #[cfg(target_os = "android")]
@@ -438,14 +459,11 @@ impl NnapiExecutor {
                     ) {
                         Ok(()) => {
                             let offset = i * num_units;
-                            total_output[offset..offset + num_units]
-                                .copy_from_slice(&output);
+                            total_output[offset..offset + num_units].copy_from_slice(&output);
                         }
                         Err(e) => {
                             // Fall back to CPU if NNAPI execution fails
-                            tracing::warn!(
-                                "NNAPI execution failed, falling back to CPU: {e}"
-                            );
+                            tracing::warn!("NNAPI execution failed, falling back to CPU: {e}");
                             return fallback_forward(input_ids, vocab_size, start);
                         }
                     }
@@ -473,11 +491,7 @@ impl std::fmt::Debug for NnapiExecutor {
 // Stub fallback
 // ---------------------------------------------------------------------------
 
-fn fallback_forward(
-    input_ids: &[u32],
-    vocab_size: usize,
-    start: Instant,
-) -> Result<AccelResult> {
+fn fallback_forward(input_ids: &[u32], vocab_size: usize, start: Instant) -> Result<AccelResult> {
     let batch_size = input_ids.len();
     let mut logits = vec![0.0f32; batch_size * vocab_size];
 
@@ -602,7 +616,8 @@ impl AccelBackend for NnapiBackend {
     #[cfg(not(test))]
     fn forward(&self, _input_ids: &[u32], _positions: &[usize]) -> Result<AccelResult> {
         Err(crate::AccelError::Deprecated(
-            "NnapiBackend::forward() is deprecated; use InferenceEngine::generate() instead".to_string(),
+            "NnapiBackend::forward() is deprecated; use InferenceEngine::generate() instead"
+                .to_string(),
         ))
     }
 }
@@ -786,7 +801,9 @@ impl NnapiGraphBuilder {
         let index = self.operand_count;
         #[cfg(target_os = "android")]
         {
-            let rc = unsafe { ndk::ANeuralNetworksModel_addOperand(self.model, &operand_type as *const _) };
+            let rc = unsafe {
+                ndk::ANeuralNetworksModel_addOperand(self.model, &operand_type as *const _)
+            };
             if rc != ndk::ANEURALNETWORKS_NO_ERROR {
                 return Err(crate::AccelError::OperationFailed(format!(
                     "NNAPI: addOperand failed: {}",
@@ -1179,9 +1196,15 @@ mod tests {
         let default_pref = ExecutionPreference::FastSingleAnswer;
         assert_eq!(backend.execution_preference(), default_pref);
         backend.set_execution_preference(ExecutionPreference::LowPower);
-        assert_eq!(backend.execution_preference(), ExecutionPreference::LowPower);
+        assert_eq!(
+            backend.execution_preference(),
+            ExecutionPreference::LowPower
+        );
         backend.set_execution_preference(ExecutionPreference::SustainedSpeed);
-        assert_eq!(backend.execution_preference(), ExecutionPreference::SustainedSpeed);
+        assert_eq!(
+            backend.execution_preference(),
+            ExecutionPreference::SustainedSpeed
+        );
     }
 
     #[test]
@@ -1248,13 +1271,22 @@ mod tests {
         };
         assert_eq!(softmax.to_nnapi_code(), ndk::ANEURALNETWORKS_SOFTMAX);
 
-        let logistic = NnapiOperation::Logistic { input: 0, output: 1 };
+        let logistic = NnapiOperation::Logistic {
+            input: 0,
+            output: 1,
+        };
         assert_eq!(logistic.to_nnapi_code(), ndk::ANEURALNETWORKS_LOGISTIC);
 
-        let relu = NnapiOperation::Relu { input: 0, output: 1 };
+        let relu = NnapiOperation::Relu {
+            input: 0,
+            output: 1,
+        };
         assert_eq!(relu.to_nnapi_code(), ndk::ANEURALNETWORKS_RELU);
 
-        let tanh = NnapiOperation::Tanh { input: 0, output: 1 };
+        let tanh = NnapiOperation::Tanh {
+            input: 0,
+            output: 1,
+        };
         assert_eq!(tanh.to_nnapi_code(), ndk::ANEURALNETWORKS_TANH);
 
         let concat = NnapiOperation::Concatenation {

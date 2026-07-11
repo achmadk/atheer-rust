@@ -119,9 +119,7 @@ impl ModelRegistry {
             .get(&url)
             .send()
             .and_then(|r| r.error_for_status())
-            .map_err(|e| {
-                AtheerCoreError::DownloadFailed(format!("HTTP request to {url}: {e}"))
-            })?;
+            .map_err(|e| AtheerCoreError::DownloadFailed(format!("HTTP request to {url}: {e}")))?;
 
         let total_size = response.content_length().unwrap_or(0);
         let mut hasher = Sha256::new();
@@ -346,8 +344,7 @@ mod tests {
     fn test_config() -> ModelConfig {
         ModelConfig {
             name: "test/placeholder".to_string(),
-            sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-                .to_string(),
+            sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_string(),
             quantization: "Q4_K_M".to_string(),
             context_size: 4096,
             recommended_backend: Some("cpu".to_string()),
@@ -382,7 +379,10 @@ mod tests {
     fn test_registry_new_with_defaults() {
         let reg = ModelRegistry::new(None, None);
         assert_eq!(reg.max_cache_size, 10_737_418_240);
-        assert!(reg.cache_dir().to_string_lossy().ends_with(".atheer/models"));
+        assert!(reg
+            .cache_dir()
+            .to_string_lossy()
+            .ends_with(".atheer/models"));
     }
 
     #[test]
@@ -434,8 +434,7 @@ mod tests {
         let file_path = dir.path().join("test.bin");
         fs::write(&file_path, b"hello world").unwrap();
 
-        let expected =
-            "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9";
+        let expected = "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9";
         assert!(reg.verify_sha256(&file_path, expected).is_ok());
     }
 

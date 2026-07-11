@@ -1,9 +1,6 @@
 use crate::model_encryption::ModelEncryption;
 use crate::AtheerCoreError;
-use aes_gcm::{
-    aead::Aead,
-    Aes256Gcm, Key, KeyInit, Nonce,
-};
+use aes_gcm::{aead::Aead, Aes256Gcm, Key, KeyInit, Nonce};
 use std::fs;
 use std::path::Path;
 use zeroize::Zeroize;
@@ -23,9 +20,7 @@ pub struct Aes256GcmEncryption {
 
 impl Aes256GcmEncryption {
     pub fn new(key: [u8; 32]) -> Self {
-        Self {
-            key: Box::new(key),
-        }
+        Self { key: Box::new(key) }
     }
 
     fn decrypt_bytes(&self, data: &[u8], aad: &[u8]) -> Result<Vec<u8>, AtheerCoreError> {
@@ -47,18 +42,26 @@ impl Aes256GcmEncryption {
         ciphertext_with_tag.extend_from_slice(tag_bytes);
 
         cipher
-            .decrypt(nonce, aes_gcm::aead::Payload {
-                msg: ciphertext,
-                aad,
+            .decrypt(
+                nonce,
+                aes_gcm::aead::Payload {
+                    msg: ciphertext,
+                    aad,
+                },
+            )
+            .map_err(|_| {
+                AtheerCoreError::ModelDecryptionFailed(
+                    "AES-GCM: bad tag or corrupted ciphertext".into(),
+                )
             })
-            .map_err(|_| AtheerCoreError::ModelDecryptionFailed("AES-GCM: bad tag or corrupted ciphertext".into()))
     }
 }
 
 impl ModelEncryption for Aes256GcmEncryption {
     fn decrypt_reader(&self, path: &str) -> Result<Vec<u8>, AtheerCoreError> {
-        let data = fs::read(path)
-            .map_err(|e| AtheerCoreError::ModelDecryptionFailed(format!("cannot read {path}: {e}")))?;
+        let data = fs::read(path).map_err(|e| {
+            AtheerCoreError::ModelDecryptionFailed(format!("cannot read {path}: {e}"))
+        })?;
         self.decrypt_bytes(&data, b"atheer-model-v1")
     }
 
@@ -103,16 +106,18 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), AtheerCoreError> {
         fs::create_dir_all(dst)
             .map_err(|e| AtheerCoreError::ModelDecryptionFailed(format!("mkdir {dst:?}: {e}")))?;
         for entry in fs::read_dir(src)
-            .map_err(|e| AtheerCoreError::ModelDecryptionFailed(format!("read_dir {src:?}: {e}")))? {
-            let entry = entry
-                .map_err(|e| AtheerCoreError::ModelDecryptionFailed(format!("entry: {e}")))?;
+            .map_err(|e| AtheerCoreError::ModelDecryptionFailed(format!("read_dir {src:?}: {e}")))?
+        {
+            let entry =
+                entry.map_err(|e| AtheerCoreError::ModelDecryptionFailed(format!("entry: {e}")))?;
             let src_path = entry.path();
             let dst_path = dst.join(entry.file_name());
             copy_dir_recursive(&src_path, &dst_path)?;
         }
     } else {
-        fs::copy(src, dst)
-            .map_err(|e| AtheerCoreError::ModelDecryptionFailed(format!("copy {src:?} -> {dst:?}: {e}")))?;
+        fs::copy(src, dst).map_err(|e| {
+            AtheerCoreError::ModelDecryptionFailed(format!("copy {src:?} -> {dst:?}: {e}"))
+        })?;
     }
     Ok(())
 }
@@ -120,19 +125,17 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), AtheerCoreError> {
 fn decrypt_bin_files(dir: &Path, key: &[u8; 32]) -> Result<(), AtheerCoreError> {
     if dir.is_dir() {
         for entry in fs::read_dir(dir)
-            .map_err(|e| AtheerCoreError::ModelDecryptionFailed(format!("walk {dir:?}: {e}")))? {
-            let entry = entry
-                .map_err(|e| AtheerCoreError::ModelDecryptionFailed(format!("entry: {e}")))?;
+            .map_err(|e| AtheerCoreError::ModelDecryptionFailed(format!("walk {dir:?}: {e}")))?
+        {
+            let entry =
+                entry.map_err(|e| AtheerCoreError::ModelDecryptionFailed(format!("entry: {e}")))?;
             let path = entry.path();
             if path.is_dir() {
                 decrypt_bin_files(&path, key)?;
-            } else if path
-                .extension()
-                .map(|e| e == "bin")
-                .unwrap_or(false)
-            {
-                let encrypted = fs::read(&path)
-                    .map_err(|e| AtheerCoreError::ModelDecryptionFailed(format!("read {:?}: {e}", path)))?;
+            } else if path.extension().map(|e| e == "bin").unwrap_or(false) {
+                let encrypted = fs::read(&path).map_err(|e| {
+                    AtheerCoreError::ModelDecryptionFailed(format!("read {:?}: {e}", path))
+                })?;
                 let aad = b"atheer-mlpackage-weight";
                 let key_ref = Key::<Aes256Gcm>::from_slice(key.as_slice());
                 let cipher = Aes256Gcm::new(key_ref);
@@ -146,18 +149,22 @@ fn decrypt_bin_files(dir: &Path, key: &[u8; 32]) -> Result<(), AtheerCoreError> 
 
                 let ciphertext = &encrypted[28..];
                 let plaintext = cipher
-                    .decrypt(nonce, aes_gcm::aead::Payload {
-                        msg: ciphertext,
-                        aad,
-                    })
+                    .decrypt(
+                        nonce,
+                        aes_gcm::aead::Payload {
+                            msg: ciphertext,
+                            aad,
+                        },
+                    )
                     .map_err(|_| {
                         AtheerCoreError::ModelDecryptionFailed(format!(
                             "AES-GCM: bad tag for {:?}",
                             path
                         ))
                     })?;
-                fs::write(&path, &plaintext)
-                    .map_err(|e| AtheerCoreError::ModelDecryptionFailed(format!("write {:?}: {e}", path)))?;
+                fs::write(&path, &plaintext).map_err(|e| {
+                    AtheerCoreError::ModelDecryptionFailed(format!("write {:?}: {e}", path))
+                })?;
             }
         }
     }

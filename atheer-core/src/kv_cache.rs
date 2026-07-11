@@ -47,9 +47,13 @@ impl KvCache {
         snapshot: &[(Vec<f32>, Vec<f32>)],
         quantizer: &dyn KvCacheQuantizer,
     ) {
-        assert_eq!(snapshot.len(), self.layers.len(),
+        assert_eq!(
+            snapshot.len(),
+            self.layers.len(),
             "KvCache::load_snapshot: expected {} layers, got {}",
-            self.layers.len(), snapshot.len());
+            self.layers.len(),
+            snapshot.len()
+        );
 
         for (i, (keys, vals)) in snapshot.iter().enumerate() {
             self.layers[i] = LayerCache {
@@ -89,7 +93,10 @@ impl KvCache {
         vals: &[f32],
         quantizer: &dyn KvCacheQuantizer,
     ) {
-        assert!(layer < self.layers.len(), "KvCache::insert: layer {layer} out of bounds");
+        assert!(
+            layer < self.layers.len(),
+            "KvCache::insert: layer {layer} out of bounds"
+        );
 
         let lc = &mut self.layers[layer];
         if lc.logical_len == 0 {
@@ -185,7 +192,7 @@ fn payload_logical_len(data: &[u8], scheme: QuantizationScheme) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::kv_cache_quantizer::{Int8Quantizer, Int4Quantizer};
+    use crate::kv_cache_quantizer::{Int4Quantizer, Int8Quantizer};
 
     fn dummy_snapshot(num_layers: usize, tokens: usize) -> Vec<(Vec<f32>, Vec<f32>)> {
         (0..num_layers)
@@ -312,9 +319,19 @@ mod tests {
 
         let final_snap = cache.to_snapshot(&q_int8);
         for ((bk, bv), (fk, fv)) in baseline.iter().zip(final_snap.iter()) {
-            let ke: f64 = bk.iter().zip(fk).map(|(a, b)| (a - b).abs() as f64).sum::<f64>() / bk.len() as f64;
+            let ke: f64 = bk
+                .iter()
+                .zip(fk)
+                .map(|(a, b)| (a - b).abs() as f64)
+                .sum::<f64>()
+                / bk.len() as f64;
             assert!(ke < 0.25, "key error too large: {ke}");
-            let ve: f64 = bv.iter().zip(fv).map(|(a, b)| (a - b).abs() as f64).sum::<f64>() / bv.len() as f64;
+            let ve: f64 = bv
+                .iter()
+                .zip(fv)
+                .map(|(a, b)| (a - b).abs() as f64)
+                .sum::<f64>()
+                / bv.len() as f64;
             assert!(ve < 0.25, "val error too large: {ve}");
         }
     }

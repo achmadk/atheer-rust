@@ -227,11 +227,7 @@ impl IncrementalCheckpoint {
 
     /// Serialise the full checkpoint (header + data).
     pub fn to_checkpoint_bytes(&self) -> Vec<u8> {
-        let header_bytes = self
-            .header
-            .as_ref()
-            .map(|h| h.encode())
-            .unwrap_or_default();
+        let header_bytes = self.header.as_ref().map(|h| h.encode()).unwrap_or_default();
         let mut out = header_bytes;
         out.extend_from_slice(&self.data);
         out
@@ -295,16 +291,11 @@ impl<T: KvCacheBridge> EngineLifecycle<T> {
         let start = Instant::now();
         let snapshot = self.engine.kv_cache_snapshot()?;
 
-        let total_positions = snapshot
-            .first()
-            .map(|(k, _)| k.len() / 2)
-            .unwrap_or(0) as u32;
+        let total_positions = snapshot.first().map(|(k, _)| k.len() / 2).unwrap_or(0) as u32;
 
         // Write delta from position 0 (full snapshot)
         self.incremental_cp.reset();
-        let new_tokens =
-            self.incremental_cp
-                .append_delta(&snapshot, 0, scheme);
+        let new_tokens = self.incremental_cp.append_delta(&snapshot, 0, scheme);
         let elapsed_ms = start.elapsed().as_secs_f64() * 1000.0;
         self.latency.record_decode_step(elapsed_ms, f64::MAX);
 

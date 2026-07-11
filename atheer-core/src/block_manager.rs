@@ -149,12 +149,7 @@ impl BlockManager {
     /// and map them into the block table.
     ///
     /// Returns the number of blocks allocated.
-    pub fn alloc_span(
-        &mut self,
-        layer: usize,
-        start_token: usize,
-        token_count: usize,
-    ) -> usize {
+    pub fn alloc_span(&mut self, layer: usize, start_token: usize, token_count: usize) -> usize {
         let first_block = start_token / self.block_size;
         let last_block = (start_token + token_count - 1) / self.block_size;
         let mut allocated = 0;
@@ -281,7 +276,11 @@ impl BlockManager {
         // Shared → allocate new block and copy data.
         let (key_data, value_data, token_count) = {
             let src = &self.blocks[block_id];
-            (src.key_data.clone(), src.value_data.clone(), src.token_count)
+            (
+                src.key_data.clone(),
+                src.value_data.clone(),
+                src.token_count,
+            )
         };
 
         let new_id = self.alloc_block()?;
@@ -314,10 +313,7 @@ impl BlockManager {
 
     /// Reference count of a specific block.
     pub fn ref_count(&self, block_id: BlockId) -> u32 {
-        self.blocks
-            .get(block_id)
-            .map(|b| b.ref_count)
-            .unwrap_or(0)
+        self.blocks.get(block_id).map(|b| b.ref_count).unwrap_or(0)
     }
 
     /// Block size in tokens.

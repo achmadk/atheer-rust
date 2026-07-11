@@ -26,8 +26,8 @@ use std::time::Duration;
 // objc2 imports
 // ---------------------------------------------------------------------------
 
-use objc2::runtime::NSObject;
 use objc2::msg_send;
+use objc2::runtime::NSObject;
 
 // ---------------------------------------------------------------------------
 // C FFI: os_proc_available_memory()
@@ -101,8 +101,8 @@ fn read_memory() -> (u64, u64) {
     // Total physical memory via NSProcessInfo
     // SAFETY: physicalMemory is a property on NSProcessInfo, always available.
     let total_mb: u64 = unsafe {
-        let cls = objc2::runtime::AnyClass::get(c"NSProcessInfo")
-            .expect("NSProcessInfo class not found");
+        let cls =
+            objc2::runtime::AnyClass::get(c"NSProcessInfo").expect("NSProcessInfo class not found");
         let process_info: *mut NSObject = msg_send![cls, processInfo];
         let physical_memory: u64 = msg_send![process_info, physicalMemory];
         physical_memory / (1024 * 1024)
@@ -150,8 +150,8 @@ fn read_battery() -> (u32, bool) {
 
         // Read battery state
         let state: i64 = msg_send![device, batteryState];
-        let on_battery = state != UI_DEVICE_BATTERY_STATE_CHARGING
-            && state != UI_DEVICE_BATTERY_STATE_FULL;
+        let on_battery =
+            state != UI_DEVICE_BATTERY_STATE_CHARGING && state != UI_DEVICE_BATTERY_STATE_FULL;
 
         // Restore previous monitoring state
         let _: () = msg_send![device, setBatteryMonitoringEnabled: was_monitoring];
@@ -286,17 +286,11 @@ impl HardwareMonitor for IosMonitor {
     }
 
     fn battery_level(&self) -> u32 {
-        self.snapshot
-            .lock()
-            .map(|g| g.battery_level)
-            .unwrap_or(0)
+        self.snapshot.lock().map(|g| g.battery_level).unwrap_or(0)
     }
 
     fn is_on_battery(&self) -> bool {
-        self.snapshot
-            .lock()
-            .map(|g| g.on_battery)
-            .unwrap_or(true)
+        self.snapshot.lock().map(|g| g.on_battery).unwrap_or(true)
     }
 }
 
@@ -396,7 +390,11 @@ mod tests {
         let monitor = IosMonitor::new();
         let state = monitor.power_state();
         // Should be either Charging or Discharging (or Unknown on non-iOS)
-        let valid_states = [PowerState::Charging, PowerState::Discharging, PowerState::Unknown];
+        let valid_states = [
+            PowerState::Charging,
+            PowerState::Discharging,
+            PowerState::Unknown,
+        ];
         assert!(valid_states.contains(&state));
     }
 

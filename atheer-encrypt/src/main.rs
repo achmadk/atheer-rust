@@ -6,8 +6,8 @@
 //!   atheer-encrypt --input model.gguf --output model.gguf.enc --key-id mykey --server-mode
 
 use aes_gcm::{
-    aead::{Aead, OsRng},
     aead::generic_array::GenericArray,
+    aead::{Aead, OsRng},
     AeadCore, Aes256Gcm, KeyInit,
 };
 use clap::Parser;
@@ -15,7 +15,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
-#[command(name = "atheer-encrypt", about = "Encrypt GGUF and .mlpackage model files")]
+#[command(
+    name = "atheer-encrypt",
+    about = "Encrypt GGUF and .mlpackage model files"
+)]
 struct Args {
     #[arg(long)]
     input: PathBuf,
@@ -53,9 +56,16 @@ fn main() {
         });
         println!("{}", serde_json::to_string_pretty(&output).unwrap());
     } else {
-        eprintln!("Encrypted: {} -> {}", args.input.display(), args.output.display());
+        eprintln!(
+            "Encrypted: {} -> {}",
+            args.input.display(),
+            args.output.display()
+        );
         eprintln!("Key ID: {}", args.key_id);
-        eprintln!("Store this key in the platform Keychain/Keystore under '{}'.", args.key_id);
+        eprintln!(
+            "Store this key in the platform Keychain/Keystore under '{}'.",
+            args.key_id
+        );
         eprintln!("(Use --server-mode to output the key material as JSON.)");
     }
 }
@@ -65,10 +75,13 @@ fn encrypt_gguf(input: &Path, output: &Path, key: &[u8], nonce: &[u8]) {
     let cipher = Aes256Gcm::new_from_slice(key).expect("valid key");
     let nonce_arr = GenericArray::<u8, typenum::U12>::from_slice(nonce);
     let ciphertext = cipher
-        .encrypt(nonce_arr, aes_gcm::aead::Payload {
-            msg: &plaintext,
-            aad: b"atheer-model-v1",
-        })
+        .encrypt(
+            nonce_arr,
+            aes_gcm::aead::Payload {
+                msg: &plaintext,
+                aad: b"atheer-model-v1",
+            },
+        )
         .expect("encryption failed");
 
     let mut out = Vec::with_capacity(12 + ciphertext.len());
@@ -94,10 +107,13 @@ fn encrypt_bin_files(dir: &Path, key: &[u8]) -> std::io::Result<()> {
                 let cipher = Aes256Gcm::new_from_slice(key).expect("valid key");
                 let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
                 let ciphertext = cipher
-                    .encrypt(&nonce, aes_gcm::aead::Payload {
-                        msg: &plaintext,
-                        aad: b"atheer-mlpackage-weight",
-                    })
+                    .encrypt(
+                        &nonce,
+                        aes_gcm::aead::Payload {
+                            msg: &plaintext,
+                            aad: b"atheer-mlpackage-weight",
+                        },
+                    )
                     .expect("encryption failed");
                 let mut out = Vec::with_capacity(12 + ciphertext.len());
                 out.extend_from_slice(&nonce);

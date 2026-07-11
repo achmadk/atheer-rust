@@ -127,9 +127,7 @@ impl BackendManager {
         match self.selected.backend_type() {
             BackendType::Cpu => candle_core::Device::Cpu,
             #[cfg(any(target_os = "ios", target_os = "macos"))]
-            BackendType::CoreML if self.coreml_model_path.is_some() => {
-                candle_core::Device::Cpu
-            }
+            BackendType::CoreML if self.coreml_model_path.is_some() => candle_core::Device::Cpu,
             #[cfg(any(target_os = "ios", target_os = "macos"))]
             BackendType::Metal | BackendType::CoreML => {
                 candle_core::Device::metal_if_available(0).unwrap_or(candle_core::Device::Cpu)
@@ -288,7 +286,10 @@ mod tests {
         let current = manager.current();
         // On non-Apple platforms, CoreML isn't registered, so autoselect picks CPU
         // The test verifies the builder doesn't panic and the manager is usable
-        assert!(current.backend_type() == BackendType::CoreML || current.backend_type() == BackendType::Cpu);
+        assert!(
+            current.backend_type() == BackendType::CoreML
+                || current.backend_type() == BackendType::Cpu
+        );
         // device() should not panic
         let _device = manager.device();
     }

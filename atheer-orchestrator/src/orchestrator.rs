@@ -114,10 +114,11 @@ impl Orchestrator {
         //    temperature is approaching the hard throttle, downgrade pre-emptively
         //    to Balanced (not Eco) — avoids aggressive cutting performance.
         if let Some(temp) = thermal_c {
-            if self
-                .thermal_model
-                .should_pre_downgrade(temp, self.config.thermal_threshold_c, self.config.thermal_margin_c)
-            {
+            if self.thermal_model.should_pre_downgrade(
+                temp,
+                self.config.thermal_threshold_c,
+                self.config.thermal_margin_c,
+            ) {
                 let downgrade_target = InferenceMode::Balanced;
                 if downgrade_target != self.current_mode {
                     tracing::info!(
@@ -142,9 +143,16 @@ impl Orchestrator {
                 self.config.thermal_margin_c * 2.0,
             ) {
                 // Try to upgrade to the target the reactive logic would pick
-                let reactive_target =
-                    self.calculate_target_mode(thermal_c, available_ram_mb, battery_level, on_battery);
-                if reactive_target != self.current_mode && !self.is_downgrade(&reactive_target) && self.can_change_mode() {
+                let reactive_target = self.calculate_target_mode(
+                    thermal_c,
+                    available_ram_mb,
+                    battery_level,
+                    on_battery,
+                );
+                if reactive_target != self.current_mode
+                    && !self.is_downgrade(&reactive_target)
+                    && self.can_change_mode()
+                {
                     tracing::info!(
                         target: "atheer::orchestrator::thermal",
                         "Predictive thermal upgrade: {:?} -> {:?} (trend=Falling, safe)",
@@ -172,7 +180,9 @@ impl Orchestrator {
         let target_mode =
             self.calculate_target_mode(thermal_c, available_ram_mb, battery_level, on_battery);
 
-        if target_mode != self.current_mode && (self.can_change_mode() || self.is_downgrade(&target_mode)) {
+        if target_mode != self.current_mode
+            && (self.can_change_mode() || self.is_downgrade(&target_mode))
+        {
             self.set_mode(target_mode);
         }
 
@@ -333,7 +343,8 @@ impl Orchestrator {
         let update = self.calibrator.recalibrate();
 
         // 1. Update energy model
-        self.perf_model.calibrate(update.turbo_mj, update.balanced_mj, update.eco_mj);
+        self.perf_model
+            .calibrate(update.turbo_mj, update.balanced_mj, update.eco_mj);
 
         // 2. Update speculation depth bounds
         for (mode, &(min, max)) in &update.depth_bounds {
@@ -341,7 +352,8 @@ impl Orchestrator {
         }
 
         // 3. Nudge mode-switch thresholds (conservatively)
-        self.config.thermal_threshold_c = (self.config.thermal_threshold_c + update.threshold_delta_c)
+        self.config.thermal_threshold_c = (self.config.thermal_threshold_c
+            + update.threshold_delta_c)
             .min(OrchestratorConfig::default().thermal_threshold_c + 3.0);
 
         self.config.memory_threshold_mb = self
@@ -571,7 +583,9 @@ mod tests {
         );
 
         // Balanced and Eco should have been recalibrated too
-        let mj_bal = orchestrator.perf_model.mj_per_token(&InferenceMode::Balanced);
+        let mj_bal = orchestrator
+            .perf_model
+            .mj_per_token(&InferenceMode::Balanced);
         assert!(
             (mj_bal - default_bal_mj).abs() < 0.01,
             "expected balanced unchanged (no samples), got {mj_bal}"

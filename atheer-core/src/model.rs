@@ -87,19 +87,18 @@ impl Model {
         let variant = crate::weights::WeightsVariant::from_gguf(gguf, &mut reader, &device)
             .map_err(|e| AtheerCoreError::ModelLoadFailed(format!("ModelWeights: {e}")))?;
 
-        let (resolved_quant_format, quant_format_warning) =
-            if let Some(ref mut res) = resolver {
-                // Use a sensible default format; the caller can pass a custom
-                // preference by calling `resolver.resolve()` separately and
-                // choosing the appropriate GGUF file before calling this.
-                let (fmt, warn) = res.resolve("q4_k_m");
-                if let Some(ref w) = warn {
-                    tracing::warn!("QuantizationResolver: {w}");
-                }
-                (Some(fmt), warn)
-            } else {
-                (None, None)
-            };
+        let (resolved_quant_format, quant_format_warning) = if let Some(ref mut res) = resolver {
+            // Use a sensible default format; the caller can pass a custom
+            // preference by calling `resolver.resolve()` separately and
+            // choosing the appropriate GGUF file before calling this.
+            let (fmt, warn) = res.resolve("q4_k_m");
+            if let Some(ref w) = warn {
+                tracing::warn!("QuantizationResolver: {w}");
+            }
+            (Some(fmt), warn)
+        } else {
+            (None, None)
+        };
 
         Ok(Self {
             weights: variant,

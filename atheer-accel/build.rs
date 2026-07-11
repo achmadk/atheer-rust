@@ -33,10 +33,7 @@ fn compile_shader(shader_path: &Path, out_path: &Path) {
     )
     .unwrap_or_else(|_| panic!("Failed to write SPIR-V: {:?}", shader_path));
 
-    let output_bytes: Vec<u8> = spv
-        .iter()
-        .flat_map(|w| w.to_le_bytes())
-        .collect();
+    let output_bytes: Vec<u8> = spv.iter().flat_map(|w| w.to_le_bytes()).collect();
 
     let stem = shader_path.file_stem().unwrap().to_str().unwrap();
     let spv_path = out_path.join(format!("{}.spv", stem));

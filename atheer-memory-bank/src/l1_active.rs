@@ -70,7 +70,12 @@ impl L1ActiveCache {
             .unwrap_or(0)
     }
 
-    pub fn promote_to_l2(&mut self, layer: usize, position: usize, l2: &mut crate::L2WarmCache) -> bool {
+    pub fn promote_to_l2(
+        &mut self,
+        layer: usize,
+        position: usize,
+        l2: &mut crate::L2WarmCache,
+    ) -> bool {
         let kv = match self.kv_cache.as_mut() {
             Some(kv) => kv,
             None => return false,
@@ -80,7 +85,13 @@ impl L1ActiveCache {
             None => return false,
         };
         if let Some(l2_kv) = l2.kv_cache_mut() {
-            l2_kv.insert(layer, position, entry.token_id, entry.keys.clone(), entry.values.clone());
+            l2_kv.insert(
+                layer,
+                position,
+                entry.token_id,
+                entry.keys.clone(),
+                entry.values.clone(),
+            );
         }
         kv.remove_entry(layer, position);
         true

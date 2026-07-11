@@ -1,19 +1,17 @@
 use crate::{
-    AtheerConfig, AtheerError, AtheerInferenceMode, EngineStatus,
-    GenerationRequest, GenerationResponse,
+    AtheerConfig, AtheerError, AtheerInferenceMode, EngineStatus, GenerationRequest,
+    GenerationResponse,
 };
 use atheer_accel::BackendManager;
 use atheer_core::model_credential::ModelCredential;
-use atheer_core::model_encryption::{
-    aes256_gcm::Aes256GcmEncryption, ModelEncryption,
-};
+use atheer_core::model_encryption::{aes256_gcm::Aes256GcmEncryption, ModelEncryption};
 use atheer_core::{CrashReporter, InferenceEngine, SamplingConfig};
 use atheer_hardware::{monitor::GenericMonitor, HardwareMonitor};
 use atheer_memory_bank::{l3_compressed::L3CompressedStorage, MemoryBank};
 use atheer_orchestrator::calibrator::CalibrationSample;
 use atheer_orchestrator::{Orchestrator, OrchestratorConfig};
-use sha2::{Digest, Sha256};
 use hkdf::Hkdf;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
@@ -192,9 +190,11 @@ impl AtheerEngine {
             ..Default::default()
         };
 
-        let mut engine = InferenceEngine::new(model, tokenizer, sampling_config, 4096)
-            .map_err(|e| AtheerError::ModelLoadFailed {
-                message: format!("Device validation: {e}"),
+        let mut engine =
+            InferenceEngine::new(model, tokenizer, sampling_config, 4096).map_err(|e| {
+                AtheerError::ModelLoadFailed {
+                    message: format!("Device validation: {e}"),
+                }
             })?;
 
         // Wire checkpoint directory and model-id for lifecycle persistence
@@ -338,9 +338,8 @@ impl AtheerEngine {
             }
         }
 
-        let use_speculation = orch.is_draft_loaded()
-            && orch.speculation_depth() > 0
-            && request.json_schema.is_none();
+        let use_speculation =
+            orch.is_draft_loaded() && orch.speculation_depth() > 0 && request.json_schema.is_none();
         // JSON-schema-constrained output currently uses grammar sampling which
         // is incompatible with draft-model speculation.
 
@@ -485,9 +484,11 @@ impl AtheerEngine {
             ..Default::default()
         };
 
-        let engine = InferenceEngine::new(model, tokenizer, sampling_config, 4096)
-            .map_err(|e| AtheerError::ModelLoadFailed {
-                message: format!("Draft engine init: {e}"),
+        let engine =
+            InferenceEngine::new(model, tokenizer, sampling_config, 4096).map_err(|e| {
+                AtheerError::ModelLoadFailed {
+                    message: format!("Draft engine init: {e}"),
+                }
             })?;
 
         {
@@ -750,11 +751,11 @@ impl AtheerEngine {
             .lock()
             .map_err(|_| AtheerError::NotInitialized)?;
         let engine = guard.as_mut().ok_or(AtheerError::NotInitialized)?;
-        let uuid = engine.save_checkpoint().map_err(|e| {
-            AtheerError::GenerationFailed {
+        let uuid = engine
+            .save_checkpoint()
+            .map_err(|e| AtheerError::GenerationFailed {
                 message: format!("checkpoint save failed: {e}"),
-            }
-        })?;
+            })?;
 
         // Store in memory
         if let Ok(mut cp) = self.last_checkpoint_uuid.lock() {
@@ -790,11 +791,11 @@ impl AtheerEngine {
             .map_err(|_| AtheerError::NotInitialized)?;
         let engine = guard.as_mut().ok_or(AtheerError::NotInitialized)?;
 
-        engine.load_checkpoint(&uuid).map_err(|e| {
-            AtheerError::GenerationFailed {
+        engine
+            .load_checkpoint(&uuid)
+            .map_err(|e| AtheerError::GenerationFailed {
                 message: format!("checkpoint load failed: {e}"),
-            }
-        })?;
+            })?;
 
         // Update in-memory UUID
         if let Ok(mut cp) = self.last_checkpoint_uuid.lock() {
@@ -812,11 +813,11 @@ impl AtheerEngine {
             .map_err(|_| AtheerError::NotInitialized)?;
         let engine = guard.as_mut().ok_or(AtheerError::NotInitialized)?;
 
-        let snapshot = engine.kv_cache_snapshot().map_err(|e| {
-            AtheerError::GenerationFailed {
+        let snapshot = engine
+            .kv_cache_snapshot()
+            .map_err(|e| AtheerError::GenerationFailed {
                 message: format!("L3 snapshot: kv_cache_snapshot failed: {e}"),
-            }
-        })?;
+            })?;
 
         // Serialize into the same binary format as a checkpoint (layer-prefixed)
         let mut buf = Vec::new();
@@ -837,16 +838,16 @@ impl AtheerEngine {
                 .l3_storage
                 .lock()
                 .map_err(|_| AtheerError::NotInitialized)?;
-            let storage = storage_guard.as_mut().ok_or_else(|| {
-                AtheerError::GenerationFailed {
+            let storage = storage_guard
+                .as_mut()
+                .ok_or_else(|| AtheerError::GenerationFailed {
                     message: "L3 storage not initialized".to_string(),
-                }
-            })?;
-            storage.snapshot(model_id, &buf).map_err(|e| {
-                AtheerError::GenerationFailed {
+                })?;
+            storage
+                .snapshot(model_id, &buf)
+                .map_err(|e| AtheerError::GenerationFailed {
                     message: format!("L3 snapshot failed: {e}"),
-                }
-            })?
+                })?
         };
 
         // Store in memory
@@ -884,7 +885,11 @@ impl AtheerEngine {
         let path = PathBuf::from(dir).join("latest_checkpoint.txt");
         let content = fs::read_to_string(path).ok()?;
         let trimmed = content.trim().to_string();
-        if trimmed.is_empty() { None } else { Some(trimmed) }
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed)
+        }
     }
 
     // ── Generational cleanup ──────────────────────────────────────
@@ -911,7 +916,10 @@ impl AtheerEngine {
         let mut checkpoints: Vec<(String, i64)> = Vec::new();
         for entry in &entries {
             let name = entry.file_name().to_string_lossy().to_string();
-            if let Some(uuid) = name.strip_prefix("checkpoint_").and_then(|n| n.strip_suffix(".meta")) {
+            if let Some(uuid) = name
+                .strip_prefix("checkpoint_")
+                .and_then(|n| n.strip_suffix(".meta"))
+            {
                 let meta_path = entry.path();
                 let meta_content = match fs::read_to_string(&meta_path) {
                     Ok(c) => c,
@@ -997,17 +1005,17 @@ impl AtheerEngine {
             .l3_storage
             .lock()
             .map_err(|_| AtheerError::NotInitialized)?;
-        let storage = storage_guard.as_ref().ok_or_else(|| {
-            AtheerError::GenerationFailed {
+        let storage = storage_guard
+            .as_ref()
+            .ok_or_else(|| AtheerError::GenerationFailed {
                 message: "L3 storage not initialized".to_string(),
-            }
-        })?;
+            })?;
 
-        let bytes = storage.restore(snapshot_id).map_err(|e| {
-            AtheerError::GenerationFailed {
+        let bytes = storage
+            .restore(snapshot_id)
+            .map_err(|e| AtheerError::GenerationFailed {
                 message: format!("L3 restore failed: {e}"),
-            }
-        })?;
+            })?;
 
         if bytes.is_empty() {
             return Ok(false);
@@ -1020,7 +1028,8 @@ impl AtheerEngine {
             if offset + 8 > bytes.len() {
                 break;
             }
-            let key_len = u64::from_le_bytes(bytes[offset..offset + 8].try_into().unwrap()) as usize;
+            let key_len =
+                u64::from_le_bytes(bytes[offset..offset + 8].try_into().unwrap()) as usize;
             offset += 8;
             let key_end = offset + key_len * 4;
             if key_end > bytes.len() {
@@ -1037,7 +1046,8 @@ impl AtheerEngine {
             if offset + 8 > bytes.len() {
                 break;
             }
-            let value_len = u64::from_le_bytes(bytes[offset..offset + 8].try_into().unwrap()) as usize;
+            let value_len =
+                u64::from_le_bytes(bytes[offset..offset + 8].try_into().unwrap()) as usize;
             offset += 8;
             let value_end = offset + value_len * 4;
             if value_end > bytes.len() {
@@ -1058,11 +1068,11 @@ impl AtheerEngine {
             return Ok(false);
         }
 
-        engine.kv_cache_restore(&snapshot).map_err(|e| {
-            AtheerError::GenerationFailed {
+        engine
+            .kv_cache_restore(&snapshot)
+            .map_err(|e| AtheerError::GenerationFailed {
                 message: format!("L3 thaw: kv_cache_restore failed: {e}"),
-            }
-        })?;
+            })?;
 
         Ok(true)
     }
@@ -1083,14 +1093,15 @@ impl AtheerEngine {
                 nonce: _,
                 wrapped_key,
             } => {
-                let key_bytes = wrapped_key.as_ref().ok_or_else(|| {
-                    AtheerError::ModelDecryptionFailed {
-                        message: format!(
-                            "ServerDistributed key '{key_id}': key not provided. \
+                let key_bytes =
+                    wrapped_key
+                        .as_ref()
+                        .ok_or_else(|| AtheerError::ModelDecryptionFailed {
+                            message: format!(
+                                "ServerDistributed key '{key_id}': key not provided. \
                              Resolve from Keychain/Keystore and pass as wrapped_key."
-                        ),
-                    }
-                })?;
+                            ),
+                        })?;
                 if key_bytes.len() != 32 {
                     return Err(AtheerError::ModelDecryptionFailed {
                         message: format!(
@@ -1133,9 +1144,8 @@ impl AtheerEngine {
                     })?
                     .clone()
                     .ok_or_else(|| AtheerError::ModelDecryptionFailed {
-                        message:
-                            "DeviceDerived: device_uid not set. Call set_device_uid() first."
-                                .into(),
+                        message: "DeviceDerived: device_uid not set. Call set_device_uid() first."
+                            .into(),
                     })?;
 
                 let mut hasher = Sha256::new();
@@ -1180,14 +1190,15 @@ impl AtheerEngine {
                         message: "encryption_schemes lock poisoned".into(),
                     }
                 })?;
-                let scheme = schemes.get(scheme_name).ok_or_else(|| {
-                    AtheerError::ModelDecryptionFailed {
-                        message: format!(
-                            "Custom encryption scheme '{scheme_name}' not registered. \
+                let scheme =
+                    schemes
+                        .get(scheme_name)
+                        .ok_or_else(|| AtheerError::ModelDecryptionFailed {
+                            message: format!(
+                                "Custom encryption scheme '{scheme_name}' not registered. \
                              Call register_encryption_scheme() before initialize()."
-                        ),
-                    }
-                })?;
+                            ),
+                        })?;
                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     scheme.decrypt_reader(model_path)
                 }));

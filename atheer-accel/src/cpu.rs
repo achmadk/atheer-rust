@@ -56,7 +56,8 @@ impl AccelBackend for CpuBackend {
     #[cfg(not(test))]
     fn forward(&self, _input_ids: &[u32], _positions: &[usize]) -> Result<AccelResult> {
         Err(crate::AccelError::Deprecated(
-            "CpuBackend::forward() is deprecated; use InferenceEngine::generate() instead".to_string(),
+            "CpuBackend::forward() is deprecated; use InferenceEngine::generate() instead"
+                .to_string(),
         ))
     }
 }

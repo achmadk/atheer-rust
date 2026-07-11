@@ -85,20 +85,15 @@ impl AccelBackend for MetalBackend {
             let out_size = batch_size * vocab_size;
             let logits = vec![0.0f32; out_size];
 
-            let logits_tensor = candle_core::Tensor::from_vec(
-                logits.clone(),
-                &[batch_size, vocab_size],
-                device,
-            )
-            .map_err(|e| {
-                crate::AccelError::OperationFailed(format!("Metal tensor creation: {e}"))
-            })?;
+            let logits_tensor =
+                candle_core::Tensor::from_vec(logits.clone(), &[batch_size, vocab_size], device)
+                    .map_err(|e| {
+                        crate::AccelError::OperationFailed(format!("Metal tensor creation: {e}"))
+                    })?;
 
             let _result = logits_tensor
                 .matmul(&logits_tensor.t()?)
-                .map_err(|e| {
-                    crate::AccelError::OperationFailed(format!("Metal compute: {e}"))
-                })?;
+                .map_err(|e| crate::AccelError::OperationFailed(format!("Metal compute: {e}")))?;
 
             let elapsed = start.elapsed().as_millis() as u64;
             Ok(AccelResult::new(logits, input_ids.len(), elapsed))
@@ -115,7 +110,8 @@ impl AccelBackend for MetalBackend {
     #[cfg(not(test))]
     fn forward(&self, _input_ids: &[u32], _positions: &[usize]) -> Result<AccelResult> {
         Err(crate::AccelError::Deprecated(
-            "MetalBackend::forward() is deprecated; use InferenceEngine::generate() instead".to_string(),
+            "MetalBackend::forward() is deprecated; use InferenceEngine::generate() instead"
+                .to_string(),
         ))
     }
 }

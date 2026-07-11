@@ -168,8 +168,7 @@ impl VulkanContext {
                 ))
             })?;
 
-            let gemv_shader_bytes =
-                include_bytes!(concat!(env!("OUT_DIR"), "/shaders/gemv.spv"));
+            let gemv_shader_bytes = include_bytes!(concat!(env!("OUT_DIR"), "/shaders/gemv.spv"));
             let gemv_module = device
                 .create_shader_module(
                     &vk::ShaderModuleCreateInfo::default()
@@ -456,11 +455,7 @@ impl VulkanContext {
         Ok((buffer, allocation))
     }
 
-    fn ensure_weight_buffers(
-        &mut self,
-        hidden_size: u32,
-        vocab_size: u32,
-    ) -> Result<()> {
+    fn ensure_weight_buffers(&mut self, hidden_size: u32, vocab_size: u32) -> Result<()> {
         if self.weight_buffer.is_some()
             && self.weight_hidden_size == hidden_size
             && self.weight_vocab_size == vocab_size
@@ -469,17 +464,17 @@ impl VulkanContext {
         }
 
         if let Some(buf) = self.weight_buffer.take() {
-            unsafe { self.device.destroy_buffer(buf, None); }
+            unsafe {
+                self.device.destroy_buffer(buf, None);
+            }
         }
         if let Some(alloc) = self.weight_allocation.take() {
             self.allocator.free(alloc).ok();
         }
 
         let weight_size = (hidden_size as u64) * (vocab_size as u64) * 4;
-        let (buffer, allocation) = self.allocate_buffer(
-            weight_size,
-            vk::BufferUsageFlags::STORAGE_BUFFER,
-        )?;
+        let (buffer, allocation) =
+            self.allocate_buffer(weight_size, vk::BufferUsageFlags::STORAGE_BUFFER)?;
 
         unsafe {
             let mapped = allocation.mapped_ptr().unwrap().as_ptr() as *mut f32;
@@ -510,22 +505,17 @@ impl VulkanContext {
 
         unsafe {
             let input_size = (batch_size as u64) * size_of::<u32>() as u64;
-            let (input_buffer, mut input_allocation) = self.allocate_buffer(
-                input_size,
-                vk::BufferUsageFlags::STORAGE_BUFFER,
-            )?;
+            let (input_buffer, mut input_allocation) =
+                self.allocate_buffer(input_size, vk::BufferUsageFlags::STORAGE_BUFFER)?;
 
             {
                 let mapped = input_allocation.mapped_ptr().unwrap().as_ptr() as *mut u32;
                 std::ptr::copy_nonoverlapping(input_ids.as_ptr(), mapped, input_ids.len());
             }
 
-            let output_size =
-                (batch_size as u64) * (vocab_size as u64) * size_of::<f32>() as u64;
-            let (output_buffer, mut output_allocation) = self.allocate_buffer(
-                output_size,
-                vk::BufferUsageFlags::STORAGE_BUFFER,
-            )?;
+            let output_size = (batch_size as u64) * (vocab_size as u64) * size_of::<f32>() as u64;
+            let (output_buffer, mut output_allocation) =
+                self.allocate_buffer(output_size, vk::BufferUsageFlags::STORAGE_BUFFER)?;
 
             let descriptor_sets = self
                 .device
@@ -638,21 +628,20 @@ impl VulkanContext {
                 ((batch_size * vocab_size + workgroup_size - 1) / workgroup_size).max(1);
             self.device.cmd_dispatch(command_buffer, dispatch_x, 1, 1);
 
-            self.device.end_command_buffer(command_buffer).map_err(|e| {
-                crate::AccelError::OperationFailed(format!(
-                    "Failed to end command buffer: {:?}",
-                    e
-                ))
-            })?;
+            self.device
+                .end_command_buffer(command_buffer)
+                .map_err(|e| {
+                    crate::AccelError::OperationFailed(format!(
+                        "Failed to end command buffer: {:?}",
+                        e
+                    ))
+                })?;
 
             let fence = self
                 .device
                 .create_fence(&vk::FenceCreateInfo::default(), None)
                 .map_err(|e| {
-                    crate::AccelError::OperationFailed(format!(
-                        "Failed to create fence: {:?}",
-                        e
-                    ))
+                    crate::AccelError::OperationFailed(format!("Failed to create fence: {:?}", e))
                 })?;
 
             let submit_info =
@@ -661,19 +650,13 @@ impl VulkanContext {
             self.device
                 .queue_submit(self.queue, std::slice::from_ref(&submit_info), fence)
                 .map_err(|e| {
-                    crate::AccelError::OperationFailed(format!(
-                        "Failed to submit: {:?}",
-                        e
-                    ))
+                    crate::AccelError::OperationFailed(format!("Failed to submit: {:?}", e))
                 })?;
 
             self.device
                 .wait_for_fences(std::slice::from_ref(&fence), true, 5_000_000_000)
                 .map_err(|e| {
-                    crate::AccelError::OperationFailed(format!(
-                        "Fence wait failed: {:?}",
-                        e
-                    ))
+                    crate::AccelError::OperationFailed(format!("Fence wait failed: {:?}", e))
                 })?;
 
             let mapped = output_allocation.mapped_ptr().unwrap().as_ptr() as *const f32;
@@ -681,7 +664,8 @@ impl VulkanContext {
             std::ptr::copy_nonoverlapping(mapped, logits.as_mut_ptr(), logits.len());
 
             self.device.destroy_fence(fence, None);
-            self.device.free_command_buffers(self.command_pool, &command_buffers);
+            self.device
+                .free_command_buffers(self.command_pool, &command_buffers);
             self.allocator.free(input_allocation).ok();
             self.allocator.free(output_allocation).ok();
             self.device.destroy_buffer(input_buffer, None);
@@ -706,26 +690,30 @@ impl VulkanContext {
         unsafe {
             let buf_size = (total_elements as u64) * size_of::<f32>() as u64;
 
-            let (q_buffer, mut q_alloc) = self.allocate_buffer(
-                buf_size,
-                vk::BufferUsageFlags::STORAGE_BUFFER,
-            )?;
-            let (k_buffer, mut k_alloc) = self.allocate_buffer(
-                buf_size,
-                vk::BufferUsageFlags::STORAGE_BUFFER,
-            )?;
-            let (v_buffer, mut v_alloc) = self.allocate_buffer(
-                buf_size,
-                vk::BufferUsageFlags::STORAGE_BUFFER,
-            )?;
-            let (output_buffer, mut output_alloc) = self.allocate_buffer(
-                buf_size,
-                vk::BufferUsageFlags::STORAGE_BUFFER,
-            )?;
+            let (q_buffer, mut q_alloc) =
+                self.allocate_buffer(buf_size, vk::BufferUsageFlags::STORAGE_BUFFER)?;
+            let (k_buffer, mut k_alloc) =
+                self.allocate_buffer(buf_size, vk::BufferUsageFlags::STORAGE_BUFFER)?;
+            let (v_buffer, mut v_alloc) =
+                self.allocate_buffer(buf_size, vk::BufferUsageFlags::STORAGE_BUFFER)?;
+            let (output_buffer, mut output_alloc) =
+                self.allocate_buffer(buf_size, vk::BufferUsageFlags::STORAGE_BUFFER)?;
 
-            std::ptr::copy_nonoverlapping(q_buf.as_ptr(), q_alloc.mapped_ptr().unwrap().as_ptr() as *mut f32, q_buf.len());
-            std::ptr::copy_nonoverlapping(k_buf.as_ptr(), k_alloc.mapped_ptr().unwrap().as_ptr() as *mut f32, k_buf.len());
-            std::ptr::copy_nonoverlapping(v_buf.as_ptr(), v_alloc.mapped_ptr().unwrap().as_ptr() as *mut f32, v_buf.len());
+            std::ptr::copy_nonoverlapping(
+                q_buf.as_ptr(),
+                q_alloc.mapped_ptr().unwrap().as_ptr() as *mut f32,
+                q_buf.len(),
+            );
+            std::ptr::copy_nonoverlapping(
+                k_buf.as_ptr(),
+                k_alloc.mapped_ptr().unwrap().as_ptr() as *mut f32,
+                k_buf.len(),
+            );
+            std::ptr::copy_nonoverlapping(
+                v_buf.as_ptr(),
+                v_alloc.mapped_ptr().unwrap().as_ptr() as *mut f32,
+                v_buf.len(),
+            );
 
             let descriptor_sets = self
                 .device
@@ -744,23 +732,43 @@ impl VulkanContext {
             let descriptor_set = descriptor_sets[0];
 
             let buffer_infos = [
-                vk::DescriptorBufferInfo::default().buffer(q_buffer).offset(0).range(buf_size),
-                vk::DescriptorBufferInfo::default().buffer(k_buffer).offset(0).range(buf_size),
-                vk::DescriptorBufferInfo::default().buffer(v_buffer).offset(0).range(buf_size),
-                vk::DescriptorBufferInfo::default().buffer(output_buffer).offset(0).range(buf_size),
+                vk::DescriptorBufferInfo::default()
+                    .buffer(q_buffer)
+                    .offset(0)
+                    .range(buf_size),
+                vk::DescriptorBufferInfo::default()
+                    .buffer(k_buffer)
+                    .offset(0)
+                    .range(buf_size),
+                vk::DescriptorBufferInfo::default()
+                    .buffer(v_buffer)
+                    .offset(0)
+                    .range(buf_size),
+                vk::DescriptorBufferInfo::default()
+                    .buffer(output_buffer)
+                    .offset(0)
+                    .range(buf_size),
             ];
 
             let writes = [
-                vk::WriteDescriptorSet::default().dst_set(descriptor_set).dst_binding(0)
+                vk::WriteDescriptorSet::default()
+                    .dst_set(descriptor_set)
+                    .dst_binding(0)
                     .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                     .buffer_info(std::slice::from_ref(&buffer_infos[0])),
-                vk::WriteDescriptorSet::default().dst_set(descriptor_set).dst_binding(1)
+                vk::WriteDescriptorSet::default()
+                    .dst_set(descriptor_set)
+                    .dst_binding(1)
                     .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                     .buffer_info(std::slice::from_ref(&buffer_infos[1])),
-                vk::WriteDescriptorSet::default().dst_set(descriptor_set).dst_binding(2)
+                vk::WriteDescriptorSet::default()
+                    .dst_set(descriptor_set)
+                    .dst_binding(2)
                     .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                     .buffer_info(std::slice::from_ref(&buffer_infos[2])),
-                vk::WriteDescriptorSet::default().dst_set(descriptor_set).dst_binding(3)
+                vk::WriteDescriptorSet::default()
+                    .dst_set(descriptor_set)
+                    .dst_binding(3)
                     .descriptor_type(vk::DescriptorType::STORAGE_BUFFER)
                     .buffer_info(std::slice::from_ref(&buffer_infos[3])),
             ];
@@ -823,25 +831,23 @@ impl VulkanContext {
             );
 
             let workgroup_size = 256u32;
-            let dispatch_x =
-                ((total_elements + workgroup_size - 1) / workgroup_size).max(1);
+            let dispatch_x = ((total_elements + workgroup_size - 1) / workgroup_size).max(1);
             self.device.cmd_dispatch(command_buffer, dispatch_x, 1, 1);
 
-            self.device.end_command_buffer(command_buffer).map_err(|e| {
-                crate::AccelError::OperationFailed(format!(
-                    "Failed to end command buffer: {:?}",
-                    e
-                ))
-            })?;
+            self.device
+                .end_command_buffer(command_buffer)
+                .map_err(|e| {
+                    crate::AccelError::OperationFailed(format!(
+                        "Failed to end command buffer: {:?}",
+                        e
+                    ))
+                })?;
 
             let fence = self
                 .device
                 .create_fence(&vk::FenceCreateInfo::default(), None)
                 .map_err(|e| {
-                    crate::AccelError::OperationFailed(format!(
-                        "Failed to create fence: {:?}",
-                        e
-                    ))
+                    crate::AccelError::OperationFailed(format!("Failed to create fence: {:?}", e))
                 })?;
 
             let submit_info =
@@ -849,18 +855,23 @@ impl VulkanContext {
 
             self.device
                 .queue_submit(self.queue, std::slice::from_ref(&submit_info), fence)
-                .map_err(|e| crate::AccelError::OperationFailed(format!("Submit failed: {:?}", e)))?;
+                .map_err(|e| {
+                    crate::AccelError::OperationFailed(format!("Submit failed: {:?}", e))
+                })?;
 
             self.device
                 .wait_for_fences(std::slice::from_ref(&fence), true, 5_000_000_000)
-                .map_err(|e| crate::AccelError::OperationFailed(format!("Fence wait failed: {:?}", e)))?;
+                .map_err(|e| {
+                    crate::AccelError::OperationFailed(format!("Fence wait failed: {:?}", e))
+                })?;
 
             let output_ptr = output_alloc.mapped_ptr().unwrap().as_ptr() as *const f32;
             let mut output = vec![0.0f32; total_elements as usize];
             std::ptr::copy_nonoverlapping(output_ptr, output.as_mut_ptr(), output.len());
 
             self.device.destroy_fence(fence, None);
-            self.device.free_command_buffers(self.command_pool, &command_buffers);
+            self.device
+                .free_command_buffers(self.command_pool, &command_buffers);
             for buf in [q_buffer, k_buffer, v_buffer, output_buffer] {
                 self.device.destroy_buffer(buf, None);
             }
@@ -887,13 +898,18 @@ impl Drop for VulkanContext {
             }
 
             self.device.destroy_command_pool(self.command_pool, None);
-            self.device.destroy_descriptor_pool(self.descriptor_pool, None);
+            self.device
+                .destroy_descriptor_pool(self.descriptor_pool, None);
             self.device.destroy_pipeline(self.gemv_pipeline, None);
-            self.device.destroy_pipeline_layout(self.gemv_pipeline_layout, None);
-            self.device.destroy_descriptor_set_layout(self.gemv_descriptor_set_layout, None);
+            self.device
+                .destroy_pipeline_layout(self.gemv_pipeline_layout, None);
+            self.device
+                .destroy_descriptor_set_layout(self.gemv_descriptor_set_layout, None);
             self.device.destroy_pipeline(self.attention_pipeline, None);
-            self.device.destroy_pipeline_layout(self.attention_pipeline_layout, None);
-            self.device.destroy_descriptor_set_layout(self.attention_descriptor_set_layout, None);
+            self.device
+                .destroy_pipeline_layout(self.attention_pipeline_layout, None);
+            self.device
+                .destroy_descriptor_set_layout(self.attention_descriptor_set_layout, None);
 
             ManuallyDrop::drop(&mut self.allocator);
             self.device.destroy_device(None);
@@ -1049,7 +1065,8 @@ impl AccelBackend for VulkanBackend {
     #[cfg(not(test))]
     fn forward(&self, _input_ids: &[u32], _positions: &[usize]) -> Result<AccelResult> {
         Err(crate::AccelError::Deprecated(
-            "VulkanBackend::forward() is deprecated; use InferenceEngine::generate() instead".to_string(),
+            "VulkanBackend::forward() is deprecated; use InferenceEngine::generate() instead"
+                .to_string(),
         ))
     }
 }

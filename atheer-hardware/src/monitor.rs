@@ -140,8 +140,7 @@ impl GenericMonitor {
             let thermal = crate::android::thermal_headroom()
                 .map(crate::android::headroom_to_state)
                 .unwrap_or(ThermalState::Nominal);
-            let (available_mb, total_mb) = crate::android::memory_mb()
-                .unwrap_or((3072, 8192));
+            let (available_mb, total_mb) = crate::android::memory_mb().unwrap_or((3072, 8192));
             let (battery_level, on_battery) = crate::android::battery_info()
                 .map(|(l, c)| (l, !c))
                 .unwrap_or((100, false));
@@ -199,7 +198,10 @@ impl HardwareMonitor for GenericMonitor {
     }
 
     fn thermal_state(&self) -> ThermalState {
-        self.snapshot.lock().map(|g| g.thermal).unwrap_or(ThermalState::Nominal)
+        self.snapshot
+            .lock()
+            .map(|g| g.thermal)
+            .unwrap_or(ThermalState::Nominal)
     }
 
     fn memory_status(&self) -> MemoryStatus {

@@ -124,7 +124,10 @@ impl MmapModel {
             // MADV_DONTNEED has different semantics (macOS), this still does
             // not cause undefined behavior — the worst case is data loss in the
             // mapping which is acceptable for eviction semantics.
-            if let Err(e) = unsafe { self._mmap.unchecked_advise_range(UncheckedAdvice::DontNeed, start, len) } {
+            if let Err(e) = unsafe {
+                self._mmap
+                    .unchecked_advise_range(UncheckedAdvice::DontNeed, start, len)
+            } {
                 tracing::warn!("madvise DONTNEED failed at offset {start}: {e}");
             }
         }

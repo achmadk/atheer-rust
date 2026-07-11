@@ -131,10 +131,7 @@ impl Sampler for DefaultSampler {
 
         // ── Softmax ────────────────────────────────────────────────────────
 
-        let max_logit = logits_vec
-            .iter()
-            .copied()
-            .fold(f32::NEG_INFINITY, f32::max);
+        let max_logit = logits_vec.iter().copied().fold(f32::NEG_INFINITY, f32::max);
         let mut sum = 0.0f32;
         for v in &mut logits_vec {
             *v = (*v - max_logit).exp();
@@ -148,10 +145,7 @@ impl Sampler for DefaultSampler {
 
         if let Some(min_p) = self.config.min_p {
             if min_p > 0.0 {
-                let p_max = logits_vec
-                    .iter()
-                    .copied()
-                    .fold(f32::NEG_INFINITY, f32::max);
+                let p_max = logits_vec.iter().copied().fold(f32::NEG_INFINITY, f32::max);
                 let threshold = p_max * min_p as f32;
                 for v in logits_vec.iter_mut() {
                     if *v < threshold {
@@ -164,8 +158,7 @@ impl Sampler for DefaultSampler {
         // ── Top-k filtering ────────────────────────────────────────────────
 
         if self.config.top_k > 0 && self.config.top_k < vocab_size {
-            let mut indexed: Vec<(usize, f32)> =
-                logits_vec.iter().copied().enumerate().collect();
+            let mut indexed: Vec<(usize, f32)> = logits_vec.iter().copied().enumerate().collect();
             indexed.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
             let threshold = indexed[self.config.top_k - 1].1;
             for v in logits_vec.iter_mut() {
@@ -178,8 +171,7 @@ impl Sampler for DefaultSampler {
         // ── Top-p (nucleus) filtering ──────────────────────────────────────
 
         if self.config.top_p < 1.0 {
-            let mut indexed: Vec<(usize, f32)> =
-                logits_vec.iter().copied().enumerate().collect();
+            let mut indexed: Vec<(usize, f32)> = logits_vec.iter().copied().enumerate().collect();
             indexed.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap());
             let mut cumsum = 0.0f32;
             let mut cutoff_idx = indexed.len();

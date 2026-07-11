@@ -19,7 +19,10 @@ unsafe impl Sync for SafeCoreMLModel {}
 
 #[cfg(all(feature = "coreml", any(target_os = "ios", target_os = "macos")))]
 impl SafeCoreMLModel {
-    fn forward_single(&self, input: &candle_core::Tensor) -> candle_core::Result<candle_core::Tensor> {
+    fn forward_single(
+        &self,
+        input: &candle_core::Tensor,
+    ) -> candle_core::Result<candle_core::Tensor> {
         self.0.forward_single(input)
     }
 }
@@ -224,8 +227,8 @@ impl ANECompatibility {
 fn validate_metal_device() -> bool {
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     {
-        let result = std::panic::catch_unwind(|| {
-            match candle_core::Device::metal_if_available(0) {
+        let result =
+            std::panic::catch_unwind(|| match candle_core::Device::metal_if_available(0) {
                 Ok(device) if !matches!(device, candle_core::Device::Cpu) => {
                     let data = vec![1.0f32; 16];
                     match candle_core::Tensor::from_vec(data, &[4, 4], &device) {
@@ -234,8 +237,7 @@ fn validate_metal_device() -> bool {
                     }
                 }
                 _ => false,
-            }
-        });
+            });
         result.unwrap_or(false)
     }
     #[cfg(not(any(target_os = "ios", target_os = "macos")))]
@@ -273,11 +275,15 @@ impl CoreMLBackend {
         let metal_ok = validate_metal_device();
         let compat = ANECompatibility::for_model(architecture, quantization, param_count_m);
         let coreml_model = if ane == AneCapability::AppleSilicon && compat.overall_compatible {
-            Some(candle_coreml::CoreMLModel::load(model_path).map(SafeCoreMLModel).map_err(|e| {
-                crate::AccelError::BackendNotAvailable(format!(
-                    "Failed to load CoreML model: {e}"
-                ))
-            }))
+            Some(
+                candle_coreml::CoreMLModel::load(model_path)
+                    .map(SafeCoreMLModel)
+                    .map_err(|e| {
+                        crate::AccelError::BackendNotAvailable(format!(
+                            "Failed to load CoreML model: {e}"
+                        ))
+                    }),
+            )
         } else {
             None
         };
@@ -296,8 +302,7 @@ impl CoreMLBackend {
     pub fn ane_is_available(&self) -> bool {
         #[cfg(all(feature = "coreml", any(target_os = "ios", target_os = "macos")))]
         {
-            self.ane_available
-                && self.coreml_model.as_ref().map_or(false, |r| r.is_ok())
+            self.ane_available && self.coreml_model.as_ref().map_or(false, |r| r.is_ok())
         }
         #[cfg(not(feature = "coreml"))]
         {
@@ -359,7 +364,11 @@ impl AccelBackend for CoreMLBackend {
 
         // --- ANE path (requires coreml feature + compatible model) ---
         #[cfg(all(feature = "coreml", any(target_os = "ios", target_os = "macos")))]
-        if self.ane_compat.as_ref().map_or(false, |c| c.overall_compatible) {
+        if self
+            .ane_compat
+            .as_ref()
+            .map_or(false, |c| c.overall_compatible)
+        {
             if let Some(Ok(ref model)) = self.coreml_model {
                 match ane_forward(model, input_ids, start) {
                     Ok(result) => return Ok(result),
@@ -387,11 +396,7 @@ impl AccelBackend for CoreMLBackend {
 /// Wrapped in `catch_unwind` to prevent panics from propagating
 /// on incompatible or malformed model inputs.
 #[cfg(all(feature = "coreml", any(target_os = "ios", target_os = "macos")))]
-fn ane_forward(
-    model: &SafeCoreMLModel,
-    input_ids: &[u32],
-    start: Instant,
-) -> Result<AccelResult> {
+fn ane_forward(model: &SafeCoreMLModel, input_ids: &[u32], start: Instant) -> Result<AccelResult> {
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let batch_size = input_ids.len();
         let vocab_size = 50257;
@@ -416,7 +421,11 @@ fn ane_forward(
             )));
         }
 
-        Ok(AccelResult::new(logits, batch_size, start.elapsed().as_millis() as u64))
+        Ok(AccelResult::new(
+            logits,
+            batch_size,
+            start.elapsed().as_millis() as u64,
+        ))
     }));
 
     match result {
@@ -434,7 +443,9 @@ fn ane_forward(
                 "unknown panic".to_string()
             };
             tracing::error!("ANE forward panicked: {msg}");
-            Err(crate::AccelError::OperationFailed(format!("ANE panic: {msg}")))
+            Err(crate::AccelError::OperationFailed(format!(
+                "ANE panic: {msg}"
+            )))
         }
     }
 }
@@ -559,7 +570,10 @@ mod tests {
         assert_eq!(compat.per_layer_compat.get("conv2d"), Some(&true));
         assert_eq!(compat.per_layer_compat.get("add"), Some(&true));
         // These default to false (fallback to GPU)
-        assert_eq!(compat.per_layer_compat.get("attention_softmax"), Some(&false));
+        assert_eq!(
+            compat.per_layer_compat.get("attention_softmax"),
+            Some(&false)
+        );
         assert_eq!(compat.per_layer_compat.get("layer_norm"), Some(&false));
         assert_eq!(compat.per_layer_compat.get("gelu"), Some(&false));
         // Rope is false by default, M3+ enables it

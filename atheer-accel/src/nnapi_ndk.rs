@@ -33,7 +33,7 @@ pub enum ANeuralNetworksMemoryDesc {}
 #[repr(C)]
 #[derive(Debug, Clone)]
 pub struct ANeuralNetworksOperandType {
-    pub type_: i32,               // OperandCode
+    pub type_: i32, // OperandCode
     pub dimension_count: u32,
     pub dimensions: *const u32,
     pub scale: f32,
@@ -135,10 +135,8 @@ extern "C" {
     // -- Device discovery (API 29+) --
 
     pub fn ANeuralNetworks_getDeviceCount(numDevices: *mut u32) -> i32;
-    pub fn ANeuralNetworks_getDevice(
-        devIndex: u32,
-        device: *mut *mut ANeuralNetworksDevice,
-    ) -> i32;
+    pub fn ANeuralNetworks_getDevice(devIndex: u32, device: *mut *mut ANeuralNetworksDevice)
+        -> i32;
     pub fn ANeuralNetworksDevice_getName(
         device: *const ANeuralNetworksDevice,
         name: *mut *const c_char,
@@ -210,18 +208,14 @@ extern "C" {
         compilation: *mut *mut ANeuralNetworksCompilation,
     ) -> i32;
 
-    pub fn ANeuralNetworksCompilation_free(
-        compilation: *mut ANeuralNetworksCompilation,
-    );
+    pub fn ANeuralNetworksCompilation_free(compilation: *mut ANeuralNetworksCompilation);
 
     pub fn ANeuralNetworksCompilation_setPreference(
         compilation: *mut ANeuralNetworksCompilation,
         preference: i32,
     ) -> i32;
 
-    pub fn ANeuralNetworksCompilation_finish(
-        compilation: *mut ANeuralNetworksCompilation,
-    ) -> i32;
+    pub fn ANeuralNetworksCompilation_finish(compilation: *mut ANeuralNetworksCompilation) -> i32;
 
     pub fn ANeuralNetworksCompilation_createForDevices(
         model: *mut ANeuralNetworksModel,
@@ -237,9 +231,7 @@ extern "C" {
         execution: *mut *mut ANeuralNetworksExecution,
     ) -> i32;
 
-    pub fn ANeuralNetworksExecution_free(
-        execution: *mut ANeuralNetworksExecution,
-    );
+    pub fn ANeuralNetworksExecution_free(execution: *mut ANeuralNetworksExecution);
 
     pub fn ANeuralNetworksExecution_setInput(
         execution: *mut ANeuralNetworksExecution,
@@ -257,9 +249,7 @@ extern "C" {
         length: usize,
     ) -> i32;
 
-    pub fn ANeuralNetworksExecution_compute(
-        execution: *mut ANeuralNetworksExecution,
-    ) -> i32;
+    pub fn ANeuralNetworksExecution_compute(execution: *mut ANeuralNetworksExecution) -> i32;
 
     pub fn ANeuralNetworksExecution_setMeasureTiming(
         execution: *mut ANeuralNetworksExecution,
@@ -396,18 +386,12 @@ impl NnapiError {
 impl From<NnapiError> for crate::AccelError {
     fn from(e: NnapiError) -> Self {
         match e {
-            NnapiError::OperationFailed => {
-                crate::AccelError::OperationFailed(e.to_string())
-            }
+            NnapiError::OperationFailed => crate::AccelError::OperationFailed(e.to_string()),
             NnapiError::BadData => {
                 crate::AccelError::OperationFailed(format!("NNAPI bad data: {e}"))
             }
-            NnapiError::OutOfMemory => {
-                crate::AccelError::MemoryAllocationFailed(e.to_string())
-            }
-            NnapiError::UnavailableDevice
-            | NnapiError::UnexpectedNull
-            | NnapiError::BadState => {
+            NnapiError::OutOfMemory => crate::AccelError::MemoryAllocationFailed(e.to_string()),
+            NnapiError::UnavailableDevice | NnapiError::UnexpectedNull | NnapiError::BadState => {
                 crate::AccelError::BackendNotAvailable(e.to_string())
             }
             _ => crate::AccelError::OperationFailed(e.to_string()),
@@ -437,7 +421,8 @@ pub fn get_devices() -> Result<Vec<NnapiDeviceInfo>, NnapiError> {
     let mut devices = Vec::with_capacity(count as usize);
     for i in 0..count {
         let mut raw: *mut ANeuralNetworksDevice = std::ptr::null_mut();
-        let rc = unsafe { ANeuralNetworks_getDevice(i, &mut raw as *mut *mut ANeuralNetworksDevice) };
+        let rc =
+            unsafe { ANeuralNetworks_getDevice(i, &mut raw as *mut *mut ANeuralNetworksDevice) };
         nnapi_result(rc)?;
 
         let info = unsafe { get_device_info(raw)? };

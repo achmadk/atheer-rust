@@ -55,7 +55,11 @@ fn read_scale(buf: &[u8; 4]) -> f32 {
 
 fn symmetric_scale(data: &[f32], max_q: f32) -> f32 {
     let max_abs = data.iter().map(|x| x.abs()).fold(0.0f32, f32::max);
-    if max_abs == 0.0 { 1.0 } else { max_abs / max_q }
+    if max_abs == 0.0 {
+        1.0
+    } else {
+        max_abs / max_q
+    }
 }
 
 /// Symmetric INT8 quantizer using per-tensor scaling.
@@ -91,8 +95,12 @@ impl KvCacheQuantizer for Int8Quantizer {
         }
         let scale = read_scale(&data[..4].try_into().expect("scale prefix"));
         let payload = &data[4..];
-        assert!(payload.len() >= len,
-            "Int8 dequantize: expected {} bytes, got {}", len, payload.len());
+        assert!(
+            payload.len() >= len,
+            "Int8 dequantize: expected {} bytes, got {}",
+            len,
+            payload.len()
+        );
 
         let mut out = Vec::with_capacity(len);
         for &b in &payload[..len] {
@@ -123,7 +131,11 @@ fn clamp_i4(x: f32) -> u8 {
 }
 
 fn sign_extend_nibble(nibble: u8) -> i8 {
-    if nibble & 0x08 != 0 { (nibble | 0xF0) as i8 } else { nibble as i8 }
+    if nibble & 0x08 != 0 {
+        (nibble | 0xF0) as i8
+    } else {
+        nibble as i8
+    }
 }
 
 impl KvCacheQuantizer for Int4Quantizer {
@@ -140,7 +152,11 @@ impl KvCacheQuantizer for Int4Quantizer {
 
         for chunk in data.chunks(2) {
             let lo = clamp_i4(chunk[0] * inv_scale);
-            let hi = if chunk.len() > 1 { clamp_i4(chunk[1] * inv_scale) } else { 0 };
+            let hi = if chunk.len() > 1 {
+                clamp_i4(chunk[1] * inv_scale)
+            } else {
+                0
+            };
             out.push(lo | (hi << 4));
         }
 
@@ -155,17 +171,25 @@ impl KvCacheQuantizer for Int4Quantizer {
         let scale = read_scale(&data[..4].try_into().expect("scale prefix"));
         let payload = &data[4..];
         let needed = len.div_ceil(2);
-        assert!(payload.len() >= needed,
-            "Int4 dequantize: expected {} bytes, got {}", needed, payload.len());
+        assert!(
+            payload.len() >= needed,
+            "Int4 dequantize: expected {} bytes, got {}",
+            needed,
+            payload.len()
+        );
 
         let mut out = Vec::with_capacity(len);
         for &byte in payload.iter() {
             let lo = sign_extend_nibble(byte & 0x0F);
             out.push((lo as f32) * scale);
-            if out.len() >= len { break; }
+            if out.len() >= len {
+                break;
+            }
             let hi = sign_extend_nibble((byte >> 4) & 0x0F);
             out.push((hi as f32) * scale);
-            if out.len() >= len { break; }
+            if out.len() >= len {
+                break;
+            }
         }
         out
     }
@@ -189,10 +213,15 @@ pub struct AdaptiveQuantizer {
 
 impl AdaptiveQuantizer {
     pub fn select_scheme(seq_len: usize) -> QuantizationScheme {
-        if seq_len >= 4096 { QuantizationScheme::Int4 }
-        else if seq_len >= 2048 { QuantizationScheme::Int8 }
-        else if seq_len >= 1024 { QuantizationScheme::Fp16 }
-        else { QuantizationScheme::Fp32 }
+        if seq_len >= 4096 {
+            QuantizationScheme::Int4
+        } else if seq_len >= 2048 {
+            QuantizationScheme::Int8
+        } else if seq_len >= 1024 {
+            QuantizationScheme::Fp16
+        } else {
+            QuantizationScheme::Fp32
+        }
     }
 
     pub fn quantizer_for(scheme: QuantizationScheme) -> Box<dyn KvCacheQuantizer> {
@@ -213,8 +242,13 @@ impl AdaptiveQuantizer {
 pub struct OnPressureQuantizer;
 
 impl OnPressureQuantizer {
-    pub fn downgrade_scheme(current: QuantizationScheme, vram_pct: f32) -> Option<QuantizationScheme> {
-        if vram_pct <= 80.0 { return None; }
+    pub fn downgrade_scheme(
+        current: QuantizationScheme,
+        vram_pct: f32,
+    ) -> Option<QuantizationScheme> {
+        if vram_pct <= 80.0 {
+            return None;
+        }
         match current {
             QuantizationScheme::Fp32 => Some(QuantizationScheme::Fp16),
             QuantizationScheme::Fp16 => Some(QuantizationScheme::Int8),
@@ -224,10 +258,10 @@ impl OnPressureQuantizer {
     }
 
     pub fn downgrade_quantizer(
-        current: QuantizationScheme, vram_pct: f32,
+        current: QuantizationScheme,
+        vram_pct: f32,
     ) -> Option<Box<dyn KvCacheQuantizer>> {
-        Self::downgrade_scheme(current, vram_pct)
-            .map(AdaptiveQuantizer::quantizer_for)
+        Self::downgrade_scheme(current, vram_pct).map(AdaptiveQuantizer::quantizer_for)
     }
 
     pub fn savings_factor(current: QuantizationScheme, vram_pct: f32) -> f32 {
@@ -255,14 +289,22 @@ impl KvCacheQuantizer for IdentityQuantizer {
     }
 
     fn dequantize(&self, data: &[u8], len: usize) -> Vec<f32> {
-        if len == 0 { return vec![]; }
+        if len == 0 {
+            return vec![];
+        }
         let _scale = read_scale(&data[..4].try_into().expect("scale prefix"));
         let payload = &data[4..];
-        assert!(payload.len() >= len * 4,
-            "Identity dequantize: expected {} bytes, got {}", len * 4, payload.len());
+        assert!(
+            payload.len() >= len * 4,
+            "Identity dequantize: expected {} bytes, got {}",
+            len * 4,
+            payload.len()
+        );
         let mut out = Vec::with_capacity(len);
         for &chunk in payload.as_chunks::<4>().0 {
-            if out.len() >= len { break; }
+            if out.len() >= len {
+                break;
+            }
             out.push(f32::from_le_bytes(chunk));
         }
         out
@@ -344,17 +386,38 @@ mod tests {
 
     #[test]
     fn test_adaptive_select_scheme() {
-        assert_eq!(AdaptiveQuantizer::select_scheme(0), QuantizationScheme::Fp32);
-        assert_eq!(AdaptiveQuantizer::select_scheme(512), QuantizationScheme::Fp32);
-        assert_eq!(AdaptiveQuantizer::select_scheme(1024), QuantizationScheme::Fp16);
-        assert_eq!(AdaptiveQuantizer::select_scheme(2048), QuantizationScheme::Int8);
-        assert_eq!(AdaptiveQuantizer::select_scheme(4096), QuantizationScheme::Int4);
-        assert_eq!(AdaptiveQuantizer::select_scheme(8192), QuantizationScheme::Int4);
+        assert_eq!(
+            AdaptiveQuantizer::select_scheme(0),
+            QuantizationScheme::Fp32
+        );
+        assert_eq!(
+            AdaptiveQuantizer::select_scheme(512),
+            QuantizationScheme::Fp32
+        );
+        assert_eq!(
+            AdaptiveQuantizer::select_scheme(1024),
+            QuantizationScheme::Fp16
+        );
+        assert_eq!(
+            AdaptiveQuantizer::select_scheme(2048),
+            QuantizationScheme::Int8
+        );
+        assert_eq!(
+            AdaptiveQuantizer::select_scheme(4096),
+            QuantizationScheme::Int4
+        );
+        assert_eq!(
+            AdaptiveQuantizer::select_scheme(8192),
+            QuantizationScheme::Int4
+        );
     }
 
     #[test]
     fn test_downgrade_below_threshold() {
-        assert_eq!(OnPressureQuantizer::downgrade_scheme(QuantizationScheme::Int8, 50.0), None);
+        assert_eq!(
+            OnPressureQuantizer::downgrade_scheme(QuantizationScheme::Int8, 50.0),
+            None
+        );
     }
 
     #[test]
@@ -371,7 +434,10 @@ mod tests {
 
     #[test]
     fn test_downgrade_at_lowest() {
-        assert_eq!(OnPressureQuantizer::downgrade_scheme(QuantizationScheme::Int4, 95.0), None);
+        assert_eq!(
+            OnPressureQuantizer::downgrade_scheme(QuantizationScheme::Int4, 95.0),
+            None
+        );
     }
 
     #[test]
@@ -398,10 +464,17 @@ mod tests {
     }
 
     fn normalized_error(original: &[f32], decoded: &[f32]) -> f64 {
-        let peak = original.iter().map(|x| x.abs()).fold(0.0f32, f32::max).max(1e-8);
-        let mean_abs_err: f64 = original.iter().zip(decoded)
+        let peak = original
+            .iter()
+            .map(|x| x.abs())
+            .fold(0.0f32, f32::max)
+            .max(1e-8);
+        let mean_abs_err: f64 = original
+            .iter()
+            .zip(decoded)
             .map(|(a, b)| (a - b).abs() as f64)
-            .sum::<f64>() / original.len() as f64;
+            .sum::<f64>()
+            / original.len() as f64;
         mean_abs_err / peak as f64
     }
 }

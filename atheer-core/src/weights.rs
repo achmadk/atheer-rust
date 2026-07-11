@@ -28,17 +28,15 @@ impl WeightsVariant {
 
         match arch.as_str() {
             "lfm2" => {
-                let w =
-                    candle_transformers::models::quantized_lfm2::ModelWeights::from_gguf(
-                        ct, reader, device,
-                    )?;
+                let w = candle_transformers::models::quantized_lfm2::ModelWeights::from_gguf(
+                    ct, reader, device,
+                )?;
                 Ok(Self::Lfm2(w))
             }
             _ => {
-                let w =
-                    candle_transformers::models::quantized_llama::ModelWeights::from_gguf(
-                        ct, reader, device,
-                    )?;
+                let w = candle_transformers::models::quantized_llama::ModelWeights::from_gguf(
+                    ct, reader, device,
+                )?;
                 Ok(Self::Llama(w))
             }
         }
@@ -62,7 +60,7 @@ impl WeightsVariant {
     pub fn kv_cache_clear(&mut self) {
         match self {
             Self::Llama(w) => w.kv_cache_clear(),
-            Self::Lfm2(w) => w.kv_cache_clear()
+            Self::Lfm2(w) => w.kv_cache_clear(),
         }
     }
 
@@ -93,5 +91,3 @@ impl WeightsVariant {
         }
     }
 }
-
-

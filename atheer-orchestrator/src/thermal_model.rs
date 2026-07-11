@@ -120,7 +120,13 @@ impl ThermalModel {
 
         // Use the most recent `trend_window` samples for the least-squares fit.
         let window_len = self.trend_window.min(n);
-        let tail: Vec<f32> = self.samples.iter().rev().take(window_len).copied().collect();
+        let tail: Vec<f32> = self
+            .samples
+            .iter()
+            .rev()
+            .take(window_len)
+            .copied()
+            .collect();
         // tail[0] = most recent, tail[last] = oldest within window.
         // For the regression we want x = 0, 1, 2, ... (index within window).
         // Since we want a slope that makes physical sense we keep natural order:
@@ -137,7 +143,9 @@ impl ThermalModel {
             .enumerate()
             .map(|(i, &y)| (i as f32) * y)
             .sum();
-        let sum_xx: f32 = (0..oldest_first.len()).map(|i| (i as f32) * (i as f32)).sum();
+        let sum_xx: f32 = (0..oldest_first.len())
+            .map(|i| (i as f32) * (i as f32))
+            .sum();
 
         let denom = m * sum_xx - sum_x * sum_x;
         let slope = if denom.abs() > f32::EPSILON {
@@ -194,8 +202,7 @@ impl ThermalModel {
         }
 
         let trigger_at = thermal_threshold_c - margin_c;
-        analysis.predicted_next_c >= trigger_at
-            || current_temp >= trigger_at
+        analysis.predicted_next_c >= trigger_at || current_temp >= trigger_at
     }
 
     /// Convenience: should the system consider upgrading (trend is Falling

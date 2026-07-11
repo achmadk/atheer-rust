@@ -157,7 +157,8 @@ impl KvCache {
         if let Some(entries) = self.entries.get_mut(&layer) {
             entries.retain(|e| e.position != position);
         }
-        self.access_order.retain(|(l, p)| !(*l == layer && *p == position));
+        self.access_order
+            .retain(|(l, p)| !(*l == layer && *p == position));
     }
 
     fn select_victim(&self) -> Option<(usize, usize)> {

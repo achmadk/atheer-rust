@@ -17,16 +17,11 @@ fn maybe_bench_energy(c: &mut Criterion) {
         return;
     }
 
-    let tokenizer =
-        atheer_core::tokenizer::Tokenizer::from_file(&tokenizer_path).expect("Failed to load tokenizer");
+    let tokenizer = atheer_core::tokenizer::Tokenizer::from_file(&tokenizer_path)
+        .expect("Failed to load tokenizer");
     let config = atheer_core::sampler::SamplingConfig::default();
-    let mut engine = atheer_core::InferenceEngine::new_auto(
-        &model_path,
-        tokenizer,
-        config,
-        4096,
-    )
-    .expect("Failed to load model");
+    let mut engine = atheer_core::InferenceEngine::new_auto(&model_path, tokenizer, config, 4096)
+        .expect("Failed to load model");
 
     c.bench_function("energy_per_token", |b| {
         b.iter(|| {

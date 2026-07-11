@@ -5,22 +5,21 @@ pub mod block_manager;
 pub mod crash;
 pub mod error;
 pub mod inference;
-pub mod kv_cache_bridge;
 pub mod kv_cache;
+pub mod kv_cache_bridge;
 pub mod kv_cache_quantizer;
 pub mod latency_budget;
 pub mod lifecycle;
-pub mod model_credential;
-pub mod model_encryption;
-pub mod model;
 #[cfg(feature = "mmap")]
 pub mod mmap_model;
+pub mod model;
+pub mod model_credential;
+pub mod model_encryption;
 #[cfg(feature = "model-registry")]
 pub mod model_registry;
 pub mod production;
 pub mod quantization_resolver;
 pub mod safety;
-pub mod weights;
 pub mod sampler;
 pub mod security;
 pub mod session;
@@ -28,8 +27,9 @@ pub mod streaming;
 #[cfg(test)]
 pub mod test_model;
 pub mod tokenizer;
+pub mod weights;
 
-pub use block_manager::{BlockManager, BlockId, NULL_BLOCK, DEFAULT_BLOCK_SIZE};
+pub use block_manager::{BlockId, BlockManager, DEFAULT_BLOCK_SIZE, NULL_BLOCK};
 pub use crash::CrashReporter;
 pub use error::{AtheerCoreError, Result};
 pub use inference::InferenceEngine;
@@ -39,7 +39,7 @@ pub use lifecycle::{
 };
 pub use model::Model;
 pub use model_credential::ModelCredential;
-pub use model_encryption::{ModelEncryption, aes256_gcm::Aes256GcmEncryption};
+pub use model_encryption::{aes256_gcm::Aes256GcmEncryption, ModelEncryption};
 pub use production::{ConfigError, ProductionConfig};
 pub use quantization_resolver::{GpuTier, QuantizationResolver};
 pub use safety::{
@@ -49,5 +49,7 @@ pub use safety::{
 pub use sampler::{Sampler, SamplingConfig};
 pub use security::{SecurityAudit, SecurityError};
 pub use session::Session;
-pub use streaming::{callback_from_fn, GenerationState, NullCallback, SharedCallback, StreamingCallback};
+pub use streaming::{
+    callback_from_fn, GenerationState, NullCallback, SharedCallback, StreamingCallback,
+};
 pub use tokenizer::Tokenizer;

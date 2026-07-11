@@ -451,10 +451,7 @@ mod tests {
 
         for i in 0..9 {
             cal.feed(sample(10.0, InferenceMode::Turbo, 0));
-            assert!(
-                !cal.should_recalibrate(),
-                "iteration {i}: expected false"
-            );
+            assert!(!cal.should_recalibrate(), "iteration {i}: expected false");
         }
     }
 
@@ -539,7 +536,11 @@ mod tests {
         }
 
         let update = cal.recalibrate();
-        let (min, max) = update.depth_bounds.get(&InferenceMode::Turbo).copied().unwrap_or((1, 8));
+        let (min, max) = update
+            .depth_bounds
+            .get(&InferenceMode::Turbo)
+            .copied()
+            .unwrap_or((1, 8));
         // Max should be reduced since depth 4 throughput is within 5% of depth 2
         assert!(max <= 4, "expected max depth capped, got {max}");
         assert_eq!(min, 1);
@@ -559,7 +560,11 @@ mod tests {
         }
 
         let update = cal.recalibrate();
-        let (min, _max) = update.depth_bounds.get(&InferenceMode::Balanced).copied().unwrap_or((1, 8));
+        let (min, _max) = update
+            .depth_bounds
+            .get(&InferenceMode::Balanced)
+            .copied()
+            .unwrap_or((1, 8));
         // Min should be raised since depth 2 underperforms by >15%
         assert!(min >= 2, "expected min depth raised, got {min}");
     }

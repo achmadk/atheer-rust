@@ -339,7 +339,9 @@ pub unsafe extern "C" fn aether_engine_get_tokens_per_second(engine: *const FfiE
 /// * `*mut c_char` - Thermal state string
 /// * `ptr::null_mut()` on error or if pointer is null
 #[no_mangle]
-pub unsafe extern "C" fn aether_engine_get_hardware_thermal(engine: *const FfiEngine) -> *mut c_char {
+pub unsafe extern "C" fn aether_engine_get_hardware_thermal(
+    engine: *const FfiEngine,
+) -> *mut c_char {
     if engine.is_null() {
         return ptr::null_mut();
     }
@@ -423,7 +425,10 @@ pub unsafe extern "C" fn aether_engine_is_on_battery(engine: *const FfiEngine) -
 /// * `0` on success
 /// * `-1` on failure or if inputs are null
 #[no_mangle]
-pub unsafe extern "C" fn aether_engine_set_mode(engine: *mut FfiEngine, mode: *const c_char) -> i32 {
+pub unsafe extern "C" fn aether_engine_set_mode(
+    engine: *mut FfiEngine,
+    mode: *const c_char,
+) -> i32 {
     if engine.is_null() || mode.is_null() {
         return -1;
     }
@@ -594,21 +599,34 @@ mod tests {
 
         // Create 5 fake checkpoint meta files for the same model
         let model_id = "test-model-v1";
-        let names = vec!["checkpoint_a.meta", "checkpoint_b.meta", "checkpoint_c.meta",
-                         "checkpoint_d.meta", "checkpoint_e.meta"];
+        let names = vec![
+            "checkpoint_a.meta",
+            "checkpoint_b.meta",
+            "checkpoint_c.meta",
+            "checkpoint_d.meta",
+            "checkpoint_e.meta",
+        ];
         for (i, name) in names.iter().enumerate() {
             let meta = serde_json::json!({
                 "version": 1,
                 "model_id": model_id,
                 "created_at": format!("2026-01-{:02}T00:00:00+00:00", i + 1),
             });
-            std::fs::write(PathBuf::from(&dir).join(name), serde_json::to_string(&meta).unwrap()).unwrap();
+            std::fs::write(
+                PathBuf::from(&dir).join(name),
+                serde_json::to_string(&meta).unwrap(),
+            )
+            .unwrap();
             // Create matching .bin file
             let bin_name = name.replace(".meta", ".bin");
             std::fs::write(PathBuf::from(&dir).join(&bin_name), b"fake checkpoint data").unwrap();
         }
         // Also create a sidecar (should be ignored by cleanup)
-        std::fs::write(PathBuf::from(&dir).join("latest_checkpoint.txt"), "checkpoint_e").unwrap();
+        std::fs::write(
+            PathBuf::from(&dir).join("latest_checkpoint.txt"),
+            "checkpoint_e",
+        )
+        .unwrap();
 
         // Create engine with max_checkpoints=2
         let mut config = crate::AtheerConfig::default();
@@ -618,7 +636,8 @@ mod tests {
         let engine = crate::AtheerEngine::new(config);
 
         // Verify all files still exist
-        let remaining: Vec<_> = std::fs::read_dir(&dir).unwrap()
+        let remaining: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
             .filter_map(|e| e.ok())
             .map(|e| e.file_name().to_string_lossy().to_string())
             .filter(|n| n.starts_with("checkpoint_"))
@@ -676,7 +695,10 @@ mod tests {
         let json = serde_json::to_string(&config).unwrap();
         let deserialized: crate::AtheerConfig = serde_json::from_str(&json).unwrap();
 
-        assert_eq!(deserialized.checkpoint_dir, Some("/tmp/checkpoints".to_string()));
+        assert_eq!(
+            deserialized.checkpoint_dir,
+            Some("/tmp/checkpoints".to_string())
+        );
         assert_eq!(deserialized.max_checkpoints, 5);
         assert_eq!(deserialized.checkpoint_ttl_hours, 24);
         assert!(!deserialized.checkpoint_on_background);
@@ -708,7 +730,8 @@ mod tests {
         std::fs::write(
             PathBuf::from(&dir).join("latest_checkpoint.txt"),
             "test-uuid-123",
-        ).unwrap();
+        )
+        .unwrap();
 
         // Now has_checkpoint should find the sidecar
         // (the sidecar check is done inside on_foreground which returns false because

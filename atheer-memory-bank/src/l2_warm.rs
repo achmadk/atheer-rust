@@ -152,7 +152,12 @@ impl L2WarmCache {
     }
 
     pub fn demote_to_l3(&mut self, l3: &mut crate::L3CompressedStorage) -> bool {
-        let snapshot = self.extract_snapshot(self.kv_cache.as_ref().map(|kv| kv.num_layers()).unwrap_or(0));
+        let snapshot = self.extract_snapshot(
+            self.kv_cache
+                .as_ref()
+                .map(|kv| kv.num_layers())
+                .unwrap_or(0),
+        );
         if snapshot.iter().all(|(k, v)| k.is_empty() && v.is_empty()) {
             return false;
         }
@@ -180,7 +185,11 @@ impl L2WarmCache {
         };
         match l3.restore(snapshot_id) {
             Ok(data) => {
-                let num_layers = self.kv_cache.as_ref().map(|kv| kv.num_layers()).unwrap_or(0);
+                let num_layers = self
+                    .kv_cache
+                    .as_ref()
+                    .map(|kv| kv.num_layers())
+                    .unwrap_or(0);
                 if num_layers == 0 || data.is_empty() {
                     return false;
                 }

@@ -39,13 +39,9 @@ fn maybe_bench_memory(c: &mut Criterion) {
     for &ctx_len in &[2048usize, 4096, 8192] {
         let tokenizer = atheer_core::tokenizer::Tokenizer::from_file(&tokenizer_path)
             .expect("Failed to load tokenizer");
-        let mut engine = atheer_core::InferenceEngine::new_auto(
-            &model_path,
-            tokenizer,
-            config.clone(),
-            ctx_len,
-        )
-        .expect("Failed to load model");
+        let mut engine =
+            atheer_core::InferenceEngine::new_auto(&model_path, tokenizer, config.clone(), ctx_len)
+                .expect("Failed to load model");
 
         let _ = engine.generate("Hello", 128, Some(10_000));
         let rss = read_rss_kb();

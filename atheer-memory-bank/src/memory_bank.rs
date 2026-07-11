@@ -84,7 +84,13 @@ impl MemoryBank {
     }
 
     /// Auto-create an L2 `KvCache` if not already present.
-    fn ensure_l2_kv_cache(&self, num_layers: usize, n_kv_head: usize, head_dim: usize, max_seq_len: usize) {
+    fn ensure_l2_kv_cache(
+        &self,
+        num_layers: usize,
+        n_kv_head: usize,
+        head_dim: usize,
+        max_seq_len: usize,
+    ) {
         let mut l2 = self.l2.write();
         if let Some(ref mut l2_cache) = *l2 {
             if l2_cache.kv_cache().is_none() {
@@ -355,7 +361,9 @@ mod tests {
         for layer in 0..2 {
             let offset = (layer * kv_elem_stride * 3) as f32;
             let k: Vec<f32> = (0..kv_elem_stride * 3).map(|i| offset + i as f32).collect();
-            let v: Vec<f32> = (0..kv_elem_stride * 3).map(|i| offset + 100.0 + i as f32).collect();
+            let v: Vec<f32> = (0..kv_elem_stride * 3)
+                .map(|i| offset + 100.0 + i as f32)
+                .collect();
             snapshot.push((k, v));
         }
 
@@ -434,10 +442,7 @@ mod tests {
         // Set up L2 with snapshot data
         let n_kv_head = 1usize;
         let head_dim = 2usize;
-        let snapshot = vec![(
-            vec![1.0, 2.0, 3.0, 4.0],
-            vec![5.0, 6.0, 7.0, 8.0],
-        )];
+        let snapshot = vec![(vec![1.0, 2.0, 3.0, 4.0], vec![5.0, 6.0, 7.0, 8.0])];
         bank.update_from_snapshot(&snapshot, n_kv_head, head_dim, 0);
 
         // Set up L3 storage

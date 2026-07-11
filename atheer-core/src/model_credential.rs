@@ -13,10 +13,7 @@ pub enum ModelCredential {
         wrapped_key: Option<Vec<u8>>,
     },
     /// Key is derived from the device identity (device UID + model hash + salt).
-    DeviceDerived {
-        salt: Vec<u8>,
-        nonce: Vec<u8>,
-    },
+    DeviceDerived { salt: Vec<u8>, nonce: Vec<u8> },
     /// Custom encryption scheme registered by the host app (Swift/Kotlin).
     Custom {
         scheme_name: String,

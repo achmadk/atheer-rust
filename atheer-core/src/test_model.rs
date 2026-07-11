@@ -18,9 +18,7 @@ pub fn ensure_test_model() -> PathBuf {
     }
 
     // File doesn't exist — try to auto-download
-    eprintln!(
-        "ATHEER_TEST_MODEL set to {var} but file not found. Attempting download..."
-    );
+    eprintln!("ATHEER_TEST_MODEL set to {var} but file not found. Attempting download...");
 
     let script_path = find_download_script();
     let status = Command::new(&script_path)
@@ -42,7 +40,10 @@ pub fn ensure_test_model() -> PathBuf {
         // Script downloaded to default location; check there
         let default_path = default_model_path();
         if default_path.exists() {
-            eprintln!("Model downloaded to default location: {}", default_path.display());
+            eprintln!(
+                "Model downloaded to default location: {}",
+                default_path.display()
+            );
             default_path
         } else {
             panic!(

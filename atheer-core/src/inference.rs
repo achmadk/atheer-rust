@@ -12,9 +12,7 @@ use std::time::Instant;
 use uuid::Uuid;
 
 fn f32_vec_to_bytes(vec: &[f32]) -> Vec<u8> {
-    vec.iter()
-        .flat_map(|f| f.to_le_bytes())
-        .collect()
+    vec.iter().flat_map(|f| f.to_le_bytes()).collect()
 }
 
 fn bytes_to_f32_vec(bytes: &[u8]) -> Vec<f32> {
@@ -271,9 +269,13 @@ impl InferenceEngine {
         while !self.turn_history.is_empty() {
             let first = self.turn_history.first().unwrap();
             let _turn_len = first.1 - first.0;
-            let remaining_tokens: usize =
-                self.turn_history.iter().skip(1).map(|t| t.1 - t.0).sum::<usize>()
-                    + keep_base;
+            let remaining_tokens: usize = self
+                .turn_history
+                .iter()
+                .skip(1)
+                .map(|t| t.1 - t.0)
+                .sum::<usize>()
+                + keep_base;
             let new_total = remaining_tokens + incoming_len;
             if new_total < self.max_seq_len || self.turn_history.len() == 1 {
                 // Evict this turn
@@ -284,12 +286,8 @@ impl InferenceEngine {
         }
 
         // Recompute last_pos from remaining turns + system prompt
-        self.last_pos = self.system_prompt_len
-            + self
-                .turn_history
-                .iter()
-                .map(|t| t.1 - t.0)
-                .sum::<usize>();
+        self.last_pos =
+            self.system_prompt_len + self.turn_history.iter().map(|t| t.1 - t.0).sum::<usize>();
 
         // Clear the GPU-side KV cache entirely; remaining context will be
         // re-encoded on the next forward call(s).
@@ -560,7 +558,6 @@ impl InferenceEngine {
             .forward(&draft_tok_tensor, draft_pos - 1)
             .map_err(|e| AtheerCoreError::GenerationFailed(format!("Draft forward: {e}")))?;
 
-
         while (generated_tokens.len() as u32) < max_tokens {
             // Timeout check
             if let Some(timeout_ms) = max_generation_time_ms {
@@ -578,9 +575,8 @@ impl InferenceEngine {
                 break;
             }
 
-            let draft_depth = max_draft_depth.min(
-                (max_tokens - generated_tokens.len() as u32) as usize,
-            );
+            let draft_depth =
+                max_draft_depth.min((max_tokens - generated_tokens.len() as u32) as usize);
 
             let mut draft_tokens: Vec<u32> = Vec::with_capacity(draft_depth);
             let mut draft_log_probs: Vec<f32> = Vec::with_capacity(draft_depth);
@@ -602,9 +598,7 @@ impl InferenceEngine {
                 let d_token = draft_engine
                     .sampler
                     .sample(&d_logits, &draft_tokens)
-                    .map_err(|e| {
-                        AtheerCoreError::GenerationFailed(format!("Draft sample: {e}"))
-                    })?;
+                    .map_err(|e| AtheerCoreError::GenerationFailed(format!("Draft sample: {e}")))?;
 
                 let d_log_prob = extract_log_prob(&d_logits, d_token).unwrap_or(-0.1);
 
@@ -657,18 +651,17 @@ impl InferenceEngine {
 
                 draft_pos = draft_engine.last_pos + prompt_len + generated_tokens.len();
             } else {
-                let extra_tensor = Tensor::new(&[draft_tokens[draft_depth - 1] as i64][..], &device)
-                    .map_err(|e| AtheerCoreError::GenerationFailed(e.to_string()))?
-                    .unsqueeze(0)
-                    .map_err(|e| AtheerCoreError::GenerationFailed(e.to_string()))?;
+                let extra_tensor =
+                    Tensor::new(&[draft_tokens[draft_depth - 1] as i64][..], &device)
+                        .map_err(|e| AtheerCoreError::GenerationFailed(e.to_string()))?
+                        .unsqueeze(0)
+                        .map_err(|e| AtheerCoreError::GenerationFailed(e.to_string()))?;
 
                 let extra_logits = self
                     .model
                     .weights
                     .forward(&extra_tensor, target_pos - 1)
-                    .map_err(|e| {
-                        AtheerCoreError::GenerationFailed(format!("Target extra: {e}"))
-                    })?;
+                    .map_err(|e| AtheerCoreError::GenerationFailed(format!("Target extra: {e}")))?;
 
                 let extra_token = self
                     .sampler
@@ -680,19 +673,16 @@ impl InferenceEngine {
                 generated_tokens.push(extra_token);
                 target_pos += 1;
 
-                let sync_tensor =
-                    Tensor::new(&[extra_token as i64][..], &draft_device)
-                        .map_err(|e| AtheerCoreError::GenerationFailed(e.to_string()))?
-                        .unsqueeze(0)
-                        .map_err(|e| AtheerCoreError::GenerationFailed(e.to_string()))?;
+                let sync_tensor = Tensor::new(&[extra_token as i64][..], &draft_device)
+                    .map_err(|e| AtheerCoreError::GenerationFailed(e.to_string()))?
+                    .unsqueeze(0)
+                    .map_err(|e| AtheerCoreError::GenerationFailed(e.to_string()))?;
 
                 draft_engine
                     .model
                     .weights
                     .forward(&sync_tensor, draft_pos - 1)
-                    .map_err(|e| {
-                        AtheerCoreError::GenerationFailed(format!("Draft sync: {e}"))
-                    })?;
+                    .map_err(|e| AtheerCoreError::GenerationFailed(format!("Draft sync: {e}")))?;
                 draft_pos += 1;
 
                 self.maybe_auto_checkpoint(generated_tokens.len());
@@ -757,10 +747,7 @@ impl InferenceEngine {
             self.system_prompt_len = sys_ids.len();
             self.system_prompt = Some(system_prompt.to_string());
             self.last_pos = self.system_prompt_len;
-            tracing::debug!(
-                "System prompt encoded: {} tokens",
-                self.system_prompt_len
-            );
+            tracing::debug!("System prompt encoded: {} tokens", self.system_prompt_len);
         }
 
         let input_ids = self.tokenizer.encode(prompt, true);
@@ -925,7 +912,11 @@ impl InferenceEngine {
             let device = self.model.device.clone();
             let sys_ids = self.tokenizer.encode(sys, true);
             let sys_tensor = Tensor::new(
-                sys_ids.iter().map(|x| *x as i64).collect::<Vec<_>>().as_slice(),
+                sys_ids
+                    .iter()
+                    .map(|x| *x as i64)
+                    .collect::<Vec<_>>()
+                    .as_slice(),
                 &device,
             )
             .map_err(|e| AtheerCoreError::GenerationFailed(e.to_string()))?
@@ -938,7 +929,10 @@ impl InferenceEngine {
         }
 
         self.last_pos = self.system_prompt_len;
-        tracing::debug!("Conversation reset (system prompt preserved: {} tokens)", self.system_prompt_len);
+        tracing::debug!(
+            "Conversation reset (system prompt preserved: {} tokens)",
+            self.system_prompt_len
+        );
         Ok(())
     }
 
@@ -959,9 +953,7 @@ impl InferenceEngine {
         match self.model.kv_cache_snapshot() {
             Ok(snapshot) => snapshot
                 .iter()
-                .map(|(k, v)| {
-                    (k.len() + v.len()) as u64 * std::mem::size_of::<f32>() as u64
-                })
+                .map(|(k, v)| (k.len() + v.len()) as u64 * std::mem::size_of::<f32>() as u64)
                 .sum(),
             Err(_) => 0,
         }
@@ -1163,8 +1155,8 @@ impl InferenceEngine {
         let tmp_path = checkpoint_dir.join(format!(".tmp_{}", uuid_str));
 
         {
-            let mut tmp_file = std::fs::File::create(&tmp_path)
-                .map_err(AtheerCoreError::IoError)?;
+            let mut tmp_file =
+                std::fs::File::create(&tmp_path).map_err(AtheerCoreError::IoError)?;
 
             for (keys, values) in &snapshot {
                 tmp_file
@@ -1182,8 +1174,7 @@ impl InferenceEngine {
             }
         }
 
-        std::fs::rename(&tmp_path, &bin_path)
-            .map_err(AtheerCoreError::IoError)?;
+        std::fs::rename(&tmp_path, &bin_path).map_err(AtheerCoreError::IoError)?;
 
         let model_id = self
             .model_id
@@ -1198,8 +1189,7 @@ impl InferenceEngine {
             "prompt_hash": "unknown",
         });
 
-        let mut meta_file = std::fs::File::create(&meta_path)
-            .map_err(AtheerCoreError::IoError)?;
+        let mut meta_file = std::fs::File::create(&meta_path).map_err(AtheerCoreError::IoError)?;
         meta_file
             .write_all(serde_json::to_string_pretty(&metadata).unwrap().as_bytes())
             .map_err(AtheerCoreError::IoError)?;
@@ -1220,26 +1210,26 @@ impl InferenceEngine {
         let meta_path = checkpoint_dir.join(format!("checkpoint_{}.meta", uuid_str));
 
         if !bin_path.exists() || !meta_path.exists() {
-            return Err(AtheerCoreError::SessionError("checkpoint not found".to_string()));
+            return Err(AtheerCoreError::SessionError(
+                "checkpoint not found".to_string(),
+            ));
         }
 
-        let meta_content = std::fs::read_to_string(&meta_path)
-            .map_err(AtheerCoreError::IoError)?;
+        let meta_content = std::fs::read_to_string(&meta_path).map_err(AtheerCoreError::IoError)?;
         let meta: serde_json::Value = serde_json::from_str(&meta_content)
             .map_err(|e| AtheerCoreError::SessionError(format!("invalid meta: {}", e)))?;
 
         if meta.get("version").and_then(|v| v.as_i64()).unwrap_or(0) != 1 {
-            return Err(AtheerCoreError::SessionError("incompatible checkpoint version".to_string()));
+            return Err(AtheerCoreError::SessionError(
+                "incompatible checkpoint version".to_string(),
+            ));
         }
 
         // Model-ID cross-check: skip restore if the checkpoint was saved from
         // a different model. This prevents silently re-loading stale KV cache
         // after the app switched model architectures.
         if let Some(current_model) = self.model_id.as_deref() {
-            let stored_model = meta
-                .get("model_id")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
+            let stored_model = meta.get("model_id").and_then(|v| v.as_str()).unwrap_or("");
             if !stored_model.is_empty() && stored_model != current_model {
                 return Err(AtheerCoreError::SessionError(format!(
                     "model-ID mismatch: checkpoint belongs to '{}', current model is '{}'",
@@ -1248,23 +1238,20 @@ impl InferenceEngine {
             }
         }
 
-        let bin_content = std::fs::read(&bin_path)
-            .map_err(AtheerCoreError::IoError)?;
+        let bin_content = std::fs::read(&bin_path).map_err(AtheerCoreError::IoError)?;
 
         let mut snapshot = Vec::new();
         let mut offset = 0;
         while offset < bin_content.len() {
-            let key_len = u64::from_le_bytes(
-                bin_content[offset..offset + 8].try_into().unwrap()
-            ) as usize;
+            let key_len =
+                u64::from_le_bytes(bin_content[offset..offset + 8].try_into().unwrap()) as usize;
             offset += 8;
             let keys_bytes = &bin_content[offset..offset + key_len * 4];
             let keys = bytes_to_f32_vec(keys_bytes);
             offset += key_len * 4;
 
-            let value_len = u64::from_le_bytes(
-                bin_content[offset..offset + 8].try_into().unwrap()
-            ) as usize;
+            let value_len =
+                u64::from_le_bytes(bin_content[offset..offset + 8].try_into().unwrap()) as usize;
             offset += 8;
             let values_bytes = &bin_content[offset..offset + value_len * 4];
             let values = bytes_to_f32_vec(values_bytes);
@@ -1295,12 +1282,10 @@ impl InferenceEngine {
         let meta_path = checkpoint_dir.join(format!("checkpoint_{}.meta", uuid_str));
 
         if bin_path.exists() {
-            std::fs::remove_file(&bin_path)
-                .map_err(AtheerCoreError::IoError)?;
+            std::fs::remove_file(&bin_path).map_err(AtheerCoreError::IoError)?;
         }
         if meta_path.exists() {
-            std::fs::remove_file(&meta_path)
-                .map_err(AtheerCoreError::IoError)?;
+            std::fs::remove_file(&meta_path).map_err(AtheerCoreError::IoError)?;
         }
 
         if self.last_checkpoint_uuid.as_deref() == Some(uuid_str) {
@@ -1370,7 +1355,10 @@ impl InferenceEngine {
         head_dim: usize,
     ) -> Result<usize> {
         let snapshot = self.kv_cache_snapshot()?;
-        let populated = snapshot.iter().filter(|(k, v)| !k.is_empty() || !v.is_empty()).count();
+        let populated = snapshot
+            .iter()
+            .filter(|(k, v)| !k.is_empty() || !v.is_empty())
+            .count();
         if populated > 0 {
             bank.promote_to_l2(&snapshot, n_kv_head, head_dim);
             self.model.kv_cache_clear();
@@ -1398,9 +1386,7 @@ impl InferenceEngine {
             self.tokenizer.token_to_id("<|im_end|>"),
             self.tokenizer.token_to_id("<|eot_id|>"),
         ];
-        stop_ids
-            .iter()
-            .any(|opt| opt.is_some_and(|id| id == token))
+        stop_ids.iter().any(|opt| opt.is_some_and(|id| id == token))
     }
 }
 
@@ -1429,18 +1415,20 @@ mod tests {
     #[test]
     fn test_extract_log_prob_returns_correct_token() {
         // Logits with highest value at index 2
-        let logits = Tensor::from_vec(
-            vec![0.1_f32, 0.2, 5.0, 0.3, 0.05],
-            (1, 5),
-            &Device::Cpu,
-        )
-        .unwrap();
+        let logits =
+            Tensor::from_vec(vec![0.1_f32, 0.2, 5.0, 0.3, 0.05], (1, 5), &Device::Cpu).unwrap();
         let prob = extract_log_prob(&logits, 2).unwrap();
         // Index 2 should have the highest probability (positive ln after softmax)
-        assert!(prob < 0.0, "log prob of max token should be negative: {prob}");
+        assert!(
+            prob < 0.0,
+            "log prob of max token should be negative: {prob}"
+        );
         // And it should be greater (less negative) than for a non-max token
         let prob_other = extract_log_prob(&logits, 0).unwrap();
-        assert!(prob > prob_other, "max token log prob should be highest: {prob} > {prob_other}");
+        assert!(
+            prob > prob_other,
+            "max token log prob should be highest: {prob} > {prob_other}"
+        );
     }
 
     #[test]
@@ -1477,8 +1465,7 @@ mod tests {
         .unwrap();
 
         let config = crate::sampler::SamplingConfig::default();
-        let mut engine =
-            InferenceEngine::new(model, tokenizer, config, 2048).unwrap();
+        let mut engine = InferenceEngine::new(model, tokenizer, config, 2048).unwrap();
 
         // Round 1: generate from prompt
         let (text1, count1, _) = engine.generate("Hello", 10, None).unwrap();
@@ -1509,8 +1496,7 @@ mod tests {
         .unwrap();
 
         let config = crate::sampler::SamplingConfig::default();
-        let mut engine =
-            InferenceEngine::new(model, tokenizer, config, 2048).unwrap();
+        let mut engine = InferenceEngine::new(model, tokenizer, config, 2048).unwrap();
 
         let (text, count, _) = engine
             .generate_with_system("You are a helpful assistant.", "Hello", 10)
@@ -1542,8 +1528,7 @@ mod tests {
         .unwrap();
 
         let config = crate::sampler::SamplingConfig::default();
-        let mut engine =
-            InferenceEngine::new(model, tokenizer, config, 2048).unwrap();
+        let mut engine = InferenceEngine::new(model, tokenizer, config, 2048).unwrap();
 
         let (_text, _, _) = engine
             .generate_with_system("System prompt", "First turn", 10)
@@ -1602,8 +1587,7 @@ mod tests {
         .unwrap();
 
         let config = crate::sampler::SamplingConfig::default();
-        let mut engine =
-            InferenceEngine::new(model, tokenizer, config, 2048).unwrap();
+        let mut engine = InferenceEngine::new(model, tokenizer, config, 2048).unwrap();
 
         // Before generation, capture an estimate.  Models that do not
         // support KV cache snapshots (e.g. LFM2) will report 0 — that is
@@ -1630,14 +1614,16 @@ mod tests {
         .unwrap();
 
         let config = crate::sampler::SamplingConfig::default();
-        let mut engine =
-            InferenceEngine::new(model, tokenizer, config, 2048).unwrap();
+        let mut engine = InferenceEngine::new(model, tokenizer, config, 2048).unwrap();
 
         let result = engine.generate("Hello", 100, Some(0));
         assert!(result.is_err());
         let err = result.unwrap_err();
         match err {
-            crate::error::AtheerCoreError::Timeout { elapsed_ms: _, tokens_generated } => {
+            crate::error::AtheerCoreError::Timeout {
+                elapsed_ms: _,
+                tokens_generated,
+            } => {
                 assert_eq!(tokens_generated, 0);
             }
             other => panic!("Expected Timeout error, got {:?}", other),
@@ -1647,7 +1633,10 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         match err {
-            crate::error::AtheerCoreError::Timeout { elapsed_ms, tokens_generated } => {
+            crate::error::AtheerCoreError::Timeout {
+                elapsed_ms,
+                tokens_generated,
+            } => {
                 assert!(tokens_generated >= 1);
                 assert!(elapsed_ms >= 1);
             }
@@ -1676,33 +1665,37 @@ mod tests {
             let mut engine = crate::inference::InferenceEngine {
                 model: unsafe { std::hint::unreachable_unchecked() },
                 tokenizer: unsafe { std::hint::unreachable_unchecked() },
-            sampler: Box::new(crate::sampler::DefaultSampler::new(
-                crate::sampler::SamplingConfig::default(),
-            )),
-            max_seq_len: 2048,
-            latency: crate::latency_budget::LatencyTracker::new(100),
-            turn_history: Vec::new(),
-            system_prompt_len: 0,
-            system_prompt: None,
-            last_pos: 0,
-            moderation: None,
-            checkpoint_dir: Some(checkpoint_path.clone()),
-            checkpoint_every_n_tokens: None,
-            last_checkpoint_uuid: None,
-            model_id: None,
-            #[cfg(feature = "auto-backend")]
-            backend: None,
-            #[cfg(feature = "auto-backend")]
-            eco_mode: false,
-        };
+                sampler: Box::new(crate::sampler::DefaultSampler::new(
+                    crate::sampler::SamplingConfig::default(),
+                )),
+                max_seq_len: 2048,
+                latency: crate::latency_budget::LatencyTracker::new(100),
+                turn_history: Vec::new(),
+                system_prompt_len: 0,
+                system_prompt: None,
+                last_pos: 0,
+                moderation: None,
+                checkpoint_dir: Some(checkpoint_path.clone()),
+                checkpoint_every_n_tokens: None,
+                last_checkpoint_uuid: None,
+                model_id: None,
+                #[cfg(feature = "auto-backend")]
+                backend: None,
+                #[cfg(feature = "auto-backend")]
+                eco_mode: false,
+            };
 
-        engine.checkpoint_dir = Some(checkpoint_path.clone());
-        let uuid = engine.save_checkpoint().expect("save_checkpoint should succeed");
-        assert!(engine.has_checkpoint());
-        assert_eq!(engine.last_checkpoint_uuid.as_deref(), Some(uuid.as_str()));
+            engine.checkpoint_dir = Some(checkpoint_path.clone());
+            let uuid = engine
+                .save_checkpoint()
+                .expect("save_checkpoint should succeed");
+            assert!(engine.has_checkpoint());
+            assert_eq!(engine.last_checkpoint_uuid.as_deref(), Some(uuid.as_str()));
 
-        engine.clear_checkpoint(&uuid).expect("clear_checkpoint should succeed");
-        assert!(!engine.has_checkpoint());
+            engine
+                .clear_checkpoint(&uuid)
+                .expect("clear_checkpoint should succeed");
+            assert!(!engine.has_checkpoint());
         }
     }
 
@@ -1741,8 +1734,7 @@ mod tests {
         let checkpoint_path = temp_dir.path().to_path_buf();
 
         let config = crate::sampler::SamplingConfig::default();
-        let mut engine =
-            InferenceEngine::new(model, tokenizer, config, 2048).unwrap();
+        let mut engine = InferenceEngine::new(model, tokenizer, config, 2048).unwrap();
 
         engine.with_checkpoint_dir(checkpoint_path.clone());
         engine.with_checkpoint_interval(5);
@@ -1754,7 +1746,10 @@ mod tests {
             .filter_map(|e| e.ok())
             .filter(|e| e.file_name().to_string_lossy().starts_with("checkpoint_"))
             .collect();
-        assert!(!checkpoints.is_empty(), "Expected at least one checkpoint file");
+        assert!(
+            !checkpoints.is_empty(),
+            "Expected at least one checkpoint file"
+        );
     }
 
     // ── Checkpoint persistence tests (8.x) ─────────────────────────────

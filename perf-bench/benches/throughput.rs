@@ -21,27 +21,18 @@ fn maybe_bench_load_time(c: &mut Criterion) {
             let tokenizer = atheer_core::tokenizer::Tokenizer::from_file(&tokenizer_path)
                 .expect("Failed to load tokenizer");
             let config = atheer_core::sampler::SamplingConfig::default();
-            let _engine = atheer_core::InferenceEngine::new_auto(
-                &model_path,
-                tokenizer,
-                config,
-                4096,
-            )
-            .expect("Failed to load model");
+            let _engine =
+                atheer_core::InferenceEngine::new_auto(&model_path, tokenizer, config, 4096)
+                    .expect("Failed to load model");
         })
     });
 
     // Throughput benchmark
-    let tokenizer =
-        atheer_core::tokenizer::Tokenizer::from_file(&tokenizer_path).expect("Failed to load tokenizer");
+    let tokenizer = atheer_core::tokenizer::Tokenizer::from_file(&tokenizer_path)
+        .expect("Failed to load tokenizer");
     let config = atheer_core::sampler::SamplingConfig::default();
-    let mut engine = atheer_core::InferenceEngine::new_auto(
-        &model_path,
-        tokenizer,
-        config,
-        4096,
-    )
-    .expect("Failed to load model");
+    let mut engine = atheer_core::InferenceEngine::new_auto(&model_path, tokenizer, config, 4096)
+        .expect("Failed to load model");
 
     c.bench_function("generation_throughput", |b| {
         b.iter(|| {

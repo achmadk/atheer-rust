@@ -18,16 +18,11 @@ fn maybe_bench_thermal(c: &mut Criterion) {
         return;
     }
 
-    let tokenizer =
-        atheer_core::tokenizer::Tokenizer::from_file(&tokenizer_path).expect("Failed to load tokenizer");
+    let tokenizer = atheer_core::tokenizer::Tokenizer::from_file(&tokenizer_path)
+        .expect("Failed to load tokenizer");
     let config = atheer_core::sampler::SamplingConfig::default();
-    let mut engine = atheer_core::InferenceEngine::new_auto(
-        &model_path,
-        tokenizer,
-        config,
-        4096,
-    )
-    .expect("Failed to load model");
+    let mut engine = atheer_core::InferenceEngine::new_auto(&model_path, tokenizer, config, 4096)
+        .expect("Failed to load model");
 
     c.bench_function("thermal_sustained_load_60s", |b| {
         b.iter(|| {
@@ -48,10 +43,15 @@ fn maybe_bench_thermal(c: &mut Criterion) {
             // Detect thermal throttling: compare first 10s vs last 10s throughput
             let n = throughput_samples.len();
             if n > 20 {
-                let first_third: f64 = throughput_samples[..n / 3].iter().sum::<f64>() / (n / 3) as f64;
-                let last_third: f64 = throughput_samples[n * 2 / 3..].iter().sum::<f64>() / (n - n * 2 / 3) as f64;
+                let first_third: f64 =
+                    throughput_samples[..n / 3].iter().sum::<f64>() / (n / 3) as f64;
+                let last_third: f64 =
+                    throughput_samples[n * 2 / 3..].iter().sum::<f64>() / (n - n * 2 / 3) as f64;
                 if last_third < first_third * 0.8 {
-                    eprintln!("THERMAL THROTTLING DETECTED: {:.1} -> {:.1} tok/s", first_third, last_third);
+                    eprintln!(
+                        "THERMAL THROTTLING DETECTED: {:.1} -> {:.1} tok/s",
+                        first_third, last_third
+                    );
                 }
             }
             black_box(throughput_samples.len());

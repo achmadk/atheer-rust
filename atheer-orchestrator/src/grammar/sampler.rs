@@ -1,9 +1,9 @@
-use std::sync::Arc;
 use atheer_core::Sampler;
 use candle_core::{Result as CandleResult, Tensor};
+use std::sync::Arc;
 
-use super::GrammarConstraint;
 use super::trie::GrammarTrie;
+use super::GrammarConstraint;
 
 /// A sampler wrapper that applies grammar constraints to mask invalid tokens.
 pub struct GrammarSampler<G: GrammarConstraint> {
@@ -30,7 +30,10 @@ impl<G: GrammarConstraint> GrammarSampler<G> {
 
     fn get_valid_token_ids(&self) -> Vec<usize> {
         if let Some(ref trie) = self.trie {
-            trie.valid_tokens("").into_iter().map(|id| id as usize).collect()
+            trie.valid_tokens("")
+                .into_iter()
+                .map(|id| id as usize)
+                .collect()
         } else {
             let vocab_size = self.tokenizer.vocab_size();
             (0..vocab_size).collect()
@@ -58,9 +61,7 @@ impl<G: GrammarConstraint + Clone> Sampler for GrammarSampler<G> {
         }
 
         if valid_count == 0 {
-            tracing::warn!(
-                "GrammarSampler: no valid tokens from trie, falling back to full scan"
-            );
+            tracing::warn!("GrammarSampler: no valid tokens from trie, falling back to full scan");
             for (token_id, is_valid) in mask.iter_mut().enumerate().take(vocab_size) {
                 if *is_valid {
                     continue;

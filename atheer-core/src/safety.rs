@@ -81,7 +81,9 @@ impl ContentModeration {
 
     /// Returns true if any stage blocked the output.
     pub fn is_output_blocked(&self, text: &str, tokens: &[u32]) -> bool {
-        self.check_output(text, tokens).iter().any(|v| v.is_blocked())
+        self.check_output(text, tokens)
+            .iter()
+            .any(|v| v.is_blocked())
     }
 }
 
@@ -122,12 +124,8 @@ const HIGH_SEVERITY_PATTERNS: &[&str] = &[
 ];
 
 /// Known low-severity injection patterns (flagged but not blocked).
-const LOW_SEVERITY_PATTERNS: &[&str] = &[
-    "new persona",
-    "you must act as",
-    "bypass",
-    "system prompt",
-];
+const LOW_SEVERITY_PATTERNS: &[&str] =
+    &["new persona", "you must act as", "bypass", "system prompt"];
 
 impl InjectionDetector {
     pub fn new() -> Self {
@@ -234,11 +232,7 @@ impl PiiRedactor {
 
         // Credit card detection - 13+ consecutive digits (after removing non-digits)
         // We use a simpler approach: look for sequences of digits with optional dashes/spaces
-        let has_card = text
-            .chars()
-            .filter(|c| c.is_ascii_digit())
-            .count()
-            >= 13;
+        let has_card = text.chars().filter(|c| c.is_ascii_digit()).count() >= 13;
         if has_card {
             result = result
                 .chars()
@@ -300,10 +294,7 @@ impl ModerationStage for TopicBlocker {
         let lower = prompt.to_lowercase();
         for topic in &self.blocked_topics {
             if lower.contains(&topic.to_lowercase()) {
-                return ModerationVerdict::Blocked(format!(
-                    "Topic blocked: '{}'",
-                    topic
-                ));
+                return ModerationVerdict::Blocked(format!("Topic blocked: '{}'", topic));
             }
         }
         ModerationVerdict::Passthrough
@@ -344,11 +335,7 @@ const HIGH_SEVERITY_TERMS: &[&str] = &[
 ];
 
 /// Medium-severity content indicators (→ Flagged).
-const MEDIUM_SEVERITY_TERMS: &[&str] = &[
-    "violent",
-    "attack",
-    "threat",
-];
+const MEDIUM_SEVERITY_TERMS: &[&str] = &["violent", "attack", "threat"];
 
 impl OutputFilter {
     pub fn new(block_threshold: Severity, flag_threshold: Severity) -> Self {
