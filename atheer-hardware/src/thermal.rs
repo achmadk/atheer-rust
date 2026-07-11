@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum ThermalState {
+    #[default]
     Nominal,
     Fair,
     Serious,
@@ -31,8 +32,3 @@ impl ThermalState {
     }
 }
 
-impl Default for ThermalState {
-    fn default() -> Self {
-        ThermalState::Nominal
-    }
-}

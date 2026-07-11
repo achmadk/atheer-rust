@@ -26,7 +26,7 @@ impl NGramCache {
 
         self.ngrams
             .entry(prefix_key.clone())
-            .or_insert_with(Vec::new)
+            .or_default()
             .extend(continuation.iter().take(10));
 
         if !self.access_order.contains(&prefix_key) {

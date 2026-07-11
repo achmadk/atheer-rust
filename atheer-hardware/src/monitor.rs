@@ -79,10 +79,12 @@ impl GenericMonitor {
 
     /// Default sampling for platforms without native telemetry (Linux, CI).
     /// Returns nominal values since actual OS APIs aren't available.
+    #[allow(dead_code)]
     fn sample_default() -> HealthSnapshot {
-        let mut snap = HealthSnapshot::default();
-        snap.timestamp = chrono::Utc::now().timestamp();
-        snap
+        HealthSnapshot {
+            timestamp: chrono::Utc::now().timestamp(),
+            ..Default::default()
+        }
     }
 
     /// Apple platform sampling via objc2 FFI (iOS/macOS).

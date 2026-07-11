@@ -54,9 +54,9 @@ impl BackendManager {
     pub fn with_coreml_model(
         mut self,
         model_path: &str,
-        architecture: &str,
-        quantization: &str,
-        param_count_m: f32,
+        _architecture: &str,
+        _quantization: &str,
+        _param_count_m: f32,
     ) -> Self {
         self.coreml_model_path = Some(model_path.to_string());
 
@@ -151,7 +151,6 @@ impl BackendManager {
             BackendType::Vulkan => candle_core::Device::Cpu,
             #[cfg(not(target_os = "android"))]
             BackendType::NNAPI => candle_core::Device::Cpu,
-            _ => candle_core::Device::Cpu,
         }
     }
 

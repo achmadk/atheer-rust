@@ -108,10 +108,7 @@ impl ContentModerationBuilder {
 ///
 /// Detects known injection patterns using string matching.
 /// High-severity patterns are blocked; low-severity patterns are flagged.
-pub struct InjectionDetector {
-    block_severity: Severity,
-    flag_severity: Severity,
-}
+pub struct InjectionDetector;
 
 /// Known high-severity injection patterns (exact blocks).
 const HIGH_SEVERITY_PATTERNS: &[&str] = &[
@@ -134,17 +131,11 @@ const LOW_SEVERITY_PATTERNS: &[&str] = &[
 
 impl InjectionDetector {
     pub fn new() -> Self {
-        Self {
-            block_severity: Severity::High,
-            flag_severity: Severity::Low,
-        }
+        Self
     }
 
-    pub fn with_thresholds(block_severity: Severity, flag_severity: Severity) -> Self {
-        Self {
-            block_severity,
-            flag_severity,
-        }
+    pub fn with_thresholds(_block_severity: Severity, _flag_severity: Severity) -> Self {
+        Self
     }
 }
 
@@ -178,7 +169,7 @@ impl ModerationStage for InjectionDetector {
 
         // Check for "ignore" + "previous" within proximity
         if let (Some(ig), Some(prev)) = (lower.find("ignore"), lower.find("previous")) {
-            let distance = if ig < prev { prev - ig } else { ig - prev };
+            let distance = prev.abs_diff(ig);
             if distance < 40 {
                 return ModerationVerdict::Flagged(
                     "Suspicious: 'ignore' and 'previous' in proximity".to_string(),
@@ -241,18 +232,7 @@ impl PiiRedactor {
             }
         }
 
-        // Simple phone detection: 7+ consecutive digits
-        let mut i = 0;
-        let bytes = result.clone().into_bytes();
-        let _digit_runs: Vec<(usize, usize)> = Vec::new();
-        while i < bytes.len() {
-            if bytes[i].is_ascii_digit() || bytes[i] == b'+' || bytes[i] == b'-' || bytes[i] == b' ' {
-                // Allow separators but count only digits
-                continue;
-            }
-            i += 1;
-        }
-        // Fallback: simple credit card detection - 13+ consecutive digits
+        // Credit card detection - 13+ consecutive digits (after removing non-digits)
         // We use a simpler approach: look for sequences of digits with optional dashes/spaces
         let has_card = text
             .chars()

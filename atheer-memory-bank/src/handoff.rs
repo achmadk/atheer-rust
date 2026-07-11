@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, Default)]
 pub enum HandoffPhase {
+    #[default]
     Idle,
     BridgeMode,
     AlignmentCheck,
@@ -21,12 +22,6 @@ impl HandoffPhase {
     }
 }
 
-impl Default for HandoffPhase {
-    fn default() -> Self {
-        HandoffPhase::Idle
-    }
-}
-
 #[allow(dead_code)]
 pub struct HandoffProtocol {
     phase: HandoffPhase,
@@ -36,8 +31,8 @@ pub struct HandoffProtocol {
     pending_tokens: Vec<u32>,
 }
 
-impl HandoffProtocol {
-    pub fn new() -> Self {
+impl Default for HandoffProtocol {
+    fn default() -> Self {
         Self {
             phase: HandoffPhase::Idle,
             bridge_tokens_remaining: 3,
@@ -45,6 +40,12 @@ impl HandoffProtocol {
             max_depth: 4,
             pending_tokens: Vec::new(),
         }
+    }
+}
+
+impl HandoffProtocol {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn phase(&self) -> HandoffPhase {

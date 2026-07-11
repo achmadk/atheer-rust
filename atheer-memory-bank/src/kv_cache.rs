@@ -108,7 +108,7 @@ impl KvCache {
             priority: 0,
         };
 
-        let entries = self.entries.entry(layer).or_insert_with(VecDeque::new);
+        let entries = self.entries.entry(layer).or_default();
         entries.push_back(entry);
         self.access_order.push_back((layer, position));
     }

@@ -1,11 +1,12 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum PowerState {
+    #[default]
+    Unknown,
     Charging,
     Discharging,
     Full,
-    Unknown,
 }
 
 impl PowerState {
@@ -19,8 +20,3 @@ impl PowerState {
     }
 }
 
-impl Default for PowerState {
-    fn default() -> Self {
-        PowerState::Unknown
-    }
-}

@@ -1,6 +1,5 @@
 use crate::{AccelBackend, AccelResult, BackendType, Result};
 use std::collections::HashMap;
-use std::sync::Mutex;
 use std::time::Instant;
 
 /// Thread-safe wrapper around [`candle_coreml::CoreMLModel`].
@@ -119,6 +118,7 @@ pub struct ANECompatibility {
     /// Overall compatibility — false if any check fails.
     pub overall_compatible: bool,
     /// Chip generation, if probed (e.g., "M1", "M2", "M3").
+    #[allow(dead_code)]
     chip_generation: Option<String>,
 }
 

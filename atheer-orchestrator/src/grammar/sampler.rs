@@ -61,10 +61,13 @@ impl<G: GrammarConstraint + Clone> Sampler for GrammarSampler<G> {
             tracing::warn!(
                 "GrammarSampler: no valid tokens from trie, falling back to full scan"
             );
-            for token_id in 0..vocab_size {
+            for (token_id, is_valid) in mask.iter_mut().enumerate().take(vocab_size) {
+                if *is_valid {
+                    continue;
+                }
                 let token_text = self.tokenizer.decode(&[token_id as u32], false);
                 if !self.grammar.is_valid_prefix(&token_text) {
-                    mask[token_id] = false;
+                    *is_valid = false;
                 }
             }
         }

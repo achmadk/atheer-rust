@@ -4,7 +4,7 @@ use std::path::Path;
 
 fn compile_shader(shader_path: &Path, out_path: &Path) {
     let glsl_source = fs::read_to_string(shader_path)
-        .expect(&format!("Failed to read {:?}", shader_path));
+        .unwrap_or_else(|_| panic!("Failed to read {:?}", shader_path));
 
     let mut frontend = naga::front::glsl::Frontend::default();
     let options = naga::front::glsl::Options {
@@ -13,14 +13,14 @@ fn compile_shader(shader_path: &Path, out_path: &Path) {
     };
     let module = frontend
         .parse(&options, &glsl_source)
-        .expect(&format!("Failed to parse GLSL: {:?}", shader_path));
+        .unwrap_or_else(|_| panic!("Failed to parse GLSL: {:?}", shader_path));
 
     let info = naga::valid::Validator::new(
         naga::valid::ValidationFlags::all(),
         naga::valid::Capabilities::all(),
     )
     .validate(&module)
-    .expect(&format!("Failed to validate SPIR-V: {:?}", shader_path));
+    .unwrap_or_else(|_| panic!("Failed to validate SPIR-V: {:?}", shader_path));
 
     let spv = naga::back::spv::write_vec(
         &module,
@@ -31,7 +31,7 @@ fn compile_shader(shader_path: &Path, out_path: &Path) {
         },
         None,
     )
-    .expect(&format!("Failed to write SPIR-V: {:?}", shader_path));
+    .unwrap_or_else(|_| panic!("Failed to write SPIR-V: {:?}", shader_path));
 
     let output_bytes: Vec<u8> = spv
         .iter()
@@ -41,7 +41,7 @@ fn compile_shader(shader_path: &Path, out_path: &Path) {
     let stem = shader_path.file_stem().unwrap().to_str().unwrap();
     let spv_path = out_path.join(format!("{}.spv", stem));
     fs::write(&spv_path, &output_bytes)
-        .expect(&format!("Failed to write SPIR-V: {:?}", spv_path));
+        .unwrap_or_else(|_| panic!("Failed to write SPIR-V: {:?}", spv_path));
 }
 
 fn main() {

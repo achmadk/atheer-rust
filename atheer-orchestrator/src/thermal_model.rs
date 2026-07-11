@@ -7,7 +7,6 @@
 ///
 /// The model drives pre-emptive mode downgrades so the orchestrator
 /// can react *before* the device hits the hard thermal throttle.
-
 use std::collections::VecDeque;
 
 // ---------------------------------------------------------------------------

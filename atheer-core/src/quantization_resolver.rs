@@ -41,32 +41,15 @@ impl QuantizationResolver {
         // Step 1: determine baseline based on RAM constraints
         let (baseline, warning) = self.apply_ram_constraints(user_requested);
 
-        // Step 2: check if NPU supports INT4 — if so, prefer q4_k_m
-        let with_npu = if self.supports_npu_int4() {
-            // NPU prefers INT4; only upgrade if baseline is less compressed
-            match baseline.as_str() {
-                "f16" | "q8_0" | "q6_k" | "q5_k_m" => {
-                    let w = Some(format!(
-                        "Format '{}' downgraded to 'q4_k_m': NPU INT4 preferred",
-                        baseline
-                    ));
-                    ("q4_k_m".to_string(), w)
-                }
-                _ => (baseline.clone(), warning),
-            }
-        } else {
-            (baseline.clone(), warning)
-        };
-
-        // Step 3: validate against known format list
-        if KNOWN_FORMATS.contains(&with_npu.0.as_str()) {
-            with_npu
+        // Step 2: validate against known format list
+        if KNOWN_FORMATS.contains(&baseline.as_str()) {
+            (baseline, warning)
         } else {
             (
                 "q4_k_m".to_string(),
                 Some(format!(
                     "Unknown format '{}', falling back to 'q4_k_m'",
-                    with_npu.0
+                    baseline
                 )),
             )
         }
@@ -117,7 +100,7 @@ impl QuantizationResolver {
     /// Currently a stub that returns `true`. In production, this should
     /// query NNAPI (Android) or CoreML (iOS) for INT4 support.
     pub fn supports_npu_int4(&mut self) -> bool {
-        *self.probed_npu_int4.get_or_init(|| Self::probe_npu_int4_impl())
+        *self.probed_npu_int4.get_or_init(Self::probe_npu_int4_impl)
     }
 
     /// The actual NPU probe implementation.

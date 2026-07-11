@@ -98,7 +98,7 @@ mod tests {
     fn test_callback_from_closure() {
         let tokens = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
         let tokens_clone = tokens.clone();
-        let mut cb = callback_from_fn(move |token, state| {
+        let mut cb = callback_from_fn(move |token, _state| {
             tokens_clone.lock().unwrap().push(token);
             true
         });

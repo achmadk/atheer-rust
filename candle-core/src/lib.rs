@@ -47,6 +47,9 @@
 //! - [candle-transformers](https://docs.rs/candle-transformers/). Candle implementation of many published transformer models.
 //!
 
+// Vendored crate — silence all clippy lints from upstream code.
+#![allow(clippy::all)]
+
 #[cfg(feature = "accelerate")]
 mod accelerate;
 pub mod backend;

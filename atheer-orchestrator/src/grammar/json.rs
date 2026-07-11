@@ -55,6 +55,12 @@ pub struct JsonGrammar {
     stack: Vec<Container>,
 }
 
+impl Default for JsonGrammar {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl JsonGrammar {
     pub fn new() -> Self {
         Self {
@@ -252,13 +258,9 @@ impl JsonGrammar {
                         false
                     }
                 }
-                ']' => {
-                    if self.stack.last() == Some(&Container::Array) {
-                        self.pop_container();
-                        true
-                    } else {
-                        false
-                    }
+                ']' if self.stack.last() == Some(&Container::Array) => {
+                    self.pop_container();
+                    true
                 }
                 _ => false,
             },

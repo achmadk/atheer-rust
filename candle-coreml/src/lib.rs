@@ -1,3 +1,7 @@
+// Vendored crate — silence all clippy lints from upstream code.
+#![allow(clippy::all)]
+#![allow(unexpected_cfgs, unused_unsafe)]
+
 pub mod builder;
 pub mod cache;
 pub mod config;
@@ -55,16 +59,14 @@ pub use download::{download_hf_model_clean, verify_download_completeness, CleanD
 // Shared utilities for transformer models
 pub use utils::{mask, multi_component, sampling};
 
-use std::path::PathBuf;
-
 /// Helper function to get a file locally first, then download from `HuggingFace` Hub if needed.
 /// Follows the same pattern as quantized-t5 example.
 #[cfg(feature = "download")]
 pub fn get_local_or_remote_file(
     filename: &str,
     api: &hf_hub::api::sync::ApiRepo,
-) -> anyhow::Result<PathBuf> {
-    let local_filename = PathBuf::from(filename);
+) -> anyhow::Result<std::path::PathBuf> {
+    let local_filename = std::path::PathBuf::from(filename);
     if local_filename.exists() {
         Ok(local_filename)
     } else {

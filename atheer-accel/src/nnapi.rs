@@ -25,6 +25,7 @@ use crate::nnapi_ndk as ndk;
 // On non-Android, provide stub type and constant definitions so struct
 // fields and function signatures referencing ndk::* still compile.
 #[cfg(not(target_os = "android"))]
+#[allow(dead_code)]
 mod ndk {
     pub enum ANeuralNetworksModel {}
     pub enum ANeuralNetworksCompilation {}
@@ -915,7 +916,7 @@ impl NnapiGraphBuilder {
     /// # Panics
     ///
     /// Panics if `finish()` has not been called first (caught in debug builds).
-    pub fn compile(mut self, preference: ExecutionPreference) -> Result<NnapiCompiledModel> {
+    pub fn compile(self, preference: ExecutionPreference) -> Result<NnapiCompiledModel> {
         #[cfg(target_os = "android")]
         {
             let mut compilation: *mut ndk::ANeuralNetworksCompilation = std::ptr::null_mut();

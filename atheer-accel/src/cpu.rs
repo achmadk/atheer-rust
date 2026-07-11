@@ -1,4 +1,5 @@
 use crate::{AccelBackend, AccelResult, BackendType, Result};
+#[cfg(test)]
 use rayon::prelude::*;
 
 pub struct CpuBackend {
@@ -7,7 +8,7 @@ pub struct CpuBackend {
 
 impl CpuBackend {
     pub fn new(num_threads: Option<usize>) -> Self {
-        let num_threads = num_threads.unwrap_or_else(|| rayon::current_num_threads());
+        let num_threads = num_threads.unwrap_or_else(rayon::current_num_threads);
         Self { num_threads }
     }
 

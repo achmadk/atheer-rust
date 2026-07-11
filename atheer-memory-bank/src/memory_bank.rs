@@ -261,7 +261,7 @@ impl MemoryBank {
     /// VRAM pressure ratio (0.0–1.0+) relative to `max_size_mb`.
     /// Values > 1.0 indicate the cache exceeds its budget.
     pub fn vram_pressure_ratio(&self) -> f32 {
-        let max_bytes = (self.max_size_mb as f64 * 1_048_576.0) as f64;
+        let max_bytes = self.max_size_mb as f64 * 1_048_576.0;
         if max_bytes <= 0.0 {
             return 1.0;
         }

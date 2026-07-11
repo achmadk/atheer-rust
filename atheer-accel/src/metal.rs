@@ -1,5 +1,4 @@
 use crate::{AccelBackend, AccelResult, BackendType, Result};
-use std::time::Instant;
 
 pub struct MetalBackend {
     #[cfg(any(target_os = "ios", target_os = "macos"))]
@@ -70,7 +69,7 @@ impl AccelBackend for MetalBackend {
 
     #[cfg(test)]
     fn forward(&self, input_ids: &[u32], _positions: &[usize]) -> Result<AccelResult> {
-        let start = Instant::now();
+        let start = std::time::Instant::now();
 
         #[cfg(any(target_os = "ios", target_os = "macos"))]
         {

@@ -68,6 +68,7 @@ impl BlockTable {
         self.map.get(&(layer, logical_block)).copied()
     }
 
+    #[allow(dead_code)]
     fn remove(&mut self, layer: usize, logical_block: usize) -> Option<BlockId> {
         self.map.remove(&(layer, logical_block))
     }
@@ -97,6 +98,7 @@ pub struct BlockManager {
     /// Block size in tokens.
     block_size: usize,
     /// Number of consecutive blocks tracked per allocation.
+    #[allow(dead_code)]
     num_layers: usize,
     /// Block table mapping logical positions to physical blocks.
     table: BlockTable,

@@ -152,6 +152,12 @@ pub struct IncrementalCheckpoint {
     data: Vec<u8>,
 }
 
+impl Default for IncrementalCheckpoint {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl IncrementalCheckpoint {
     pub fn new() -> Self {
         Self {

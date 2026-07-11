@@ -332,7 +332,7 @@ impl AtheerEngine {
                 // Try to relieve pressure - demote L1 to L2
                 let snapshot = engine.kv_cache_snapshot().unwrap_or_default();
                 if !snapshot.is_empty() {
-                    let mut mem = self.memory_bank.lock().unwrap();
+                    let mem = self.memory_bank.lock().unwrap();
                     mem.demote_l1_to_l2_on_pressure(&snapshot, 8, 128, 0.8);
                 }
             }
@@ -1027,8 +1027,10 @@ impl AtheerEngine {
                 break;
             }
             let keys: Vec<f32> = bytes[offset..key_end]
-                .chunks_exact(4)
-                .map(|c| f32::from_le_bytes(c.try_into().unwrap()))
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|c| f32::from_le_bytes(*c))
                 .collect();
             offset = key_end;
 
@@ -1042,8 +1044,10 @@ impl AtheerEngine {
                 break;
             }
             let values: Vec<f32> = bytes[offset..value_end]
-                .chunks_exact(4)
-                .map(|c| f32::from_le_bytes(c.try_into().unwrap()))
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .map(|c| f32::from_le_bytes(*c))
                 .collect();
             offset = value_end;
 

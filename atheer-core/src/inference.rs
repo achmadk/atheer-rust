@@ -19,8 +19,10 @@ fn f32_vec_to_bytes(vec: &[f32]) -> Vec<u8> {
 
 fn bytes_to_f32_vec(bytes: &[u8]) -> Vec<f32> {
     bytes
-        .chunks_exact(4)
-        .map(|b| f32::from_le_bytes(b.try_into().unwrap()))
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|b| f32::from_le_bytes(*b))
         .collect()
 }
 
@@ -315,14 +317,14 @@ impl InferenceEngine {
         let model_device = self.model.device.clone();
 
         #[cfg(feature = "auto-backend")]
-        let prefill_device = self
+        let _prefill_device = self
             .backend
             .as_ref()
             .map(|b| b.device_for_op(true, self.eco_mode))
             .unwrap_or_else(|| model_device.clone());
 
         #[cfg(feature = "auto-backend")]
-        let decode_device = self
+        let _decode_device = self
             .backend
             .as_ref()
             .map(|b| b.device_for_op(false, self.eco_mode))
@@ -1162,26 +1164,26 @@ impl InferenceEngine {
 
         {
             let mut tmp_file = std::fs::File::create(&tmp_path)
-                .map_err(|e| AtheerCoreError::IoError(e))?;
+                .map_err(AtheerCoreError::IoError)?;
 
             for (keys, values) in &snapshot {
                 tmp_file
                     .write_all(&(keys.len() as u64).to_le_bytes())
-                    .map_err(|e| AtheerCoreError::IoError(e))?;
+                    .map_err(AtheerCoreError::IoError)?;
                 tmp_file
                     .write_all(&f32_vec_to_bytes(keys))
-                    .map_err(|e| AtheerCoreError::IoError(e))?;
+                    .map_err(AtheerCoreError::IoError)?;
                 tmp_file
                     .write_all(&(values.len() as u64).to_le_bytes())
-                    .map_err(|e| AtheerCoreError::IoError(e))?;
+                    .map_err(AtheerCoreError::IoError)?;
                 tmp_file
                     .write_all(&f32_vec_to_bytes(values))
-                    .map_err(|e| AtheerCoreError::IoError(e))?;
+                    .map_err(AtheerCoreError::IoError)?;
             }
         }
 
         std::fs::rename(&tmp_path, &bin_path)
-            .map_err(|e| AtheerCoreError::IoError(e))?;
+            .map_err(AtheerCoreError::IoError)?;
 
         let model_id = self
             .model_id
@@ -1197,10 +1199,10 @@ impl InferenceEngine {
         });
 
         let mut meta_file = std::fs::File::create(&meta_path)
-            .map_err(|e| AtheerCoreError::IoError(e))?;
+            .map_err(AtheerCoreError::IoError)?;
         meta_file
             .write_all(serde_json::to_string_pretty(&metadata).unwrap().as_bytes())
-            .map_err(|e| AtheerCoreError::IoError(e))?;
+            .map_err(AtheerCoreError::IoError)?;
 
         self.last_checkpoint_uuid = Some(uuid_str.clone());
         tracing::info!("Checkpoint saved: {} ({} tokens)", uuid_str, token_count);
@@ -1222,7 +1224,7 @@ impl InferenceEngine {
         }
 
         let meta_content = std::fs::read_to_string(&meta_path)
-            .map_err(|e| AtheerCoreError::IoError(e))?;
+            .map_err(AtheerCoreError::IoError)?;
         let meta: serde_json::Value = serde_json::from_str(&meta_content)
             .map_err(|e| AtheerCoreError::SessionError(format!("invalid meta: {}", e)))?;
 
@@ -1247,7 +1249,7 @@ impl InferenceEngine {
         }
 
         let bin_content = std::fs::read(&bin_path)
-            .map_err(|e| AtheerCoreError::IoError(e))?;
+            .map_err(AtheerCoreError::IoError)?;
 
         let mut snapshot = Vec::new();
         let mut offset = 0;
@@ -1294,11 +1296,11 @@ impl InferenceEngine {
 
         if bin_path.exists() {
             std::fs::remove_file(&bin_path)
-                .map_err(|e| AtheerCoreError::IoError(e))?;
+                .map_err(AtheerCoreError::IoError)?;
         }
         if meta_path.exists() {
             std::fs::remove_file(&meta_path)
-                .map_err(|e| AtheerCoreError::IoError(e))?;
+                .map_err(AtheerCoreError::IoError)?;
         }
 
         if self.last_checkpoint_uuid.as_deref() == Some(uuid_str) {
@@ -1313,7 +1315,7 @@ impl InferenceEngine {
     /// save a checkpoint. Log errors but don't fail generation.
     fn maybe_auto_checkpoint(&mut self, token_count: usize) {
         if let Some(interval) = self.checkpoint_every_n_tokens {
-            if token_count > 0 && (token_count as u32) % interval == 0 {
+            if token_count > 0 && (token_count as u32).is_multiple_of(interval) {
                 if let Err(e) = self.save_checkpoint() {
                     tracing::warn!("Auto-checkpoint failed: {}", e);
                 }
@@ -1398,7 +1400,7 @@ impl InferenceEngine {
         ];
         stop_ids
             .iter()
-            .any(|opt| opt.map_or(false, |id| id == token))
+            .any(|opt| opt.is_some_and(|id| id == token))
     }
 }
 
@@ -1635,9 +1637,8 @@ mod tests {
         assert!(result.is_err());
         let err = result.unwrap_err();
         match err {
-            crate::error::AtheerCoreError::Timeout { elapsed_ms, tokens_generated } => {
+            crate::error::AtheerCoreError::Timeout { elapsed_ms: _, tokens_generated } => {
                 assert_eq!(tokens_generated, 0);
-                assert!(elapsed_ms >= 0);
             }
             other => panic!("Expected Timeout error, got {:?}", other),
         }
@@ -1665,14 +1666,16 @@ mod tests {
     #[test]
     #[ignore = "requires a real model; use test_auto_checkpoint_every_n_tokens for integration testing"]
     fn test_save_and_load_checkpoint() {
-        use tempfile::TempDir;
+        #[allow(unreachable_code, unused_variables)]
+        {
+            use tempfile::TempDir;
 
-        let temp_dir = TempDir::new().unwrap();
-        let checkpoint_path = temp_dir.path().to_path_buf();
+            let temp_dir = TempDir::new().unwrap();
+            let checkpoint_path = temp_dir.path().to_path_buf();
 
-        let mut engine = crate::inference::InferenceEngine {
-            model: unsafe { std::hint::unreachable_unchecked() },
-            tokenizer: unsafe { std::hint::unreachable_unchecked() },
+            let mut engine = crate::inference::InferenceEngine {
+                model: unsafe { std::hint::unreachable_unchecked() },
+                tokenizer: unsafe { std::hint::unreachable_unchecked() },
             sampler: Box::new(crate::sampler::DefaultSampler::new(
                 crate::sampler::SamplingConfig::default(),
             )),
@@ -1700,6 +1703,7 @@ mod tests {
 
         engine.clear_checkpoint(&uuid).expect("clear_checkpoint should succeed");
         assert!(!engine.has_checkpoint());
+        }
     }
 
     /// Unit test: save_checkpoint returns error when checkpoint_dir is None.

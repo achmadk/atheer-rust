@@ -1,5 +1,4 @@
 use crate::error::Result;
-use crate::kv_cache_bridge::KvCacheBridge;
 use crate::Model;
 use candle_core::Tensor;
 use sha2::{Digest, Sha256};
@@ -44,7 +43,7 @@ pub fn fingerprint_topk(logits: &Tensor, k: usize) -> Result<String> {
 
     let mut hasher = Sha256::new();
     for v in &sorted {
-        hasher.update(&v.to_le_bytes());
+        hasher.update(v.to_le_bytes());
     }
     Ok(hex::encode(hasher.finalize()))
 }
@@ -90,10 +89,9 @@ pub fn capture_fingerprint(
     let prefill_fingerprint = fingerprint_topk(&logits, k)?;
 
     let mut hasher = Sha256::new();
-    let mut pos = 1;
     let mut token = 1u32;
 
-    for _ in 0..max_tokens {
+    for pos in 1..=max_tokens {
         let token_tensor = Tensor::new(&[token as i64][..], device)
             .map_err(|e| crate::error::AtheerCoreError::GenerationFailed(e.to_string()))?
             .unsqueeze(0)
@@ -101,7 +99,7 @@ pub fn capture_fingerprint(
 
         let logits = model
             .weights
-            .forward(&token_tensor, pos)
+            .forward(&token_tensor, pos as usize)
             .map_err(|e| crate::error::AtheerCoreError::GenerationFailed(e.to_string()))?;
 
         let fp = fingerprint_topk(&logits, k)?;
@@ -118,8 +116,6 @@ pub fn capture_fingerprint(
             .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
             .map(|(i, _)| i as u32)
             .unwrap_or(0);
-
-        pos += 1;
     }
 
     let generation_fingerprint = hex::encode(hasher.finalize());
@@ -137,18 +133,17 @@ pub fn compare_accuracy(
     baseline: &LogitFingerprint,
     candidate: &LogitFingerprint,
 ) -> AccuracyComparison {
-    let mut comp = AccuracyComparison::default();
-
-    comp.prefill_match = baseline.prefill_fingerprint == candidate.prefill_fingerprint;
-    comp.generation_match = baseline.generation_fingerprint == candidate.generation_fingerprint;
-
-    comp
+    AccuracyComparison {
+        prefill_match: baseline.prefill_fingerprint == candidate.prefill_fingerprint,
+        generation_match: baseline.generation_fingerprint == candidate.generation_fingerprint,
+        ..Default::default()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::error::AtheerCoreError;
+    use crate::kv_cache_bridge::KvCacheBridge;
 
     #[test]
     fn test_fingerprint_empty_logit() {

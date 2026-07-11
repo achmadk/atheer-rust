@@ -50,7 +50,9 @@ const NS_PROCESS_INFO_THERMAL_STATE_CRITICAL: i64 = 3;
 // UIDevice battery state constants
 // ---------------------------------------------------------------------------
 
+#[allow(dead_code)]
 const UI_DEVICE_BATTERY_STATE_UNKNOWN: i64 = 0;
+#[allow(dead_code)]
 const UI_DEVICE_BATTERY_STATE_UNPLUGGED: i64 = 1;
 const UI_DEVICE_BATTERY_STATE_CHARGING: i64 = 2;
 const UI_DEVICE_BATTERY_STATE_FULL: i64 = 3;

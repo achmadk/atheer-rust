@@ -23,7 +23,7 @@ impl WeightsVariant {
             .metadata
             .get("general.architecture")
             .and_then(|v| v.to_string().ok())
-            .map(|s| s.clone())
+            .cloned()
             .unwrap_or_else(|| "llama".to_string());
 
         match arch.as_str() {

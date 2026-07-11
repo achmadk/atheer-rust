@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum InferenceMode {
     Turbo,
     Balanced,
+    #[default]
     Eco,
 }
 
@@ -32,12 +33,6 @@ impl InferenceMode {
 
     pub fn is_eco(&self) -> bool {
         matches!(self, InferenceMode::Eco)
-    }
-}
-
-impl Default for InferenceMode {
-    fn default() -> Self {
-        InferenceMode::Eco
     }
 }
 

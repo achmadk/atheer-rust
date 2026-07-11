@@ -1,8 +1,8 @@
-/// KV cache quantization: trait, INT8/INT4 quantizers, adaptive depth, and
-/// on-pressure downgrade logic.
-///
-/// Each quantized buffer stores the per-tensor scale as a little-endian f32 in
-/// the first 4 bytes, followed by the packed quantized payload.
+// KV cache quantization: trait, INT8/INT4 quantizers, adaptive depth, and
+// on-pressure downgrade logic.
+//
+// Each quantized buffer stores the per-tensor scale as a little-endian f32 in
+// the first 4 bytes, followed by the packed quantized payload.
 
 /// The numeric format a quantized KV cache buffer is stored in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -115,7 +115,6 @@ impl KvCacheQuantizer for Int8Quantizer {
 /// ```
 ///
 /// Packing order per byte: low nibble → first element, high nibble → second.
-
 pub struct Int4Quantizer;
 
 fn clamp_i4(x: f32) -> u8 {
@@ -134,7 +133,7 @@ impl KvCacheQuantizer for Int4Quantizer {
         }
         let scale = symmetric_scale(data, 7.0);
         let inv_scale = scale.recip();
-        let packed_len = (data.len() + 1) / 2;
+        let packed_len = data.len().div_ceil(2);
 
         let mut out = Vec::with_capacity(4 + packed_len);
         out.extend_from_slice(&[0u8; 4]);
@@ -155,7 +154,7 @@ impl KvCacheQuantizer for Int4Quantizer {
         }
         let scale = read_scale(&data[..4].try_into().expect("scale prefix"));
         let payload = &data[4..];
-        let needed = (len + 1) / 2;
+        let needed = len.div_ceil(2);
         assert!(payload.len() >= needed,
             "Int4 dequantize: expected {} bytes, got {}", needed, payload.len());
 
@@ -228,7 +227,7 @@ impl OnPressureQuantizer {
         current: QuantizationScheme, vram_pct: f32,
     ) -> Option<Box<dyn KvCacheQuantizer>> {
         Self::downgrade_scheme(current, vram_pct)
-            .map(|s| AdaptiveQuantizer::quantizer_for(s))
+            .map(AdaptiveQuantizer::quantizer_for)
     }
 
     pub fn savings_factor(current: QuantizationScheme, vram_pct: f32) -> f32 {
@@ -262,11 +261,9 @@ impl KvCacheQuantizer for IdentityQuantizer {
         assert!(payload.len() >= len * 4,
             "Identity dequantize: expected {} bytes, got {}", len * 4, payload.len());
         let mut out = Vec::with_capacity(len);
-        for chunk in payload.chunks_exact(4) {
+        for &chunk in payload.as_chunks::<4>().0 {
             if out.len() >= len { break; }
-            let mut arr = [0u8; 4];
-            arr.copy_from_slice(chunk);
-            out.push(f32::from_le_bytes(arr));
+            out.push(f32::from_le_bytes(chunk));
         }
         out
     }

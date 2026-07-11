@@ -98,23 +98,23 @@ impl Sampler for DefaultSampler {
             let fp = self.config.frequency_penalty;
             let pp = self.config.presence_penalty;
 
-            for t in 0..vocab_size {
+            for (t, logit) in logits_vec.iter_mut().enumerate() {
                 if let Some(&count) = counts.get(&(t as u32)) {
                     let count_f = count as f32;
 
                     // Repetition penalty: divide by rp^count
                     if rp != 1.0 && count > 0 {
-                        logits_vec[t] /= rp.powi(count as i32);
+                        *logit /= rp.powi(count as i32);
                     }
 
                     // Frequency penalty: subtract fp * count
                     if fp != 0.0 {
-                        logits_vec[t] -= fp * count_f;
+                        *logit -= fp * count_f;
                     }
 
                     // Presence penalty: subtract pp if count > 0
                     if pp != 0.0 {
-                        logits_vec[t] -= pp;
+                        *logit -= pp;
                     }
                 }
             }

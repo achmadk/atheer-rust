@@ -1,8 +1,4 @@
 use crate::{AccelBackend, AccelResult, BackendType, Result};
-use std::ffi::CString;
-use std::mem::ManuallyDrop;
-use std::sync::Mutex;
-use std::time::Instant;
 
 #[cfg(target_os = "android")]
 use ash::vk;
@@ -23,6 +19,7 @@ struct VulkanDevice {
 }
 
 #[cfg(not(target_os = "android"))]
+#[allow(dead_code)]
 struct VulkanQueue {
     family_index: u32,
 }
@@ -1021,7 +1018,7 @@ impl AccelBackend for VulkanBackend {
 
     #[cfg(test)]
     fn forward(&self, input_ids: &[u32], _positions: &[usize]) -> Result<AccelResult> {
-        let start = Instant::now();
+        let start = std::time::Instant::now();
 
         #[cfg(target_os = "android")]
         {

@@ -144,16 +144,20 @@ jobs:
 
       - name: Download test model
         if: steps.cache-model.outputs.cache-hit != 'true'
+        env:
+          ATHEER_TEST_MODEL: /tmp/models/LFM2-700M-Q4_0.gguf
         run: |
           mkdir -p /tmp/models
           scripts/download-test-model.sh
-          cp models/LFM2-700M-Q4_0.gguf $ATHEER_TEST_MODEL
+          cp models/LFM2-700M-Q4_0.gguf "$ATHEER_TEST_MODEL"
 
       - name: Symlink model for cached runs
         if: steps.cache-model.outputs.cache-hit == 'true'
+        env:
+          ATHEER_TEST_MODEL: /tmp/models/LFM2-700M-Q4_0.gguf
         run: |
           mkdir -p models
-          ln -sf $ATHEER_TEST_MODEL models/LFM2-700M-Q4_0.gguf
+          ln -sf "$ATHEER_TEST_MODEL" models/LFM2-700M-Q4_0.gguf
 
       - name: Run accuracy integration tests
         run: cargo test -p atheer-core -- --ignored accuracy

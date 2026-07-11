@@ -101,7 +101,7 @@ pub extern "C" fn aether_engine_new() -> *mut FfiEngine {
 /// * Pointer must not be used after this call (dangling pointer)
 /// * Safe to call with null pointer (no-op)
 #[no_mangle]
-pub extern "C" fn aether_engine_free(engine: *mut FfiEngine) {
+pub unsafe extern "C" fn aether_engine_free(engine: *mut FfiEngine) {
     if !engine.is_null() {
         unsafe {
             let _ = Box::from_raw(engine);
@@ -119,7 +119,7 @@ pub extern "C" fn aether_engine_free(engine: *mut FfiEngine) {
 /// * `0` on success
 /// * `-1` on failure or if pointer is null
 #[no_mangle]
-pub extern "C" fn aether_engine_initialize(engine: *mut FfiEngine) -> i32 {
+pub unsafe extern "C" fn aether_engine_initialize(engine: *mut FfiEngine) -> i32 {
     if engine.is_null() {
         return -1;
     }
@@ -140,7 +140,7 @@ pub extern "C" fn aether_engine_initialize(engine: *mut FfiEngine) -> i32 {
 /// * `1` if initialized
 /// * `0` if not initialized or if pointer is null
 #[no_mangle]
-pub extern "C" fn aether_engine_is_initialized(engine: *const FfiEngine) -> i32 {
+pub unsafe extern "C" fn aether_engine_is_initialized(engine: *const FfiEngine) -> i32 {
     if engine.is_null() {
         return 0;
     }
@@ -164,22 +164,16 @@ pub extern "C" fn aether_engine_is_initialized(engine: *const FfiEngine) -> i32 
 /// * `*mut c_char` - Newly allocated C string with result (caller owns)
 /// * `ptr::null_mut()` on error or if inputs are null
 #[no_mangle]
-pub extern "C" fn aether_generate_sync(
+pub unsafe extern "C" fn aether_generate_sync(
     engine: *mut FfiEngine,
     prompt: *const c_char,
-    max_tokens: u32,
+    _max_tokens: u32,
 ) -> *mut c_char {
     if engine.is_null() || prompt.is_null() {
         return ptr::null_mut();
     }
 
     unsafe {
-        let c_str = CStr::from_ptr(prompt);
-        let prompt_str = match c_str.to_str() {
-            Ok(s) => s,
-            Err(_) => return ptr::null_mut(),
-        };
-
         let request = crate::GenerationRequest {
             prompt: "Say hi".to_string(),
             max_tokens: 10,
@@ -208,7 +202,7 @@ pub extern "C" fn aether_generate_sync(
 /// * `0` on successful stream start
 /// * `-1` on failure or if pointer is null
 #[no_mangle]
-pub extern "C" fn aether_engine_generate_stream(
+pub unsafe extern "C" fn aether_engine_generate_stream(
     engine: *mut FfiEngine,
     prompt: *const c_char,
     max_tokens: u32,
@@ -240,7 +234,7 @@ pub extern "C" fn aether_engine_generate_stream(
 /// * Next token as C string (caller owns)
 /// * `ptr::null_mut()` if no more tokens or stream not started
 #[no_mangle]
-pub extern "C" fn aether_engine_stream_poll(engine: *mut FfiEngine) -> *mut c_char {
+pub unsafe extern "C" fn aether_engine_stream_poll(engine: *mut FfiEngine) -> *mut c_char {
     if engine.is_null() {
         return ptr::null_mut();
     }
@@ -257,11 +251,14 @@ pub extern "C" fn aether_engine_stream_poll(engine: *mut FfiEngine) -> *mut c_ch
 
 /// Checks if streaming is complete.
 ///
+/// # Safety
+/// * `engine` must be a valid pointer from `aether_engine_new()`
+///
 /// # Returns
 /// * `1` if complete
 /// * `0` if more tokens available
 #[no_mangle]
-pub extern "C" fn aether_engine_stream_done(engine: *mut FfiEngine) -> i32 {
+pub unsafe extern "C" fn aether_engine_stream_done(engine: *mut FfiEngine) -> i32 {
     if engine.is_null() {
         return 1;
     }
@@ -282,7 +279,7 @@ pub extern "C" fn aether_engine_stream_done(engine: *mut FfiEngine) -> i32 {
 /// * Pointer must not be used after this call
 /// * Safe to call with null pointer (no-op)
 #[no_mangle]
-pub extern "C" fn aether_string_free(s: *mut c_char) {
+pub unsafe extern "C" fn aether_string_free(s: *mut c_char) {
     if !s.is_null() {
         unsafe {
             let _ = CString::from_raw(s);
@@ -300,7 +297,7 @@ pub extern "C" fn aether_string_free(s: *mut c_char) {
 /// * `*mut c_char` - Mode string ("eco", "balanced", "turbo")
 /// * `ptr::null_mut()` on error or if pointer is null
 #[no_mangle]
-pub extern "C" fn aether_engine_get_mode(engine: *const FfiEngine) -> *mut c_char {
+pub unsafe extern "C" fn aether_engine_get_mode(engine: *const FfiEngine) -> *mut c_char {
     if engine.is_null() {
         return ptr::null_mut();
     }
@@ -322,7 +319,7 @@ pub extern "C" fn aether_engine_get_mode(engine: *const FfiEngine) -> *mut c_cha
 /// * Tokens per second as float
 /// * `0.0` if pointer is null
 #[no_mangle]
-pub extern "C" fn aether_engine_get_tokens_per_second(engine: *const FfiEngine) -> f32 {
+pub unsafe extern "C" fn aether_engine_get_tokens_per_second(engine: *const FfiEngine) -> f32 {
     if engine.is_null() {
         return 0.0;
     }
@@ -342,7 +339,7 @@ pub extern "C" fn aether_engine_get_tokens_per_second(engine: *const FfiEngine) 
 /// * `*mut c_char` - Thermal state string
 /// * `ptr::null_mut()` on error or if pointer is null
 #[no_mangle]
-pub extern "C" fn aether_engine_get_hardware_thermal(engine: *const FfiEngine) -> *mut c_char {
+pub unsafe extern "C" fn aether_engine_get_hardware_thermal(engine: *const FfiEngine) -> *mut c_char {
     if engine.is_null() {
         return ptr::null_mut();
     }
@@ -364,7 +361,7 @@ pub extern "C" fn aether_engine_get_hardware_thermal(engine: *const FfiEngine) -
 /// * Available RAM in MB
 /// * `0` if pointer is null
 #[no_mangle]
-pub extern "C" fn aether_engine_get_available_ram_mb(engine: *const FfiEngine) -> u64 {
+pub unsafe extern "C" fn aether_engine_get_available_ram_mb(engine: *const FfiEngine) -> u64 {
     if engine.is_null() {
         return 0;
     }
@@ -383,7 +380,7 @@ pub extern "C" fn aether_engine_get_available_ram_mb(engine: *const FfiEngine) -
 /// * Battery level 0-100
 /// * `0` if pointer is null or battery info unavailable
 #[no_mangle]
-pub extern "C" fn aether_engine_get_battery_level(engine: *const FfiEngine) -> u32 {
+pub unsafe extern "C" fn aether_engine_get_battery_level(engine: *const FfiEngine) -> u32 {
     if engine.is_null() {
         return 0;
     }
@@ -402,7 +399,7 @@ pub extern "C" fn aether_engine_get_battery_level(engine: *const FfiEngine) -> u
 /// * `1` if on battery
 /// * `0` if plugged in or if pointer is null
 #[no_mangle]
-pub extern "C" fn aether_engine_is_on_battery(engine: *const FfiEngine) -> i32 {
+pub unsafe extern "C" fn aether_engine_is_on_battery(engine: *const FfiEngine) -> i32 {
     if engine.is_null() {
         return 0;
     }
@@ -426,7 +423,7 @@ pub extern "C" fn aether_engine_is_on_battery(engine: *const FfiEngine) -> i32 {
 /// * `0` on success
 /// * `-1` on failure or if inputs are null
 #[no_mangle]
-pub extern "C" fn aether_engine_set_mode(engine: *mut FfiEngine, mode: *const c_char) -> i32 {
+pub unsafe extern "C" fn aether_engine_set_mode(engine: *mut FfiEngine, mode: *const c_char) -> i32 {
     if engine.is_null() || mode.is_null() {
         return -1;
     }
@@ -445,7 +442,7 @@ pub extern "C" fn aether_engine_set_mode(engine: *mut FfiEngine, mode: *const c_
             _ => return -1,
         };
 
-        match (*engine).engine.set_mode(mode.into()) {
+        match (*engine).engine.set_mode(mode) {
             Ok(_) => 0,
             Err(_) => -1,
         }
@@ -462,29 +459,29 @@ mod tests {
         let ptr = aether_engine_new();
         assert!(!ptr.is_null());
 
-        let initialized = aether_engine_is_initialized(ptr);
+        let initialized = unsafe { aether_engine_is_initialized(ptr) };
         assert_eq!(initialized, 0);
 
         // Initialize fails because no model path is set (default config)
-        let result = aether_engine_initialize(ptr);
+        let result = unsafe { aether_engine_initialize(ptr) };
         assert_eq!(result, -1);
 
-        let initialized = aether_engine_is_initialized(ptr);
+        let initialized = unsafe { aether_engine_is_initialized(ptr) };
         assert_eq!(initialized, 0);
 
-        aether_engine_free(ptr);
+        unsafe { aether_engine_free(ptr) };
     }
 
     #[test]
     fn test_ffi_generate_null_engine() {
         let prompt = CString::new("Hello world").unwrap();
-        let result = aether_generate_sync(ptr::null_mut(), prompt.as_ptr(), 10);
+        let result = unsafe { aether_generate_sync(ptr::null_mut(), prompt.as_ptr(), 10) };
         assert!(result.is_null());
     }
 
     #[test]
     fn test_ffi_string_free_null() {
-        aether_string_free(ptr::null_mut());
+        unsafe { aether_string_free(ptr::null_mut()) };
     }
 
     #[test]
@@ -576,13 +573,14 @@ mod tests {
 
     #[test]
     fn test_ffi_status_null() {
-        let mode = aether_engine_get_mode(ptr::null());
+        // SAFETY: Calling with null pointers to verify graceful handling of invalid input
+        let mode = unsafe { aether_engine_get_mode(ptr::null()) };
         assert!(mode.is_null());
 
-        let tps = aether_engine_get_tokens_per_second(ptr::null());
+        let tps = unsafe { aether_engine_get_tokens_per_second(ptr::null()) };
         assert_eq!(tps, 0.0);
 
-        let thermal = aether_engine_get_hardware_thermal(ptr::null());
+        let thermal = unsafe { aether_engine_get_hardware_thermal(ptr::null()) };
         assert!(thermal.is_null());
     }
 

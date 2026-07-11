@@ -79,10 +79,9 @@ impl L1ActiveCache {
             Some(e) => e,
             None => return false,
         };
-        l2.kv_cache_mut().and_then(|l2_kv| {
+        if let Some(l2_kv) = l2.kv_cache_mut() {
             l2_kv.insert(layer, position, entry.token_id, entry.keys.clone(), entry.values.clone());
-            Some(())
-        });
+        }
         kv.remove_entry(layer, position);
         true
     }

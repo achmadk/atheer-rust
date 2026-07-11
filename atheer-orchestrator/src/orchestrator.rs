@@ -144,17 +144,15 @@ impl Orchestrator {
                 // Try to upgrade to the target the reactive logic would pick
                 let reactive_target =
                     self.calculate_target_mode(thermal_c, available_ram_mb, battery_level, on_battery);
-                if reactive_target != self.current_mode && !self.is_downgrade(&reactive_target) {
-                    if self.can_change_mode() {
-                        tracing::info!(
-                            target: "atheer::orchestrator::thermal",
-                            "Predictive thermal upgrade: {:?} -> {:?} (trend=Falling, safe)",
-                            self.current_mode,
-                            reactive_target,
-                        );
-                        self.set_mode(reactive_target);
-                        return self.current_mode;
-                    }
+                if reactive_target != self.current_mode && !self.is_downgrade(&reactive_target) && self.can_change_mode() {
+                    tracing::info!(
+                        target: "atheer::orchestrator::thermal",
+                        "Predictive thermal upgrade: {:?} -> {:?} (trend=Falling, safe)",
+                        self.current_mode,
+                        reactive_target,
+                    );
+                    self.set_mode(reactive_target);
+                    return self.current_mode;
                 }
             }
         }
@@ -174,10 +172,8 @@ impl Orchestrator {
         let target_mode =
             self.calculate_target_mode(thermal_c, available_ram_mb, battery_level, on_battery);
 
-        if target_mode != self.current_mode {
-            if self.can_change_mode() || self.is_downgrade(&target_mode) {
-                self.set_mode(target_mode);
-            }
+        if target_mode != self.current_mode && (self.can_change_mode() || self.is_downgrade(&target_mode)) {
+            self.set_mode(target_mode);
         }
 
         self.current_mode
