@@ -1033,6 +1033,7 @@ impl AccelBackend for VulkanBackend {
     }
 
     #[cfg(test)]
+    #[allow(unused_variables)]
     fn forward(&self, input_ids: &[u32], _positions: &[usize]) -> Result<AccelResult> {
         let start = std::time::Instant::now();
 

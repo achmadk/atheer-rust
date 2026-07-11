@@ -633,7 +633,7 @@ mod tests {
         config.checkpoint_dir = Some(dir.clone());
         config.model_id = Some(model_id.to_string());
         config.max_checkpoints = 2;
-        let engine = crate::AtheerEngine::new(config);
+        let _engine = crate::AtheerEngine::new(config);
 
         // Verify all files still exist
         let remaining: Vec<_> = std::fs::read_dir(&dir)

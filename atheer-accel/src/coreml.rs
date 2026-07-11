@@ -635,7 +635,12 @@ mod tests {
 
     #[test]
     fn test_metal_forward_probe() {
+        #[cfg(any(target_os = "ios", target_os = "macos"))]
         let result = metal_forward(&[0, 1, 2], Instant::now());
+        #[cfg(not(any(target_os = "ios", target_os = "macos")))]
+        let result = Err(crate::AccelError::BackendNotAvailable(
+            "Metal not available on this platform".to_string(),
+        ));
         #[cfg(any(target_os = "ios", target_os = "macos"))]
         {
             // May succeed (Metal available) or fail (Metal unavailable) — no panic

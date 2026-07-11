@@ -103,8 +103,6 @@ impl<G: GrammarConstraint + Clone> Sampler for GrammarSampler<G> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn test_grammar_sampler_construction() {
         assert!(true);
