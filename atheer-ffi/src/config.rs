@@ -35,6 +35,15 @@ pub struct AtheerConfig {
     pub clear_on_low_memory: bool,
     #[serde(skip)]
     pub model_credential: Option<ModelCredential>,
+    /// Raw Ed25519 public key bytes (32 bytes) for model signature verification.
+    /// When set, `SecurityAudit.enable_signature_verify` is enabled and the
+    /// engine verifies the model file against a `.gguf.sig` detached signature
+    /// before loading.
+    pub model_signature_public_key: Option<Vec<u8>>,
+    /// Expected SHA-256 hash of the model file, hex-encoded (64 hex chars).
+    /// When set, the engine verifies the model file hash before loading.
+    /// Computed via streaming SHA-256 at load time.
+    pub model_expected_sha256: Option<String>,
 }
 
 impl Default for AtheerConfig {
@@ -62,6 +71,8 @@ impl Default for AtheerConfig {
             checkpoint_on_terminate: true,
             clear_on_low_memory: true,
             model_credential: None,
+            model_signature_public_key: None,
+            model_expected_sha256: None,
         }
     }
 }

@@ -222,7 +222,7 @@ impl ModelRegistry {
         device: &candle_core::Device,
     ) -> Result<crate::Model> {
         let path = self.resolve(model_name, config)?;
-        crate::Model::from_gguf(&path, device)
+        crate::Model::from_gguf(&path, device, None)
     }
 
     fn enforce_cache_limit(&self) -> Result<()> {

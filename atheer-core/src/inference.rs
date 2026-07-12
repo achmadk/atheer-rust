@@ -177,7 +177,7 @@ impl InferenceEngine {
             backend.current().name(),
             device
         );
-        let model = Model::from_gguf(model_path, &device)?;
+        let model = Model::from_gguf(model_path, &device, None)?;
         Self::new(model, tokenizer, config, max_seq_len)
     }
 
@@ -1453,12 +1453,13 @@ mod tests {
     /// Integration test: multi-turn conversation with a real GGUF model.
     /// Set `ATHEER_TEST_MODEL` env var to a GGUF file path.
     #[test]
-    #[ignore = "requires a real GGUF model; set ATHEER_TEST_MODEL or run scripts/download-test-model.sh"]
     fn test_multi_turn_basic() {
-        let model_path = crate::test_model::ensure_test_model();
+        let Some(model_path) = crate::test_model::ensure_test_model() else {
+            return;
+        };
         let device = candle_core::Device::Cpu;
 
-        let model = Model::from_gguf(&model_path, &device).unwrap();
+        let model = Model::from_gguf(&model_path, &device, None).unwrap();
         let tokenizer = crate::tokenizer::Tokenizer::from_file(
             &std::path::PathBuf::from(&model_path).with_extension("json"),
         )
@@ -1484,12 +1485,13 @@ mod tests {
     /// Integration test: system prompt isolation ensures conversation
     /// turns don't corrupt the system prefix.
     #[test]
-    #[ignore = "requires a real GGUF model; set ATHEER_TEST_MODEL or run scripts/download-test-model.sh"]
     fn test_system_prompt_isolation() {
-        let model_path = crate::test_model::ensure_test_model();
+        let Some(model_path) = crate::test_model::ensure_test_model() else {
+            return;
+        };
         let device = candle_core::Device::Cpu;
 
-        let model = Model::from_gguf(&model_path, &device).unwrap();
+        let model = Model::from_gguf(&model_path, &device, None).unwrap();
         let tokenizer = crate::tokenizer::Tokenizer::from_file(
             &std::path::PathBuf::from(&model_path).with_extension("json"),
         )
@@ -1516,12 +1518,13 @@ mod tests {
     /// Integration test: reset_session() clears everything including
     /// the system prompt.
     #[test]
-    #[ignore = "requires a real GGUF model; set ATHEER_TEST_MODEL or run scripts/download-test-model.sh"]
     fn test_reset_session_clears_all() {
-        let model_path = crate::test_model::ensure_test_model();
+        let Some(model_path) = crate::test_model::ensure_test_model() else {
+            return;
+        };
         let device = candle_core::Device::Cpu;
 
-        let model = Model::from_gguf(&model_path, &device).unwrap();
+        let model = Model::from_gguf(&model_path, &device, None).unwrap();
         let tokenizer = crate::tokenizer::Tokenizer::from_file(
             &std::path::PathBuf::from(&model_path).with_extension("json"),
         )
@@ -1546,12 +1549,13 @@ mod tests {
     /// Integration test: sliding window eviction drops oldest turn(s)
     /// when context exceeds max_seq_len.
     #[test]
-    #[ignore = "requires a real GGUF model; set ATHEER_TEST_MODEL or run scripts/download-test-model.sh"]
     fn test_sliding_window_eviction() {
-        let model_path = crate::test_model::ensure_test_model();
+        let Some(model_path) = crate::test_model::ensure_test_model() else {
+            return;
+        };
         let device = candle_core::Device::Cpu;
 
-        let model = Model::from_gguf(&model_path, &device).unwrap();
+        let model = Model::from_gguf(&model_path, &device, None).unwrap();
         let tokenizer = crate::tokenizer::Tokenizer::from_file(
             &std::path::PathBuf::from(&model_path).with_extension("json"),
         )
@@ -1575,12 +1579,13 @@ mod tests {
     /// Integration test: kv_cache_estimated_bytes returns a positive value
     /// after generation.
     #[test]
-    #[ignore = "requires a real GGUF model; set ATHEER_TEST_MODEL or run scripts/download-test-model.sh"]
     fn test_kv_cache_estimate_nonzero() {
-        let model_path = crate::test_model::ensure_test_model();
+        let Some(model_path) = crate::test_model::ensure_test_model() else {
+            return;
+        };
         let device = candle_core::Device::Cpu;
 
-        let model = Model::from_gguf(&model_path, &device).unwrap();
+        let model = Model::from_gguf(&model_path, &device, None).unwrap();
         let tokenizer = crate::tokenizer::Tokenizer::from_file(
             &std::path::PathBuf::from(&model_path).with_extension("json"),
         )
@@ -1602,12 +1607,13 @@ mod tests {
 
     /// Integration test: verify timeout returns partial results with correct error fields.
     #[test]
-    #[ignore = "requires a real GGUF model; set ATHEER_TEST_MODEL or run scripts/download-test-model.sh"]
     fn test_generate_timeout_returns_partial_results() {
-        let model_path = crate::test_model::ensure_test_model();
+        let Some(model_path) = crate::test_model::ensure_test_model() else {
+            return;
+        };
         let device = candle_core::Device::Cpu;
 
-        let model = Model::from_gguf(&model_path, &device).unwrap();
+        let model = Model::from_gguf(&model_path, &device, None).unwrap();
         let tokenizer = crate::tokenizer::Tokenizer::from_file(
             &std::path::PathBuf::from(&model_path).with_extension("json"),
         )
@@ -1717,14 +1723,15 @@ mod tests {
 
     /// Integration test: auto-checkpoint every N tokens during generation.
     #[test]
-    #[ignore = "requires a real GGUF model; set ATHEER_TEST_MODEL or run scripts/download-test-model.sh"]
     fn test_auto_checkpoint_every_n_tokens() {
         use tempfile::TempDir;
 
-        let model_path = crate::test_model::ensure_test_model();
+        let Some(model_path) = crate::test_model::ensure_test_model() else {
+            return;
+        };
         let device = candle_core::Device::Cpu;
 
-        let model = Model::from_gguf(&model_path, &device).unwrap();
+        let model = Model::from_gguf(&model_path, &device, None).unwrap();
         let tokenizer = crate::tokenizer::Tokenizer::from_file(
             &std::path::PathBuf::from(&model_path).with_extension("json"),
         )

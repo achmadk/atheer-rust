@@ -134,10 +134,10 @@ jobs:
           retention-days: 7
 
   accuracy-tests:
-    name: Accuracy regression
+    name: Model tests (integration)
     runs-on: ubuntu-latest
     needs: [check, unit-tests]
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     steps:
       - uses: actions/checkout@v6
 
@@ -168,7 +168,7 @@ jobs:
           mkdir -p models
           ln -sf "$ATHEER_TEST_MODEL" models/LFM2-700M-Q4_0.gguf
 
-      - name: Run accuracy integration tests
-        run: cargo test -p atheer-core -- --ignored accuracy
+      - name: Run model-dependent integration tests
+        run: cargo test -p atheer-core
         env:
           ATHEER_TEST_MODEL: /tmp/models/LFM2-700M-Q4_0.gguf

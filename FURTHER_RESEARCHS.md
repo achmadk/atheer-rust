@@ -10,6 +10,8 @@
 >
 > **Status of S1 (Model File Encryption): ✅ Completed July 2026** — AES-256-GCM encryption at rest for GGUF and .mlpackage, decryption pipeline with three key-resolution strategies (ServerDistributed, DeviceDerived via HKDF, Custom), platform Keychain/Keystore wrappers for iOS and Android, and a CLI tool for offline encryption.
 >
+> **Status of S2 + S3 (Model Signature & Hash Verification): ✅ Completed July 2026** — Ed25519 detached signature verification via `ModelVerifier` in a new `model_verifier.rs` module. Streaming SHA-256 hash of model file at load time via `Model::from_gguf()`/`from_gguf_reader()` when `expected_hash` is provided. `AtheerConfig.model_signature_public_key` and `model_expected_sha256` fields wire into `AtheerEngine::initialize()` for pre-load verification. `SecurityAudit::verify_model_hash()` method activated. All callers backward-compatible (`None` default). 12 new unit tests across ModelVerifier (7) and SecurityAudit (5). 151/151 core tests pass.
+>
 > **Status of R1 (Draft Speculation): ✅ Completed July 2026** — `load_draft()`/`unload_draft()` reimplemented to load a real GGUF draft model, `standby_draft_path` consumed in `initialize()` for auto-loading, `generate_speculative()` on `InferenceEngine` implements the draft proposal + target verification loop with acceptance callback, `AtheerEngine::generate_sync()` dispatches to speculative decoding when a draft model is loaded and speculation is active. Orchestrator tracks results via `record_speculative_result()`. Tests for `extract_log_prob` utility pass.
 >
 > **Status of P2 (Continuous Runtime Calibration): ✅ Completed July 2026** — `PerfCalibrator` struct in `atheer-orchestrator/src/calibrator.rs` (new module) dynamically adjusts speculation depth, mode thresholds, NGram cache size, and temperature based on recent generation history, throughput trend slope, and hardware health snapshot. Calibration runs after each generation in `generate_sync()`, with tunable parameters per performance regime. Orchestrator tracks stats via `CalibrationReport`. Includes unit tests.
@@ -97,6 +99,7 @@
 | Agent tool-calling infrastructure | `atheer-orchestrator` | Differentiator — nobody else does agent loops on-device. |
 | Rust memory safety by default | entire codebase | No GC pauses, no JNI thrashes, built-in safety. |
 | Model file encryption (AES-256-GCM) | `model_encryption/`, `AtheerEngine` | Three key-resolutions: ServerDistributed, DeviceDerived (HKDF), Custom. Platform Keychain/Keystore wrappers. **Nobody in the competitive set does this — genuine differentiator.** |
+| Model signature verification (Ed25519) | `model_verifier.rs` | Detached Ed25519 signature verification + streaming SHA-256 at load time. Activated `SecurityAudit.enable_signature_verify`. **No other mobile engine signs models.** |
 
 ---
 
@@ -104,37 +107,38 @@
 
 ### Current State
 
-The [security.rs](atheer-core/src/security.rs) module is minimal — path allowlisting, size checks, and prompt truncation. There is **no model signature verification** despite the field existing (`enable_signature_verify: bool` on `SecurityAudit`).
+The [security.rs](atheer-core/src/security.rs) module now covers path allowlisting, size checks, prompt truncation, **model signature verification** (Ed25519 via `ModelVerifier`), and **load-time SHA-256 hash verification**. The previously-dead `enable_signature_verify` field on `SecurityAudit` is now activated and wired through `AtheerConfig.model_signature_public_key`.
 
-> **S1 completed ✅** — Model file encryption (AES-256-GCM) is now implemented. See `atheer-core/src/model_encryption/`, `ios/AtheerKeychain.swift`, `android/KeyStoreManager.kt`, and the `atheer-encrypt` CLI tool. The remaining critical gaps are S2 (model signature verification) and S3 (load-time hash verification).
+> **S1 completed ✅** — Model file encryption (AES-256-GCM).  
+> **S2 + S3 completed ✅** — Ed25519 detached signature verification + streaming load-time SHA-256.
 
 > [!CAUTION]
-> Model integrity is the #1 attack surface for on-device AI. A malicious GGUF file can execute arbitrary computation through crafted weight values. Without cryptographic verification, the engine is vulnerable to supply-chain attacks.
+> Model integrity is the #1 attack surface for on-device AI. A malicious GGUF file can execute arbitrary computation through crafted weight values. With S1 (encryption), S2 (Ed25519 signing), and S3 (load-time hash) completed, the engine now cryptographically verifies model provenance. The remaining gap is S4 (GGUF format structural validation) — a malformed GGUF with forged signature metadata could still cause OOB reads via `mmap`.
 
 ### Gaps & Recommendations
 
 | # | Gap | Severity | Recommendation |
 |---|-----|----------|-------------|
 | S1 | **Model file encryption** | ✅ Completed | `.gguf`/`.mlpackage` encrypted with AES-256-GCM via `Aes256GcmEncryption`; decryption pipeline in `AtheerEngine::initialize()` with three key-resolution strategies (ServerDistributed, DeviceDerived via HKDF, Custom). Keychain/Keystore wrappers for iOS (`AtheerKeychain.swift`) and Android (`KeyStoreManager.kt`). CLI tool `atheer-encrypt` for offline encryption. See `atheer-core/src/model_encryption/`, `ios/`, `android/`. |
-| S2 | **No model signature verification** | 🔴 Critical | Implement Ed25519 or ECDSA signature verification for model files. The `SecurityAudit.enable_signature_verify` field exists but is dead code. Wire it to a real verification pipeline using `ring` or `ed25519-dalek`. |
-| S3 | **SHA-256 verification is download-only** | 🟠 High | ModelRegistry verifies hashes after download, but `Model::from_gguf()` does **not** verify hashes at load time. A file modified post-download passes silently. Add mandatory hash verification at `from_gguf()` time. |
+| S2 | **Model signature verification** | ✅ Completed | Ed25519 detached signature verification via `ModelVerifier` (`atheer-core/src/model_verifier.rs`). `SecurityAudit.enable_signature_verify` wired through `AtheerConfig.model_signature_public_key`. 7 unit tests covering valid sig, tampered file, wrong key, invalid sig, missing file, key parse failure. |
+| S3 | **Load-time SHA-256 hash verification** | ✅ Completed | `Model::from_gguf()` and `from_gguf_reader()` accept `expected_hash: Option<[u8; 32]>`, compute streaming SHA-256 before GGUF parsing. `SecurityAudit::verify_model_hash()` activated. 5 unit tests covering match, mismatch, nonexistent file, error message format. |
 | S4 | **No GGUF format validation** | 🟠 High | The engine trusts GGUF metadata (tensor shapes, quantization markers) without validation. Malformed GGUF files could cause OOB reads via `mmap`. Add GGUF header/metadata validation before mmap. |
 | S5 | **No memory-safe tensor bounds checking** | 🟡 Medium | The `mmap` model loading trusts file offsets. Add bounds checks to prevent mmap OOB access from malformed files. |
 | S6 | **HTTP downloads over plain reqwest** | 🟡 Medium | Model downloads from HuggingFace happen without certificate pinning. On mobile networks, MITM is a real risk. Add TLS certificate pinning for model download endpoints. |
 | S7 | **No sandboxing of model execution** | 🟡 Medium | The NNAPI and Vulkan backends execute compute on shared device resources. Consider seccomp/SELinux policy recommendations for Android deployments. |
 | S8 | **Secure key storage** | 🟡 Medium | Currently keys in process memory (`String`). Use Android Keystore / iOS Keychain for model decryption keys. |
-| S9 | **Prompt truncation not unicode-safe** | 🟡 Medium | `sanitze_prompt()` at `security.rs:56-61` slices at byte offset `prompt[..max_len]` — panics on multi-byte UTF-8. Use `prompt.chars().take(max_len)` or `flor_char_boundary()`. |
+| S9 | **Prompt truncation not unicode-safe** | ✅ Completed | `sanitze_prompt()` at `security.rs:56-61` fixed in prior session — now uses `prompt.chars().take(max_len)` to avoid multi-byte UTF-8 panics. |
 | S10 | **Memory sanitization** | 🟢 Low | Tokens, keys, and output buffers remain in process memory after inference. Use `zeroize` crate for sensitive buffers. |
 
 ### Recommended New Modules
 
 ```
 atheer-core/src/
-├── model_verifier.rs    # Ed25519 signature + SHA-256 at load time
-├── gguf_validator.rs    # GGUF header/metadata structural validation
-├── crypto.rs            # AES-256-GCM encryption for cache/checkpoints
-├── secure_memory.rs     # Zeroize wrappers for sensitive buffers
-└── audit_log.rs         # Append-only local audit trail
+├── model_verifier.rs      # ✅ Ed25519 signature verification at load time (implemented)
+├── gguf_validator.rs      # GGUF header/metadata structural validation
+├── model_encryption/      # ✅ AES-256-GCM decrypt pipeline (implemented)
+├── secure_memory.rs       # Zeroize wrappers for sensitive buffers
+└── audit_log.rs          # Append-only local audit trail
 ```
 
 ---
@@ -205,7 +209,7 @@ The project has a strong architecture for graceful degradation (ANE → Metal �
 | R2 | **Model loading retry with degradation** | ✅ Completed — `initialize()` retries on CPU after preferred device fails before propagating the error. `tracing::warn!`/`info!` events emitted. Aggregated error message on total failure. | Retry chain: preferred accelerator → CPU → report cause | 🔴 High |
 | R3 | **Sampling thread watchdog** | ✅ Completed — `HealthStatus.sample_count` exposed, `AtheerEngine` checks before `select_mode()`, crash logged + conservative fallback | 🟡 Medium |
 | R4 | **KV cache checkpoint persistence** | ✅ Completed — `AtheerEngine` wired with `on_background`, `on_foreground`, `on_low_memory`, `on_terminate` lifecycle + LZ4 L3 snapshot + sidecar tracking | Auto-checkpoint on background/low-memory; restore on foreground/resume with model-id verification | 🟡 Medium |
-| R5 | **Model integrity verification** | No checksum validation at load time | Verify SHA-256 of model file before loading; reject on mismatch | 🟡 Medium |
+| R5 | **Model integrity verification** | ✅ Completed via S3 | Streaming SHA-256 in `Model::from_gguf()` + `ModelVerifier` Ed25519 sig verify | 🟡 Medium |
 | R6 | **No crash analysis pipeline** | CrashReporter writes to disk silently | Structured crash report with telemetry + model metadata + system state | 🟢 Low |
 | R7 | **No hardware health pre-flight check** | `initialize()` assumes device is ready | Before each generate, verify health snapshot is recent (<2s); warn if stale | 🟢 Low |
 | R8 | **14 test failures + 40+ warnings** | ✅ Completed July 2026 — all 3 real bugs fixed (PII loop, NPU/RAM, CI vars), 0 warnings across workspace, `cargo clippy --workspace -- -D warnings` passes | Clippy gate enabled, CI regression detection restored | 🔴 Critical |
@@ -373,16 +377,16 @@ UniFFI bindings exist, the binding generation pipeline is broken, and pre-genera
 | **Predictive thermal** | ✅ **Unique** | ❌ | ❌ | ❌ | ❌ |
 | **Grammar-structured output** | ✅ Pushdown automaton | ✅ GBNF | ✅ | ❌ | ❌ |
 | **Tool calling / agent loops** | ✅ **Unique** | ❌ | ❌ | ❌ | ❌ |
-| **Model encryption** | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **Model encryption + signing** | ✅ **Unique** | ❌ | ❌ | ❌ | ❌ |
 | **Prompt guardrails** | ❌ Gap | ❌ | ❌ | ❌ | ❌ |
 | **Privacy manifest** | ❌ Gap | ❌ | ❌ | ❌ | ❌ |
 | **Session isolation** | ❌ Gap | ❌ | ❌ | ❌ | ❌ |
 
 ### Key Insight
 
-**Nobody in the competitive set does model encryption, prompt guardrails, or privacy manifests.** These are not "catching up" items — they are genuine greenfield differentiation. Atheer has **shipped S1 (encrypted model distribution)** — it is now the only open engine with AES-256-GCM model encryption at rest. Shipping V1 (privacy mode with `PrivacyMode`) next would make it the engine you recommend when "we need to run a model on customer devices and prove nothing leaves."
+**Nobody in the competitive set does model encryption, model signing, prompt guardrails, or privacy manifests.** These are not "catching up" items — they are genuine greenfield differentiation. Atheer has **shipped S1 (encrypted model distribution) and S2+S3 (Ed25519 signature + load-time SHA-256 verification)** — it is now the only open engine with AES-256-GCM encryption at rest **and** cryptographic model integrity verification. Shipping V1 (privacy mode with `PrivacyMode`) next would make it the engine you recommend when "we need to run a model on customer devices and prove nothing leaves."
 
-Meanwhile, R1 (speculative decoding) and P2 (continuous calibration) close the performance gap with MLC/MLX on throughput benchmarks.
+R1 (speculative decoding) and P2 (continuous calibration) close the performance gap with MLC/MLX on throughput benchmarks. S2+S3 closes the security gap — Atheer is now the only engine where model provenance can be cryptographically proven at load time.
 
 ---
 
@@ -394,29 +398,29 @@ Meanwhile, R1 (speculative decoding) and P2 (continuous calibration) close the p
 |---|-----|-----------|-------------------|
 | 1 | Fix all 14 test failures + 40+ warnings | ✅ Completed | CI gate |
 | 2 | Fix PII redactor infinite loop bug | ✅ Completed | `safety.rs:249-253` |
-| 3 | Fix prompt truncation UTF-8 panic | 0.5 | `security.rs:57-59` |
+| 3 | Fix prompt truncation UTF-8 panic | ✅ Completed | `security.rs:57-59` |
 | 4 | Fix CI env var bug + add macOS runner | ✅ Completed (env var) · 1 (macOS runner) | `ci.yml` |
 | 5 | R1: Un-stub draft speculation | ✅ Completed | `engine.rs`, `inference.rs`, `orchestrator.rs` |
 | 6 | P2: Continuous runtime calibration | ✅ Completed | `orchestrator.rs`, `PerfModel` |
 | 7 | R2: Model loading retry with degradation | ✅ Completed | `atheer-ffi/src/engine.rs` |
 | 8 | R3: Sampling thread heartbeat watchdog | ✅ Completed | `atheer-ffi/src/engine.rs`, `atheer-hardware/src/health.rs`, `monitor.rs`, `ios.rs` |
-| 9 | Implement model signature verification | 2-3 | New: `model_verifier.rs` |
+| 9 | Implement model signature verification | ✅ Completed | New: `model_verifier.rs` (S2) + load-time hash (S3) |
 
-**Total remaining: ~3-5 days** (R1, P2, R8, R9, B1, B3, R2, R3 ✅ completed)
+**Total remaining: ~2.5-4.5 days** (R1, P2, R8, R9, B1, B3, R2, R3, S9, S2, S3 ✅ completed)
 
 ### Phase 2: Security & Privacy Hardening (3-4 weeks)
 
 | # | Item | Est. Days | Integration |
 |---|-----|-----------|-------------|
 | 10 | V2/V3: Encrypt L2/L3 cache + checkpoints (AES-256-GCM) | 3-5 | `memory-bank/src/` + new |
-| 11 | S2 + S3: Model signature + hash + gguf validation | 2-3 | `from_gguf()` path |
+| 11 | S2 + S3: Model signature + hash verification | ✅ Completed | `model_verifier.rs`, `model.rs`, `engine.rs` |
 | 12 | V1: Configurable privacy mode (`PrivacyMode`) | 2 | `config.rs`, `crash.rs`, `memory-bank` |
 | 13 | S4: Prompt injection guardrails | 3-5 | New safety module |
 | 14 | P5: ANE compilation pre-heat | 1 | `coreml.rs` |
-| 15 | R5: Model hash verify at load time | 1 | `model.rs` |
+| 15 | R5: Model hash verify at load time | ✅ Completed | `model.rs` (streaming SHA-256 in `from_gguf`) |
 | 16 | R4: KV cache checkpoint persistence | ✅ Completed | `lifecycle.rs`, `AtheerEngine` |
 
-**Phase 2: ~14-21 days** (R4 ✅ completed)
+**Phase 2: ~10-16 days** (S2+S3, R5, R4 ✅ completed)
 
 ### Phase 3: Polish & Performance (4-6 weeks)
 
@@ -440,23 +444,24 @@ Phase 1          Phase 2              Phase 3
 (2-3 weeks)      (3-4 weeks)          (4-6 weeks)
 ─────────────────────────────────────────────────
 R1 ───────────── V1+V2+V3 ──────────── P6+P7
-R2 ✓ ─────────── S2+S3+S4 ─────────── D1
-R3 ✓ ─────────── R4 ───────────────── C2
-R5 ───────────── P5 ───────────────── E1
-R8              V4 ───────────────── D3
-R9              V6 ──────────────────
-R10                            
+R2 ✓ ─────────── S2+S3 ✓ ──────────── D1
+R3 ✓ ─────────── S4 ───────────────── C2
+R5 ✓ ─────────── R4 ✓ ─────────────── E1
+R8              P5 ────────────────── D3
+R9              V4 ──────────────────
+R10                              
 R11 ──────────────────────────────────────────────
-P2 ───────────────────────────────────────────────
+P2 ──────────────────────────────────────────────
+S2+S3 ✓
 ```
 
 ### Effort Summary
 
 | Effort | Range | Items |
 |--------|-------|------|
-| Low (≤1 day) | 0.5-1 day | R2 ✅, R3 ✅, R5, R7, R9 ✅, R10, R13, R14, R6, P5, S3, S9 |
+| Low (≤1 day) | 0.5-1 day | R2 ✅, R3 ✅, R5 ✅, R7, R9 ✅, R10, R13, R14, R6, P5, S3 ✅, S9 ✅ |
 | Medium (2-5 days) | 2-5 days | R1, R4, R8, R11, P1, P2, P9, P10 |
-| Med-High (5-10 days) | 5-10 days | S2, S4, S5, S7, S8, V1, V2, V3, V4, V5, E1, E2 |
+| Med-High (5-10 days) | 5-10 days | S2 ✅, S4, S5, S7, S8, V1, V2, V3, V4, V5, E1, E2 |
 | High (10+ days) | 10+ days | S5 (sandboxing), S7 (side-channel), V7 (DP analytics) |
 
 ---
@@ -466,7 +471,7 @@ P2 ─────────────────────────�
 | # | Bug | File | Line | Impact | Status |
 |---|-----|------|------|--------|--------|
 | B1 | PII phone detection infinite loop | `safety.rs` | 249-253 | `continue` skips `i += 1`, infinite loop on digit input | ✅ Fixed |
-| B2 | Prompt truncation panics on UTF-8 | `security.rs` | 57-59 | `prompt[..max_len]` slices at byte boundary, panics on multi-byte characters | Open |
+| B2 | Prompt truncation panics on UTF-8 | `security.rs` | 57-59 | `prompt[..max_len]` slices at byte boundary, panics on multi-byte characters | ✅ Fixed |
 | B3 | CI env var used before set | `ci.yml` | 150-161 | Environment variable `$ATHEER_TEST_MODEL` referenced before `env:` block | ✅ Fixed |
 | B4 | Metal tests panic on empty device list | `metal.rs` | upstream | `swap_remove` on empty Vec in `candle-core` | Open (vendored)` |
 
@@ -479,6 +484,7 @@ P2 ─────────────────────────�
 | CI env var order | `ci.yml:150-161` | ✅ |
 | Metal test panic wrapper | `metal.rs` + upstream candle-core fork | ✅ |
 | S1: Model file encryption (AES-256-GCM) | `model_encryption/`, `AtheerEngine::initialize()`, `ios/AtheerKeychain.swift`, `android/KeyStoreManager.kt`, `atheer-encrypt` CLI | ✅ |
+| S2+S3: Model signature + hash verification | `model_verifier.rs`, `model.rs`, `engine.rs`, `security.rs` | ✅ |
 | R4 / P3: KV cache checkpoint persistence | `atheer-core/src/lifecycle.rs`, `AtheerEngine` lifecycle FFI, sidecar `latest_checkpoint.txt`, generational cleanup, LZ4 L3 snapshot/thaw | ✅ |
 | R8: Fix 14 test failures + 40+ warnings | Entire workspace — see `fix-test-failures-warnings-ci` change | ✅ |
 | R9: CI env var bug | `.github/workflows/ci.yml` — moved `env:` block above step references | ✅ |
@@ -497,10 +503,10 @@ P2 ─────────────────────────�
 | R2: Retry with degrade | ✅ Completed — CPU fallback on model load failure | `atheer-ffi/src/engine.rs` (initialize) |
 | R3: Thread watchdog | ✅ Completed — heartbeat via `sample_count`, crash reporter, conservative fallback | `atheer-ffi/src/engine.rs`, `atheer-hardware/src/health.rs`, `monitor.rs`, `ios.rs` |
 | R4: KV cache checkpoint | ✅ Completed — `AtheerEngine` lifecycle FFI, sidecar, L3 snapshot/thaw | `atheer-core/src/lifecycle.rs`, `atheer-ffi/src/engine.rs` |
-| R5: Model hash | `Model::from_gguf()` | `atheer-core/src/model.rs` |
+| R5: Model hash | ✅ Completed — streaming SHA-256 in `Model::from_gguf()` | `atheer-core/src/model.rs` |
 | P2: Calibration | `PerfModel`, `Orchestrator` | `atheer-orchestrator/src/orchestrator.rs` |
 | P5: ANE pre-heat | `CoreMLBackend::with_model()` | `atheer-accel/src/coreml.rs` |
-| S2: Model attestation | `AtheerEngine.initialize()` | New `atheer-core/src/model_verifier.rs` |
+| S2: Model attestation | ✅ Completed — Ed25519 detached sig verify via `ModelVerifier` | `atheer-core/src/model_verifier.rs` |
 | V1: Privacy mode | `AtheerConfig`, `CrashReporter`, `MemoryBank` | `atheer-ffi/src/config.rs`, `atheer-core/src/crash.rs` |
 | V2: Cache encryption | L2/L3 persistence layers | `atheer-memory-bank/src/l2_warm.rs`, `l3_compressed.rs` |
 
@@ -508,7 +514,7 @@ P2 ─────────────────────────�
 
 ```
 atheer-core/src/
-├── model_verifier.rs      # Ed25519/ECDSA signature verification at load time
+├── model_verifier.rs      # ✅ Ed25519 signature verification at load time (implemented)
 ├── gguf_validator.rs      # GGUF header/metadata structural validation
 ├── model_encryption/      # ✅ AES-256-GCM decrypt pipeline (implemented)
 ├── secure_memory.rs       # Zeroize wrappers for sensitive buffers

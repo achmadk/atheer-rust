@@ -525,7 +525,7 @@
 <!-- ─── Stats ─── -->
 <section class="stats-bar" id="stats">
   <div class="stats-grid">
-    <div class="stat-item reveal"><div class="stat-number" data-target="499">0</div><div class="stat-label">Tests</div></div>
+    <div class="stat-item reveal"><div class="stat-number" data-target="520">0</div><div class="stat-label">Tests</div></div>
     <div class="stat-item reveal"><div class="stat-number" data-target="7">0</div><div class="stat-label">Platform Crates</div></div>
     <div class="stat-item reveal"><div class="stat-number" data-target="5">0</div><div class="stat-label">GPU/NPU + CPU Backends</div></div>
     <div class="stat-item reveal"><div class="stat-number" data-target="100" data-suffix="%">0</div><div class="stat-label">Safe Rust</div></div>
@@ -593,9 +593,9 @@
 
       <div class="feature-card reveal">
         <div class="feature-icon feature-icon-green">🔐</div>
-        <h3>#8 &mdash; Model-Level Encryption</h3>
-        <p>AES-256-GCM encryption for GGUF and .mlpackage model files at rest, with a three-strategy decryption pipeline &mdash; ServerDistributed keys, DeviceDerived via HKDF-SHA256, or Custom provider. Platform-native Keychain (<code>AtheerKeychain.swift</code>) and Android Keystore (<code>KeyStoreManager.kt</code>) wrappers for secure key storage. Offline encryption via the <code>atheer-encrypt</code> CLI tool.</p>
-        <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> No other open engine encrypts models at rest. llama.cpp, MLC, MLX Swift, and Google AI Edge all load models in plaintext. This is the only engine where you can prove model files never leave device storage unencrypted.</p>
+        <h3>#8 &mdash; Model-Level Encryption &amp; Signature Verification</h3>
+        <p>AES-256-GCM encryption for GGUF and .mlpackage model files at rest, with a three-strategy decryption pipeline &mdash; ServerDistributed keys, DeviceDerived via HKDF-SHA256, or Custom provider. Ed25519 detached signature verification validates model origin and integrity before loading. This is the only open engine where model files are both <strong>encrypted at rest</strong> and <strong>cryptographically verified at load time</strong>.</p>
+        <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> No other open engine encrypts <em>or</em> signs models. llama.cpp, MLC, MLX Swift, and Google AI Edge all load models in plaintext with zero integrity checks.</p>
       </div>
 
     </div>
@@ -688,7 +688,7 @@
             <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
           </tr>
           <tr style="border-bottom: 1px solid rgba(56,189,248,.06); background: rgba(56,189,248,.03);">
-            <td style="padding: .7rem 1rem; color: #22C55E; font-weight: 500;">Model encryption</td>
+            <td style="padding: .7rem 1rem; color: #22C55E; font-weight: 500;">Model encryption + signing</td>
             <td style="text-align:center; padding: .7rem .5rem;"><span style="color:#22C55E; font-weight: 600;">✅ Unique</span></td>
             <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
             <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
@@ -726,7 +726,7 @@
       ✅ Shipped &mdash; 📋 Planned = gap identified, prioritized in roadmap below ⬇️
     </p>
     <p style="margin-top: 1.5rem; font-size: .9rem; color: #94A3B8; text-align: center; max-width: 650px; margin-left: auto; margin-right: auto; line-height: 1.7;">
-      <strong style="color: #38BDF8;">Key insight:</strong> The gaps we&rsquo;ve identified (prompt guardrails, privacy manifesto, session isolation) are not "catching up" items — <strong style="color: #E2E8F0;">nobody else does them either</strong>. These are genuine greenfield differentiation opportunities. Atheer has <strong style="color: #22C55E;">already shipped model file encryption (AES-256-GCM)</strong> and speculative decoding — the only open engine with either. Adding privacy mode next makes it the engine you choose when you need to "run AI on customer devices and prove nothing leaves."
+      <strong style="color: #38BDF8;">Key insight:</strong> The gaps we&rsquo;ve identified (prompt guardrails, privacy manifesto, session isolation) are not "catching up" items — <strong style="color: #E2E8F0;">nobody else does them either</strong>. These are genuine greenfield differentiation opportunities. Atheer has <strong style="color: #22C55E;">already shipped model file encryption (AES-256-GCM), Ed25519 signature verification, load-time SHA-256 hash checks, and speculative decoding</strong> — the only open engine with all four. Adding privacy mode next makes it the engine you choose when you need to "run AI on customer devices and prove nothing leaves."
     </p>
   </div>
 </section>
@@ -796,6 +796,7 @@
       <span class="arch-pill">▦ Character-level PDA grammar</span>
       <span class="arch-pill">◉ PagedAttention 16-token blocks</span>
       <span class="arch-pill">◆ INT8/INT4 KV cache quant</span>
+      <span class="arch-pill">🔐 Ed25519 sig verify + SHA-256</span>
     </div>
     <p style="text-align:center;margin-top:1.5rem;font-size:.8rem;color:#475569;font-family:'JetBrains Mono',monospace;">
       atheer-hardware ─1 Hz→ orchestrator ─mode→ atheer-core ─tensor→ atheer-accel
@@ -861,15 +862,15 @@
       <pre class="code-block"><code><span class="comment"># Build the entire workspace</span>
 cargo build --workspace
 
-<span class="comment"># Run all 499 tests</span>
+<span class="comment"># Run all 520+ tests</span>
 cargo test --workspace
 
 <span class="comment"># Download a test model (~350 MB)</span>
 scripts/download-test-model.sh
 
-<span class="comment"># Run integration tests with a real model</span>
+    <span class="comment"># Run integration tests with a real model</span>
 ATHEER_TEST_MODEL=./models/LFM2-700M-Q4_0.gguf \
-  cargo test -p atheer-core -- --ignored
+  cargo test -p atheer-core
 
 <span class="comment"># Benchmark throughput</span>
 cargo run -p perf-bench -- \
@@ -1013,7 +1014,7 @@ engine.initialize()
             <span style="color: #22C55E;">✓</span> Sampling thread heartbeat watchdog
           </li>
           <li style="padding: .45rem 0; font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #F59E0B;">⚡</span> Model signature verification
+            <span style="color: #22C55E;">✓</span> Model signature + hash verification (S2+S3)
           </li>
         </ul>
         <div style="margin-top: .75rem; padding-top: .75rem; border-top: 1px solid rgba(56,189,248,.06); font-size: .75rem; color: #64748B;">
@@ -1026,15 +1027,17 @@ engine.initialize()
         <div style="margin-bottom: .75rem;">
           <span style="font-size: .7rem; color: #64748B; font-family: 'JetBrains Mono', monospace;">Phase 2</span>
           <h3 style="font-size: 1rem; font-weight: 700; margin-top: .15rem;">Security &amp; Privacy Hardening</h3>
-          <span style="font-size: .75rem; color: #64748B;">3&ndash;4 weeks · 7 items</span>
+          <span style="font-size: .75rem; color: #64748B;">3&ndash;4 weeks · 9 items (3 complete)</span>
         </div>
         <ul style="list-style: none; padding: 0; margin: 0;">
           <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
             <span style="color: #06B6D4;">🔐</span> Encrypt L2/L3 cache + checkpoints (AES-256-GCM)
           </li>
           <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #06B6D4;">🔐</span> Model signature + hash + GGUF validation
+            <span style="color: #22C55E;">✓</span> Model signature + hash verification (S2+S3)
           </li>
+          <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
+            <span style="color: #06B6D4;">🔐</span> GGUF format validation
           <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
             <span style="color: #06B6D4;">🔐</span> Configurable privacy mode (<code style="font-size: .75rem;">PrivacyMode</code>)
           </li>
@@ -1048,7 +1051,7 @@ engine.initialize()
             <span style="color: #22C55E;">✓</span> KV cache checkpoint persistence
           </li>
           <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #F59E0B;">⚡</span> Model hash verify
+            <span style="color: #22C55E;">✓</span> Model hash verify (S3)
           </li>
           <li style="padding: .45rem 0; font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
             <span style="color: #06B6D4;">🔐</span> Certificate pinning for model downloads

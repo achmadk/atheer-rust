@@ -5,7 +5,8 @@ use crate::{
 use atheer_accel::BackendManager;
 use atheer_core::model_credential::ModelCredential;
 use atheer_core::model_encryption::{aes256_gcm::Aes256GcmEncryption, ModelEncryption};
-use atheer_core::{CrashReporter, InferenceEngine, SamplingConfig};
+use atheer_core::model_verifier::ModelVerifier;
+use atheer_core::{CrashReporter, InferenceEngine, SamplingConfig, SecurityAudit};
 use atheer_hardware::{monitor::GenericMonitor, HardwareMonitor};
 use atheer_memory_bank::{l3_compressed::L3CompressedStorage, MemoryBank};
 use atheer_orchestrator::calibrator::CalibrationSample;
@@ -150,11 +151,12 @@ fn parse_param_count(model_id: &str) -> f32 {
 #[uniffi::export]
 impl AtheerEngine {
     pub fn initialize(&self) -> std::result::Result<(), AtheerError> {
-        let model_path = self
+        let model_path_str = self
             .config
             .model_path
             .as_ref()
             .ok_or(AtheerError::NotInitialized)?;
+        let model_path = std::path::Path::new(model_path_str);
         let tokenizer_path = self
             .config
             .tokenizer_path
@@ -164,18 +166,73 @@ impl AtheerEngine {
         let device = self.backend_manager.device();
         let cpu_device = candle_core::Device::Cpu;
 
+        // ── Parse verification configuration ────────────────────────
+
+        let expected_hash: Option<[u8; 32]> = self
+            .config
+            .model_expected_sha256
+            .as_ref()
+            .map(|hex_str| -> std::result::Result<[u8; 32], AtheerError> {
+                let bytes = hex::decode(hex_str).map_err(|e| AtheerError::ModelLoadFailed {
+                    message: format!("Invalid model_expected_sha256 hex: {e}"),
+                })?;
+                bytes.try_into().map_err(|_| AtheerError::ModelLoadFailed {
+                    message: "model_expected_sha256 must be 32 bytes (64 hex chars)".into(),
+                })
+            })
+            .transpose()?;
+
+        let audit = if self.config.model_signature_public_key.is_some() {
+            SecurityAudit::new().with_signature_verification(true)
+        } else {
+            SecurityAudit::new()
+        };
+
+        if let Some(hash) = expected_hash {
+            tracing::info!(
+                target: "atheer::engine",
+                "Verifying model SHA-256 hash at load time"
+            );
+            audit.verify_model_hash(model_path, &hash).map_err(|e| {
+                AtheerError::ModelLoadFailed {
+                    message: format!("{e}"),
+                }
+            })?;
+        }
+
+        if let Some(ref key_bytes) = self.config.model_signature_public_key {
+            tracing::info!(
+                target: "atheer::engine",
+                "Verifying model Ed25519 signature"
+            );
+            let verifier =
+                ModelVerifier::new(key_bytes).map_err(|e| AtheerError::ModelLoadFailed {
+                    message: format!("{e}"),
+                })?;
+            let sig_path = {
+                let mut s = model_path_str.clone();
+                s.push_str(".sig");
+                std::path::PathBuf::from(s)
+            };
+            verifier
+                .verify_detached(model_path, &sig_path)
+                .map_err(|e| AtheerError::ModelLoadFailed {
+                    message: format!("Signature verification failed: {e}"),
+                })?;
+        }
+
         let model = {
             let try_load = |dev: &candle_core::Device| -> std::result::Result<atheer_core::Model, AtheerError> {
                 if let Some(ref credential) = self.config.model_credential {
-                    let bytes = self.decrypt_with_credential(credential, model_path)?;
+                    let bytes = self.decrypt_with_credential(credential, model_path_str)?;
                     let mut cursor = std::io::Cursor::new(bytes);
-                    atheer_core::Model::from_gguf_reader(&mut cursor, dev).map_err(|e| {
+                    atheer_core::Model::from_gguf_reader(&mut cursor, dev, expected_hash).map_err(|e| {
                         AtheerError::ModelLoadFailed {
                             message: format!("{e}"),
                         }
                     })
                 } else {
-                    atheer_core::Model::from_gguf(model_path, dev).map_err(|e| {
+                    atheer_core::Model::from_gguf(model_path, dev, expected_hash).map_err(|e| {
                         AtheerError::ModelLoadFailed {
                             message: format!("{e}"),
                         }
@@ -392,6 +449,10 @@ impl AtheerEngine {
             }
         }
 
+        // Sanitize prompt — truncate at character boundary and log if truncated
+        let security = SecurityAudit::new();
+        let prompt = security.sanitize_prompt(&request.prompt);
+
         let use_speculation =
             orch.is_draft_loaded() && orch.speculation_depth() > 0 && request.json_schema.is_none();
         // JSON-schema-constrained output currently uses grammar sampling which
@@ -410,7 +471,7 @@ impl AtheerEngine {
 
             let (text, tokens_gen, time_ms) = engine
                 .generate_speculative(
-                    &request.prompt,
+                    &prompt,
                     request.max_tokens,
                     draft_engine,
                     spec_depth,
@@ -452,7 +513,7 @@ impl AtheerEngine {
         }
 
         let (text, tokens_gen, time_ms) = engine
-            .generate(&request.prompt, request.max_tokens, None)
+            .generate(&prompt, request.max_tokens, None)
             .map_err(|e| AtheerError::GenerationFailed {
                 message: format!("{e}"),
             })?;
@@ -521,7 +582,7 @@ impl AtheerEngine {
             .as_deref()
             .unwrap_or("tokenizer.json");
 
-        let model = atheer_core::Model::from_gguf(path, &device).map_err(|e| {
+        let model = atheer_core::Model::from_gguf(path, &device, None).map_err(|e| {
             AtheerError::ModelLoadFailed {
                 message: format!("Failed to load draft model: {e}"),
             }
@@ -609,7 +670,8 @@ impl AtheerEngine {
 
         let tokens_clone = self.stream_tokens.clone();
         let done_clone = self.stream_done.clone();
-        let prompt = request.prompt.clone();
+        let security = SecurityAudit::new();
+        let prompt = security.sanitize_prompt(&request.prompt);
         let max_tokens = request.max_tokens;
 
         thread::spawn(move || {

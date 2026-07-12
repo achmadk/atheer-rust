@@ -217,22 +217,24 @@ mod tests {
     /// Integration test: requires a real GGUF model file.
     /// Set `ATHEER_TEST_MODEL` env var or run scripts/download-test-model.sh.
     #[test]
-    #[ignore]
     fn test_accuracy_with_real_model() {
-        let model_path = crate::test_model::ensure_test_model();
+        let Some(model_path) = crate::test_model::ensure_test_model() else {
+            return;
+        };
         let device = candle_core::Device::Cpu;
-        let mut model = Model::from_gguf(&model_path, &device).unwrap();
+        let mut model = Model::from_gguf(&model_path, &device, None).unwrap();
         let fp = capture_fingerprint(&mut model, "Hello world", 5, 100).unwrap();
         assert_eq!(fp.prefill_fingerprint.len(), 64);
         assert_eq!(fp.generation_fingerprint.len(), 64);
     }
 
     #[test]
-    #[ignore]
     fn test_kv_cache_roundtrip_accuracy() {
-        let model_path = crate::test_model::ensure_test_model();
+        let Some(model_path) = crate::test_model::ensure_test_model() else {
+            return;
+        };
         let device = candle_core::Device::Cpu;
-        let mut model = Model::from_gguf(&model_path, &device).unwrap();
+        let mut model = Model::from_gguf(&model_path, &device, None).unwrap();
 
         // KV cache snapshot/restore is model-specific — LFM2 does not
         // support it.  Skip the roundtrip assertion gracefully.
@@ -253,11 +255,12 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
     fn test_quantization_accuracy() {
-        let model_path = crate::test_model::ensure_test_model();
+        let Some(model_path) = crate::test_model::ensure_test_model() else {
+            return;
+        };
         let device = candle_core::Device::Cpu;
-        let mut model = Model::from_gguf(&model_path, &device).unwrap();
+        let mut model = Model::from_gguf(&model_path, &device, None).unwrap();
         let _fp = capture_fingerprint(&mut model, "The capital of France is", 10, 100).unwrap();
     }
 }

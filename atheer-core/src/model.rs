@@ -1,6 +1,7 @@
 use crate::kv_cache_bridge::KvCacheBridge;
 use crate::quantization_resolver::QuantizationResolver;
 use crate::{AtheerCoreError, Result};
+use sha2::{Digest, Sha256};
 use std::io::{Read, Seek};
 use std::path::Path;
 
@@ -16,7 +17,21 @@ pub struct Model {
 }
 
 impl Model {
-    pub fn from_gguf(path: impl AsRef<Path>, device: &candle_core::Device) -> Result<Self> {
+    /// Load a model from a GGUF file with optional SHA-256 hash verification.
+    ///
+    /// When `expected_hash` is `Some`, the file is hashed via streaming SHA-256
+    /// **before** GGUF header parsing. A mismatch returns `AtheerCoreError`.
+    pub fn from_gguf(
+        path: impl AsRef<Path>,
+        device: &candle_core::Device,
+        expected_hash: Option<[u8; 32]>,
+    ) -> Result<Self> {
+        if let Some(hash) = expected_hash {
+            let audit = crate::security::SecurityAudit::new();
+            audit.verify_model_hash(path.as_ref(), &hash).map_err(|e| {
+                AtheerCoreError::ModelLoadFailed(format!("Load-time hash verification: {e}"))
+            })?;
+        }
         Self::from_gguf_inner(path, device, None)
     }
 
@@ -34,7 +49,12 @@ impl Model {
     }
 
     /// Load a model from an arbitrary `Read + Seek` source (e.g. a
-    /// `Cursor<Vec<u8>>` of decrypted bytes) rather than a file path.
+    /// `Cursor<Vec<u8>>` of decrypted bytes) rather than a file path,
+    /// with optional SHA-256 hash verification.
+    ///
+    /// When `expected_hash` is `Some`, the reader is sought to the start,
+    /// hashed via streaming SHA-256, then sought back for GGUF parsing.
+    /// This works correctly for `Cursor<Vec<u8>>` (the decryption pipeline).
     ///
     /// This is the primary entry point for the decryption pipeline: after
     /// `Aes256GcmEncryption` produces plaintext bytes, they are passed to
@@ -42,8 +62,39 @@ impl Model {
     pub fn from_gguf_reader<R: Read + Seek>(
         reader: &mut R,
         device: &candle_core::Device,
+        expected_hash: Option<[u8; 32]>,
     ) -> Result<Self> {
         let device = device.clone();
+
+        // If hash verification is requested, hash the content before GGUF parsing
+        if let Some(hash) = expected_hash {
+            reader.seek(std::io::SeekFrom::Start(0)).map_err(|e| {
+                AtheerCoreError::ModelLoadFailed(format!("Seek for hash verification: {e}"))
+            })?;
+            let mut hasher = Sha256::new();
+            let mut buf = [0u8; 65536];
+            loop {
+                let n = reader.read(&mut buf).map_err(|e| {
+                    AtheerCoreError::ModelLoadFailed(format!("Read for hash verification: {e}"))
+                })?;
+                if n == 0 {
+                    break;
+                }
+                hasher.update(&buf[..n]);
+            }
+            let actual = hasher.finalize();
+            if actual.as_slice() != hash {
+                return Err(AtheerCoreError::ModelLoadFailed(format!(
+                    "Load-time hash mismatch: expected {}, got {}",
+                    hex::encode(hash),
+                    hex::encode(actual),
+                )));
+            }
+            reader.seek(std::io::SeekFrom::Start(0)).map_err(|e| {
+                AtheerCoreError::ModelLoadFailed(format!("Seek after hash verification: {e}"))
+            })?;
+        }
+
         let gguf = candle_core::quantized::gguf_file::Content::read(reader)
             .map_err(|e| AtheerCoreError::ModelLoadFailed(format!("GGUF parse: {e}")))?;
 
@@ -148,7 +199,7 @@ mod tests {
     #[test]
     fn test_model_from_gguf_not_found() {
         let device = candle_core::Device::Cpu;
-        let result = Model::from_gguf("/nonexistent/path/model.gguf", &device);
+        let result = Model::from_gguf("/nonexistent/path/model.gguf", &device, None);
         assert!(result.is_err());
     }
 

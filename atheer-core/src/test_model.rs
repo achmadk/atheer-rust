@@ -1,41 +1,50 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-/// Ensure a test model is available, downloading it if necessary.
+/// Try to obtain a test model path, downloading it if necessary.
+///
+/// Returns `Some(path)` if a model is available (env var is set and file exists
+/// or was downloaded), or `None` if `ATHEER_TEST_MODEL` is unset or the download
+/// fails.  Tests should call this and skip gracefully when it returns `None`.
 ///
 /// Behavior:
-/// - If `ATHEER_TEST_MODEL` is set and the file exists → return its path.
+/// - If `ATHEER_TEST_MODEL` is unset → return `None`.
+/// - If `ATHEER_TEST_MODEL` is set and the file exists → return `Some(path)`.
 /// - If `ATHEER_TEST_MODEL` is set but the file is missing → attempt to
-///   download the model to that path by spawning `scripts/download-test-model.sh`.
-/// - If `ATHEER_TEST_MODEL` is not set → panic with a helpful message.
-pub fn ensure_test_model() -> PathBuf {
-    let var = std::env::var("ATHEER_TEST_MODEL")
-        .expect("ATHEER_TEST_MODEL env var must be set to run integration tests");
+///   download the model by spawning `scripts/download-test-model.sh`.  Returns
+///   `Some(path)` on success, `None` on failure.
+pub fn ensure_test_model() -> Option<PathBuf> {
+    let var = std::env::var("ATHEER_TEST_MODEL").ok()?;
 
     let path = PathBuf::from(&var);
     if path.exists() {
-        return path;
+        return Some(path);
     }
 
     // File doesn't exist — try to auto-download
     eprintln!("ATHEER_TEST_MODEL set to {var} but file not found. Attempting download...");
 
     let script_path = find_download_script();
-    let status = Command::new(&script_path)
-        .status()
-        .expect("Failed to spawn download-test-model.sh");
-
-    if !status.success() {
-        panic!(
-            "Model download failed for {var}. Run `{}` manually and retry.",
+    let Ok(status) = Command::new(&script_path).status() else {
+        eprintln!(
+            "Failed to spawn download-test-model.sh at {}",
             script_path.display()
         );
+        return None;
+    };
+
+    if !status.success() {
+        eprintln!(
+            "Model download script failed for {var}. Run `{}` manually.",
+            script_path.display()
+        );
+        return None;
     }
 
     // Check if download placed the model at the expected path
     if path.exists() {
         eprintln!("Model downloaded to {var}");
-        path
+        Some(path)
     } else {
         // Script downloaded to default location; check there
         let default_path = default_model_path();
@@ -44,16 +53,25 @@ pub fn ensure_test_model() -> PathBuf {
                 "Model downloaded to default location: {}",
                 default_path.display()
             );
-            default_path
+            Some(default_path)
         } else {
-            panic!(
+            eprintln!(
                 "Model download script ran but file not found at {var} or {}. \
                  Run `{}` manually.",
                 default_path.display(),
                 script_path.display()
             );
+            None
         }
     }
+}
+
+/// Like [`ensure_test_model`] but panics if no model is available.
+///
+/// Use in CI or other contexts where a model is expected to always be present.
+pub fn require_test_model() -> PathBuf {
+    ensure_test_model()
+        .expect("ATHEER_TEST_MODEL env var must be set to run tests that require a real GGUF model")
 }
 
 /// Locate `scripts/download-test-model.sh` relative to the project root.

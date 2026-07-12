@@ -254,17 +254,19 @@ The workspace contains **~390 tests** across all crates, verified via `cargo tes
 | Integration (orchestrator) | ~5 | NGram cache, Eco mode, mode switching with telemetry |
 | `atheer-fuzz` | 3 | Fuzz-resistant KV cache, token, config parsing |
 
-Additional integration tests (8, marked `#[ignore]`) require a real GGUF model file. To run them:
+A further 4 tests remain `#[ignore]` (structurally blocked — they use `unsafe` construct patterns that cannot be safely tested without a real model).
+
+To run the full atheer-core test suite with a real model (including 10 model-dependent tests that otherwise skip gracefully):
 
 ```bash
 # One-time download (~350 MB)
 scripts/download-test-model.sh
 
 # Run all integration tests
-ATHEER_TEST_MODEL=./models/LFM2-700M-Q4_0.gguf cargo test -p atheer-core -- --ignored
+ATHEER_TEST_MODEL=./models/LFM2-700M-Q4_0.gguf cargo test -p atheer-core
 ```
 
-**CI**: The `.github/workflows/ci.yml` workflow runs `cargo check`, lint, and unit tests on every push/PR to `main`. Accuracy regression tests (requires GGUF model) run on schedule and manual dispatch.
+**CI**: The `.github/workflows/ci.yml` workflow runs `cargo check`, lint, and unit tests on every push/PR to `main`. Model-dependent integration tests run on every push to `main` (plus schedule and manual dispatch) with a cached GGUF model.
 
 ## Benchmarking
 
