@@ -148,7 +148,9 @@ jobs:
         id: cache-model
         uses: actions/cache@v6
         with:
-          path: /tmp/models/LFM2-700M-Q4_0.gguf
+          path: |
+            /tmp/models/LFM2-700M-Q4_0.gguf
+            /tmp/models/LFM2-700M-Q4_0.json
           key: test-model-${{ hashFiles('scripts/download-test-model.sh') }}
 
       - name: Download test model
@@ -159,6 +161,7 @@ jobs:
           mkdir -p /tmp/models
           scripts/download-test-model.sh
           cp models/LFM2-700M-Q4_0.gguf "$ATHEER_TEST_MODEL"
+          cp models/LFM2-700M-Q4_0.json /tmp/models/LFM2-700M-Q4_0.json
 
       - name: Symlink model for cached runs
         if: steps.cache-model.outputs.cache-hit == 'true'
@@ -167,6 +170,7 @@ jobs:
         run: |
           mkdir -p models
           ln -sf "$ATHEER_TEST_MODEL" models/LFM2-700M-Q4_0.gguf
+          ln -sf /tmp/models/LFM2-700M-Q4_0.json models/LFM2-700M-Q4_0.json
 
       - name: Run model-dependent integration tests
         run: cargo test -p atheer-core
