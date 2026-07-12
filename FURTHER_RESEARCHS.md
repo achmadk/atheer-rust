@@ -241,7 +241,7 @@ Outstanding (next iteration):
 - **Degradation observability**: `tracing::warn!` on fallback, `tracing::info!` on successful CPU recovery — both with target `"atheer::engine"`.
 - **Aggregated error**: On total failure, the error message includes both the preferred-device error and the CPU fallback error in a single `AtheerError::ModelLoadFailed`.
 - **No BackendManager mutation**: Safe because `device_for_op()` is unused in inference (all ops use `model.device`).
-- **Tests**: 2 new unit tests (`test_initialize_degradation_both_devices_fail`, `test_initialize_degradation_metal_unavailable_both_fail`) — 488 tests, 0 failures.
+- **Tests**: 2 new unit tests (`test_initialize_degradation_both_devices_fail`, `test_initialize_degradation_metal_unavailable_both_fail`) — 499 tests, 0 failures.
 
 Outstanding (low priority):
 - "Retry with lower precision" excluded — quantization is baked into each GGUF file; different quantizations require different model files, which is an app-level concern.
