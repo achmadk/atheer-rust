@@ -31,7 +31,6 @@ skip_if_exists() {
 
 download_model() {
     echo "Downloading LFM2-700M-Q4_0.gguf from HuggingFace..."
-    mkdir -p "$MODEL_DIR"
     curl -fL --retry 3 --retry-delay 5 \
         -o "$MODEL_PATH" \
         "$MODEL_URL"
@@ -67,6 +66,7 @@ download_tokenizer() {
 
 main() {
     check_dependencies
+    mkdir -p "$MODEL_DIR"
     # Always download tokenizer, even if model exists (skip_if_exists may exit early)
     download_tokenizer
     skip_if_exists

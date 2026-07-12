@@ -3,16 +3,19 @@ use std::process::Command;
 
 /// Try to obtain a test model path, downloading it if necessary.
 ///
-/// Returns `Some(path)` if a model is available (env var is set and file exists
-/// or was downloaded), or `None` if `ATHEER_TEST_MODEL` is unset or the download
-/// fails.  Tests should call this and skip gracefully when it returns `None`.
+/// Returns `Some(path)` if a model is available, or `None` if `ATHEER_TEST_MODEL`
+/// is unset (local-dev scenario — tests skip gracefully).
+///
+/// When `ATHEER_TEST_MODEL` IS set but the model cannot be obtained, panics with
+/// a descriptive message.  This ensures CI fails loudly when the download fails
+/// despite explicit configuration, rather than silently skipping tests.
 ///
 /// Behavior:
 /// - If `ATHEER_TEST_MODEL` is unset → return `None`.
 /// - If `ATHEER_TEST_MODEL` is set and the file exists → return `Some(path)`.
 /// - If `ATHEER_TEST_MODEL` is set but the file is missing → attempt to
 ///   download the model by spawning `scripts/download-test-model.sh`.  Returns
-///   `Some(path)` on success, `None` on failure.
+///   `Some(path)` on success, panics on failure.
 pub fn ensure_test_model() -> Option<PathBuf> {
     let var = std::env::var("ATHEER_TEST_MODEL").ok()?;
 
@@ -25,20 +28,18 @@ pub fn ensure_test_model() -> Option<PathBuf> {
     eprintln!("ATHEER_TEST_MODEL set to {var} but file not found. Attempting download...");
 
     let script_path = find_download_script();
-    let Ok(status) = Command::new(&script_path).status() else {
-        eprintln!(
-            "Failed to spawn download-test-model.sh at {}",
+    let status = Command::new(&script_path).status().unwrap_or_else(|e| {
+        panic!(
+            "Failed to spawn download-test-model.sh at {}: {e}",
             script_path.display()
         );
-        return None;
-    };
+    });
 
     if !status.success() {
-        eprintln!(
+        panic!(
             "Model download script failed for {var}. Run `{}` manually.",
             script_path.display()
         );
-        return None;
     }
 
     // Check if download placed the model at the expected path
@@ -55,13 +56,12 @@ pub fn ensure_test_model() -> Option<PathBuf> {
             );
             Some(default_path)
         } else {
-            eprintln!(
+            panic!(
                 "Model download script ran but file not found at {var} or {}. \
                  Run `{}` manually.",
                 default_path.display(),
                 script_path.display()
             );
-            None
         }
     }
 }
