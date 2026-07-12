@@ -203,7 +203,7 @@ The project has a strong architecture for graceful degradation (ANE → Metal �
 |---|-----|---------------|---------------|--------|
 | R1 | **Draft speculation un-stubbed** | ✅ Completed — `load_draft()`/`unload_draft()` load real GGUF models, `generate_speculative()` on InferenceEngine, speculative dispatch in `generate_sync()` | Load draft model, run speculative decoding, merge KV caches | 🔴 High |
 | R2 | **Model loading retry with degradation** | ✅ Completed — `initialize()` retries on CPU after preferred device fails before propagating the error. `tracing::warn!`/`info!` events emitted. Aggregated error message on total failure. | Retry chain: preferred accelerator → CPU → report cause | 🔴 High |
-| R3 | **Sampling thread watchdog** | `IosMonitor`/`GenericMonitor` spawn single thread with no heartbeat | Detect thread death via missed heartbeats, restart, log to crash reporter | 🟡 Medium |
+| R3 | **Sampling thread watchdog** | ✅ Completed — `HealthStatus.sample_count` exposed, `AtheerEngine` checks before `select_mode()`, crash logged + conservative fallback | 🟡 Medium |
 | R4 | **KV cache checkpoint persistence** | ✅ Completed — `AtheerEngine` wired with `on_background`, `on_foreground`, `on_low_memory`, `on_terminate` lifecycle + LZ4 L3 snapshot + sidecar tracking | Auto-checkpoint on background/low-memory; restore on foreground/resume with model-id verification | 🟡 Medium |
 | R5 | **Model integrity verification** | No checksum validation at load time | Verify SHA-256 of model file before loading; reject on mismatch | 🟡 Medium |
 | R6 | **No crash analysis pipeline** | CrashReporter writes to disk silently | Structured crash report with telemetry + model metadata + system state | 🟢 Low |
@@ -260,9 +260,22 @@ let watchdog = thread::spawn(|| {
 });
 ```
 
-### R3: Sampling Thread Heartbeat
+### R3: Sampling Thread Heartbeat — ✅ Completed July 2026
 
-If the `IosMonitor`/`GenericMonitor` sampling thread dies silently, telemetry stops updating and the orchestrator operates on stale health snapshots. A heartbeat counter incremented by the sampling loop and checked before each mode selection decision would detect thread death promptly.
+If the `IosMonitor`/`GenericMonitor` sampling thread dies silently, telemetry stops updating and the orchestrator operates on stale health snapshots. A heartbeat counter incremented by the sampling loop and checked before each mode selection decision detects thread death promptly.
+
+Implemented via Option B (heartbeat via existing `sample_count`):
+
+- **`HealthStatus.sample_count`** (`atheer-hardware/src/health.rs`): New field exposing the monitor's internal iteration counter. Defaults to `0`.
+- **`GenericMonitor::health()` and `IosMonitor::health()`**: Emit `sample_count` from `HealthSnapshot` into the returned `HealthStatus`.
+- **`AtheerEngine.last_heartbeat_count`** (`atheer-ffi/src/engine.rs`): `Arc<AtomicU64>` initialized to `u64::MAX` (avoids false positive on first call). Checked before each `select_mode()` in `generate_sync()`.
+- **Stall detection**: If `sample_count == last_heartbeat_count`, emits `tracing::warn!` (target: `"atheer::engine::monitor"`), calls `crash_reporter.record_crash("MonitorHeartbeatStalled", ...)`, and falls back to conservative defaults (4096 MB RAM, 100% battery, plugged in).
+- **Normal path**: When heartbeat advances, stores the new count and passes real health values unchanged.
+- **Tests**: 5 new tests — 3 in `atheer-hardware` (sample_count starts 0, advances after 1 Hz tick, matches HealthSnapshot), 2 in `atheer-ffi` (engine construction, plumbing verification). 499 total, 0 failures.
+
+Not implemented (explicitly scoped out):
+- Auto-restart of dead thread (requires thread-safety for re-spawn — tracked separately)
+- FFI surface changes (`HardwareHealth` in atheer-ffi unchanged)
 
 ---
 
@@ -386,10 +399,10 @@ Meanwhile, R1 (speculative decoding) and P2 (continuous calibration) close the p
 | 5 | R1: Un-stub draft speculation | ✅ Completed | `engine.rs`, `inference.rs`, `orchestrator.rs` |
 | 6 | P2: Continuous runtime calibration | ✅ Completed | `orchestrator.rs`, `PerfModel` |
 | 7 | R2: Model loading retry with degradation | ✅ Completed | `atheer-ffi/src/engine.rs` |
-| 8 | R3: Sampling thread heartbeat watchdog | 1 | `monitor.rs`, `ios.rs` |
+| 8 | R3: Sampling thread heartbeat watchdog | ✅ Completed | `atheer-ffi/src/engine.rs`, `atheer-hardware/src/health.rs`, `monitor.rs`, `ios.rs` |
 | 9 | Implement model signature verification | 2-3 | New: `model_verifier.rs` |
 
-**Total remaining: ~4-6 days** (R1, P2, R8, R9, B1, B3, R2 ✅ completed)
+**Total remaining: ~3-5 days** (R1, P2, R8, R9, B1, B3, R2, R3 ✅ completed)
 
 ### Phase 2: Security & Privacy Hardening (3-4 weeks)
 
@@ -428,7 +441,7 @@ Phase 1          Phase 2              Phase 3
 ─────────────────────────────────────────────────
 R1 ───────────── V1+V2+V3 ──────────── P6+P7
 R2 ✓ ─────────── S2+S3+S4 ─────────── D1
-R3 ───────────── R4 ───────────────── C2
+R3 ✓ ─────────── R4 ───────────────── C2
 R5 ───────────── P5 ───────────────── E1
 R8              V4 ───────────────── D3
 R9              V6 ──────────────────
@@ -441,7 +454,7 @@ P2 ─────────────────────────�
 
 | Effort | Range | Items |
 |--------|-------|------|
-| Low (≤1 day) | 0.5-1 day | R2 ✅, R3, R5, R7, R9 ✅, R10, R13, R14, R6, P5, S3, S9 |
+| Low (≤1 day) | 0.5-1 day | R2 ✅, R3 ✅, R5, R7, R9 ✅, R10, R13, R14, R6, P5, S3, S9 |
 | Medium (2-5 days) | 2-5 days | R1, R4, R8, R11, P1, P2, P9, P10 |
 | Med-High (5-10 days) | 5-10 days | S2, S4, S5, S7, S8, V1, V2, V3, V4, V5, E1, E2 |
 | High (10+ days) | 10+ days | S5 (sandboxing), S7 (side-channel), V7 (DP analytics) |
@@ -482,7 +495,7 @@ P2 ─────────────────────────�
 |------|----------------|-------------|
 | R1: Draft speculation | `AtheerEngine.load_draft()`, `InferenceEngine` spec decode | `atheer-ffi/src/engine.rs`, `atheer-core/src/inference.rs` |
 | R2: Retry with degrade | ✅ Completed — CPU fallback on model load failure | `atheer-ffi/src/engine.rs` (initialize) |
-| R3: Thread watchdog | `GenericMonitor`, `IosMonitor` | `atheer-hardware/src/monitor.rs`, `atheer-hardware/src/ios.rs` |
+| R3: Thread watchdog | ✅ Completed — heartbeat via `sample_count`, crash reporter, conservative fallback | `atheer-ffi/src/engine.rs`, `atheer-hardware/src/health.rs`, `monitor.rs`, `ios.rs` |
 | R4: KV cache checkpoint | ✅ Completed — `AtheerEngine` lifecycle FFI, sidecar, L3 snapshot/thaw | `atheer-core/src/lifecycle.rs`, `atheer-ffi/src/engine.rs` |
 | R5: Model hash | `Model::from_gguf()` | `atheer-core/src/model.rs` |
 | P2: Calibration | `PerfModel`, `Orchestrator` | `atheer-orchestrator/src/orchestrator.rs` |

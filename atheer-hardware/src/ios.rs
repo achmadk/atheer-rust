@@ -250,6 +250,7 @@ impl HardwareMonitor for IosMonitor {
             battery_level: snap.battery_level,
             on_battery: snap.on_battery,
             timestamp: snap.timestamp,
+            sample_count: snap.sample_count,
         }
     }
 

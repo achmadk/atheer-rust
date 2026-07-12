@@ -191,6 +191,7 @@ impl HardwareMonitor for GenericMonitor {
                 battery_level: guard.battery_level,
                 on_battery: guard.on_battery,
                 timestamp: guard.timestamp,
+                sample_count: guard.sample_count,
             }
         } else {
             HealthStatus::default()
@@ -298,5 +299,33 @@ mod tests {
         assert_eq!(snap.thermal, ThermalState::Nominal);
         assert_eq!(snap.available_ram_mb, 4096);
         assert_eq!(snap.battery_level, 100);
+    }
+
+    #[test]
+    fn test_sample_count_starts_zero_then_advances() {
+        let monitor = GenericMonitor::new();
+        let health = monitor.health();
+        // Before first 1 Hz tick completes, sample_count must be 0
+        assert_eq!(health.sample_count, 0);
+
+        // Wait for at least one sampling cycle
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        let health = monitor.health();
+        assert!(
+            health.sample_count > 0,
+            "sample_count should advance after at least one sampling tick"
+        );
+    }
+
+    #[test]
+    fn test_sample_count_reflected_in_health_status() {
+        let monitor = GenericMonitor::new();
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        let health = monitor.health();
+        let snap = monitor.snapshot.lock().unwrap();
+        assert_eq!(
+            health.sample_count, snap.sample_count,
+            "HealthStatus.sample_count must match HealthSnapshot.sample_count"
+        );
     }
 }

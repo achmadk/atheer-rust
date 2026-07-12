@@ -15,7 +15,7 @@ use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
@@ -44,6 +44,8 @@ pub struct AtheerEngine {
     last_checkpoint_uuid: Arc<Mutex<Option<String>>>,
     last_l3_snapshot_id: Arc<Mutex<Option<String>>>,
     l3_storage: Arc<Mutex<Option<L3CompressedStorage>>>,
+    // Heartbeat watchdog counter for monitor sampling thread
+    last_heartbeat_count: Arc<AtomicU64>,
 }
 
 #[uniffi::export]
@@ -109,6 +111,7 @@ impl AtheerEngine {
             last_checkpoint_uuid: Arc::new(Mutex::new(None)),
             last_l3_snapshot_id: Arc::new(Mutex::new(None)),
             l3_storage: Arc::new(Mutex::new(l3_storage)),
+            last_heartbeat_count: Arc::new(AtomicU64::new(u64::MAX)),
         }
     }
 }
@@ -346,12 +349,33 @@ impl AtheerEngine {
             .lock()
             .map_err(|_| AtheerError::NotInitialized)?;
 
-        let mode = orch.select_mode(
-            None, // thermal_c — would come from thermal headroom conversion
-            health.available_ram_mb,
-            Some(health.battery_level),
-            health.on_battery,
-        );
+        // Heartbeat check: detect if the monitor sampling thread has stalled.
+        // `sample_count` is incremented by the sampling loop on every 1 Hz tick.
+        // If it matches our last observed value, the thread is likely dead.
+        let last_hb = self.last_heartbeat_count.load(Ordering::Relaxed);
+        let mode = if health.sample_count == last_hb {
+            tracing::warn!(
+                target: "atheer::engine::monitor",
+                "Monitor heartbeat stalled at count {} — thread may be dead",
+                last_hb,
+            );
+            self.crash_reporter.record_crash(
+                "MonitorHeartbeatStalled",
+                &format!("sample_count={} last_seen={}", health.sample_count, last_hb),
+            );
+            // Use conservative (nominal) defaults so stale data doesn't trigger
+            // spurious throttling — 4096 MB RAM, 100% battery, plugged in.
+            orch.select_mode(None, 4096, Some(100), false)
+        } else {
+            self.last_heartbeat_count
+                .store(health.sample_count, Ordering::Relaxed);
+            orch.select_mode(
+                None, // thermal_c — would come from thermal headroom conversion
+                health.available_ram_mb,
+                Some(health.battery_level),
+                health.on_battery,
+            )
+        };
 
         // Check and relieve memory pressure before generation
         {

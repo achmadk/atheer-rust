@@ -457,6 +457,7 @@ pub unsafe extern "C" fn aether_engine_set_mode(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use atheer_hardware::HardwareMonitor;
     use std::path::PathBuf;
 
     #[test]
@@ -785,6 +786,34 @@ mod tests {
         // (the sidecar check is done inside on_foreground which returns false because
         // no inference_engine is available — but has_checkpoint should find it)
         // Note: has_checkpoint checks memory first, then sidecar
+    }
+
+    /// Verify engine initializes with heartbeat watchdog counter.
+    #[test]
+    fn test_heartbeat_watchdog_initialized() {
+        let engine = crate::AtheerEngine::new(crate::AtheerConfig::default());
+        // If this doesn't panic, the struct field initializes correctly.
+        // Integration-level stall detection test requires a real GGUF model
+        // (generate_sync() won't proceed without model_atheers).
+        let _ = engine;
+    }
+
+    /// Verify HealthStatus.sample_count is properly wired through the monitor.
+    /// This validates the plumbing between HealthSnapshot → HealthStatus.
+    #[test]
+    fn test_health_status_sample_count_plumbing() {
+        use atheer_hardware::monitor::GenericMonitor;
+        let monitor = GenericMonitor::new();
+        let health = monitor.health();
+        // sample_count must be 0 before first 1 Hz tick
+        assert_eq!(health.sample_count, 0);
+        // Wait for at least one sample
+        std::thread::sleep(std::time::Duration::from_millis(1100));
+        let health = monitor.health();
+        assert!(
+            health.sample_count > 0,
+            "sample_count must advance after at least one sampling tick"
+        );
     }
 
     /// Verify lifecycle methods respect enable/disable config flags.

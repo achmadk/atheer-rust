@@ -9,6 +9,7 @@ pub struct HealthStatus {
     pub battery_level: u32,
     pub on_battery: bool,
     pub timestamp: i64,
+    pub sample_count: u64,
 }
 
 impl HealthStatus {
@@ -20,6 +21,7 @@ impl HealthStatus {
             battery_level: 100,
             on_battery: false,
             timestamp: chrono::Utc::now().timestamp(),
+            sample_count: 0,
         }
     }
 
