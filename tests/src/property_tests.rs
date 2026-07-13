@@ -114,7 +114,7 @@ mod property_tests {
 
         #[test]
         fn test_memory_bank_creation(max_size_mb in 1..=4096usize) {
-            let bank = MemoryBank::new(max_size_mb);
+            let bank = MemoryBank::new(max_size_mb, None);
 
             prop_assert!(bank.l1_active().is_none());
             prop_assert!(bank.l2_warm().is_none());
@@ -125,7 +125,7 @@ mod property_tests {
             max_size in 128..=2048usize,
             model_id in "[a-z]{1,20}"
         ) {
-            let bank = MemoryBank::new(max_size);
+            let bank = MemoryBank::new(max_size, None);
 
             bank.load_l1(&model_id).unwrap();
 

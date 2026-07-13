@@ -1,3 +1,4 @@
+pub mod encrypted_store;
 pub mod error;
 pub mod handoff;
 pub mod kv_cache;
@@ -7,6 +8,7 @@ pub mod l2_warm;
 pub mod l3_compressed;
 pub mod memory_bank;
 
+pub use encrypted_store::EncryptedStore;
 pub use error::Result;
 pub use handoff::{HandoffPhase, HandoffProtocol};
 pub use kv_cache::KvCache;

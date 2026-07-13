@@ -61,6 +61,29 @@ impl L3CompressedStorage {
         ))
     }
 
+    /// Write raw (already-compressed/encrypted) data to a snapshot file.
+    /// Returns the snapshot ID.  Used by `EncryptedStore` to avoid double
+    /// compression.
+    pub fn snapshot_raw(&mut self, model_id: &str, data: &[u8]) -> std::io::Result<String> {
+        let snapshot_id = uuid::Uuid::new_v4().to_string();
+        let path = self
+            .storage_dir
+            .join(format!("{}_{}.snap", model_id, snapshot_id));
+        let mut file = File::create(path)?;
+        file.write_all(data)?;
+        Ok(snapshot_id)
+    }
+
+    /// Read raw file content for a snapshot — no decompression.
+    /// Used by `EncryptedStore` which handles decryption itself.
+    pub fn restore_raw(&self, snapshot_id: &str) -> std::io::Result<Vec<u8>> {
+        let path = self.find_snapshot(snapshot_id)?;
+        let mut file = File::open(path)?;
+        let mut data = Vec::new();
+        file.read_to_end(&mut data)?;
+        Ok(data)
+    }
+
     pub fn size_bytes(&self) -> usize {
         fs::read_dir(&self.storage_dir)
             .map(|entries| {

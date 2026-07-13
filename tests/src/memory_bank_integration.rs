@@ -3,7 +3,7 @@ use atheer_memory_bank::{HandoffPhase, L1ActiveCache, L2WarmCache, MemoryBank};
 
 #[test]
 fn test_memory_bank_single_tier() {
-    let bank = MemoryBank::new(512);
+    let bank = MemoryBank::new(512, None);
     bank.load_l1("model-1").expect("Should load L1");
 
     assert_eq!(bank.l1_active(), Some("model-1".to_string()));
@@ -12,7 +12,7 @@ fn test_memory_bank_single_tier() {
 
 #[test]
 fn test_memory_bank_multi_tier() {
-    let bank = MemoryBank::new(2048);
+    let bank = MemoryBank::new(2048, None);
 
     bank.load_l1("model-1").expect("Should load L1");
     bank.load_l2("model-1").expect("Should load L2");
@@ -36,7 +36,7 @@ fn test_l2_cache_basic() {
 
 #[test]
 fn test_memory_bank_alignment_score() {
-    let bank = MemoryBank::new(1024);
+    let bank = MemoryBank::new(1024, None);
     bank.load_l1("model-1").expect("Should load");
     bank.load_l2("model-1").expect("Should load");
 
@@ -46,6 +46,6 @@ fn test_memory_bank_alignment_score() {
 
 #[test]
 fn test_handoff_protocol_idle() {
-    let bank = MemoryBank::new(1024);
+    let bank = MemoryBank::new(1024, None);
     assert!(matches!(bank.handoff_phase(), HandoffPhase::Idle));
 }

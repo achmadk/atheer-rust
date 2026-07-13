@@ -104,14 +104,15 @@
 **Remaining:**
 - 1 compiler warning (unused import)
 
-### 2.4 `atheer-memory-bank` — KV Cache Hierarchy ✅ (90%)
+### 2.4 `atheer-memory-bank` — KV Cache Hierarchy ✅ (95%)
 
 | Area | Lines | Tests | Status |
 |------|-------|-------|--------|
 | L1 (active) | 138 | — | ✅ Current context window |
 | L2 (warm) | 266 | — | ✅ Recent history, fast recall |
 | L3 (compressed) | 95 | — | ✅ LZ4-compressed, long-term storage |
-| Memory bank | 565 | — | ✅ Full orchestration |
+| EncryptedStore | 145 | 6 | ✅ AES-256-GCM encrypted L3 persistence (new module) |
+| Memory bank | 594 | — | ✅ Full orchestration with encrypted L3 |
 | Handoff protocol | 133 | — | ✅ L1↔L2↔L3 transitions |
 | KV sync | 71 | — | ✅ Cross-layer synchronization |
 | Error types | 30 | — | ✅ Typed errors |
@@ -272,13 +273,13 @@ Crate                  Total   Pass   Fail   Ignored   Notes
 atheer-core             163    ~160    0       3       (3 ignored need GGUF model)
 atheer-accel             60      46    14*     0       * 4 Metal panics + 10 platform-gated (NNAPI)
 atheer-orchestrator      70      70     0       0
-atheer-memory-bank       33      33     0       0
+atheer-memory-bank       40      40     0       0       +7 tests from EncryptedStore module
 atheer-hardware          23      23     0       0
 atheer-ffi                8       8     0       0
 tests/src (integ.)       36      36     0       0
 fuzz                      1*      1*    0       0       * skeleton harness
 ─────────────────────────────────────────────────────────────
-Total                   ~394   ~377    14       3
+Total                   ~401   ~384    14       3
 
 * NNAPI tests (10) are `#[cfg(target_os = "android")]` — don't run on macOS
   4 Metal tests fail on this macOS machine (no Metal GPU)

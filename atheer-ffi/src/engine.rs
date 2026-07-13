@@ -12,6 +12,7 @@ use atheer_memory_bank::{l3_compressed::L3CompressedStorage, MemoryBank};
 use atheer_orchestrator::calibrator::CalibrationSample;
 use atheer_orchestrator::{Orchestrator, OrchestratorConfig};
 use hkdf::Hkdf;
+use rand::Rng;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
@@ -85,12 +86,46 @@ impl AtheerEngine {
             bm
         };
 
-        // Initialize L3-compressed storage if checkpoint_dir is configured
+        // Resolve the cache encryption key:
+        //   - If `cache_encryption_key` is set in config and is 32 bytes, use it directly
+        //   - If `checkpoint_dir` is set but no key provided, generate ephemeral key
+        //   - Otherwise, pass None (no encryption; L3 storage unavailable)
+        let encryption_key: Option<[u8; 32]> = config
+            .cache_encryption_key
+            .as_ref()
+            .filter(|v| v.len() == 32)
+            .map(|v| {
+                let mut key = [0u8; 32];
+                key.copy_from_slice(v);
+                key
+            })
+            .or_else(|| {
+                if config.checkpoint_dir.is_some() {
+                    Some(rand::thread_rng().gen::<[u8; 32]>())
+                } else {
+                    None
+                }
+            });
+
+        // Initialize L3-compressed storage for checkpoint save/restore
         let l3_storage = config
             .checkpoint_dir
             .as_ref()
             .map(|dir| PathBuf::from(dir).join("l3"))
             .and_then(|l3_dir| L3CompressedStorage::new(l3_dir).ok());
+
+        let memory_bank = Arc::new(Mutex::new(MemoryBank::new(
+            config.memory_bank_size_mb as usize,
+            encryption_key,
+        )));
+        if let Some(ref checkpoint_dir) = config.checkpoint_dir {
+            if let Some(key) = encryption_key {
+                let l3_dir = PathBuf::from(checkpoint_dir).join("l3");
+                if let Ok(mb) = memory_bank.lock() {
+                    mb.set_l3_storage(l3_dir, key);
+                }
+            }
+        }
 
         Self {
             inference_engine: Arc::new(Mutex::new(None)),
@@ -98,9 +133,7 @@ impl AtheerEngine {
             config: config.clone(),
             backend_manager,
             orchestrator: Arc::new(Mutex::new(Orchestrator::new(orch_config))),
-            memory_bank: Arc::new(Mutex::new(MemoryBank::new(
-                config.memory_bank_size_mb as usize,
-            ))),
+            memory_bank,
             monitor: Arc::new(GenericMonitor::new()),
             crash_reporter: CrashReporter::new(),
             session_id: Arc::new(Mutex::new(None)),

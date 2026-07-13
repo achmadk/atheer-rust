@@ -8,6 +8,8 @@
 > 1. A prior detailed audit (crate-by-crate, line-level bug findings)
 > 2. A strategic competitive-gap analysis (reliability/performance/security/privacy against best-in-class)
 >
+> **Status of V2/V3 (KV Cache + Checkpoint Encryption): ✅ Completed July 2026** — `EncryptedStore` wrapper around `L3CompressedStorage` encrypts L2/L3 KV cache snapshots at rest using AES-256-GCM with LZ4 compression. `MemoryBank::new()` stores `encryption_key` for zeroize-on-drop. Key resolved at engine init (config → ephemeral → None). 40 memory-bank tests, 0 failures, 0 warnings. See `openspec/changes/encrypt-cache-checkpoints/`.
+
 > **Status of S1 (Model File Encryption): ✅ Completed July 2026** — AES-256-GCM encryption at rest for GGUF and .mlpackage, decryption pipeline with three key-resolution strategies (ServerDistributed, DeviceDerived via HKDF, Custom), platform Keychain/Keystore wrappers for iOS and Android, and a CLI tool for offline encryption.
 >
 > **Status of S2 + S3 (Model Signature & Hash Verification): ✅ Completed July 2026** — Ed25519 detached signature verification via `ModelVerifier` in a new `model_verifier.rs` module. Streaming SHA-256 hash of model file at load time via `Model::from_gguf()`/`from_gguf_reader()` when `expected_hash` is provided. `AtheerConfig.model_signature_public_key` and `model_expected_sha256` fields wire into `AtheerEngine::initialize()` for pre-load verification. `SecurityAudit::verify_model_hash()` method activated. All callers backward-compatible (`None` default). 12 new unit tests across ModelVerifier (7) and SecurityAudit (5). 151/151 core tests pass.
@@ -157,8 +159,8 @@ The project positions itself as "privacy-first" by virtue of on-device inference
 | # | Gap | Severity | Recommendation |
 |---|-----|----------|-------------|
 | V1 | **Configurable privacy mode** | 🔴 High | `PrivatelyMode` flag on `AtheerConfig` — Normal (current), Ephemeral (no disk writes), Audited (full logging for compliance) |
-| V2 | **KV cache stored in plaintext** | 🔴 Critical | L2/L3 cache stores conversation context in the open. Encrypt L2/L3 cache at rest using AES-256-GCM with a device-bound secure key (Android Keytore / iOS Keychain). |
-| V3 | **Checkpoints stored in plaintext** | 🔴 Critical | KV cache checkpoints write raw tensor data to disk — no encryption. | |
+| V2 | **KV cache stored in plaintext** | ✅ Completed | `EncryptedStore` wrapper encrypts L3 KV cache snapshots at rest using AES-256-GCM with device-bound key. Key resolved at engine init, zeroized on MemoryBank drop. |
+| V3 | **Checkpoints stored in plaintext** | ✅ Completed | KV cache checkpoint L3 path uses `EncryptedStore` (LZ4 compress → AES-256-GCM encrypt). Engine checkpoint save/restore continues using plain `L3CompressedStorage` for model checkpoint data (not KV cache). | |
 | V4 | **No cache expiry / auto-wipe** | 🟠 High | L2/L3 cache has LRU eviction by size but no time-based expiry. Sensitive conversations persist indefinitely. Add configurable TTL (e.g., 24h default) and secure wipe (overwrite before delete). |
 | V5 | **PII redaction is rudimentary** | 🟠 High | PiiRedactor uses basic string matching for emails and counts digits for credit cards. Phone detection has a `continue` bug (missing `i += 1`) causing an infinite loop on digit input. Replace with regex or established PII library. |
 | V6 | **No audit logging** | 🟡 Medium | No tamper-evident log of what prompts were processed, what models were used, or what content was moderated. Add append-only local audit log for compliance. |
@@ -412,7 +414,7 @@ R1 (speculative decoding) and P2 (continuous calibration) close the performance 
 
 | # | Item | Est. Days | Integration |
 |---|-----|-----------|-------------|
-| 10 | V2/V3: Encrypt L2/L3 cache + checkpoints (AES-256-GCM) | 3-5 | `memory-bank/src/` + new |
+| 10 | V2/V3: Encrypt L2/L3 cache + checkpoints (AES-256-GCM) | ✅ Completed | `memory-bank/src/encrypted_store.rs` + `memory_bank.rs`, `engine.rs`, `config.rs` |
 | 11 | S2 + S3: Model signature + hash verification | ✅ Completed | `model_verifier.rs`, `model.rs`, `engine.rs` |
 | 12 | V1: Configurable privacy mode (`PrivacyMode`) | 2 | `config.rs`, `crash.rs`, `memory-bank` |
 | 13 | S4: Prompt injection guardrails | 3-5 | New safety module |

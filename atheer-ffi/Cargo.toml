@@ -14,6 +14,7 @@ uniffi = { workspace = true }
 sha2 = "0.10"
 hex = "0.4"
 hkdf = "0.12"
+rand = "0.8"
 
 atheer-core = { path = "../atheer-core" }
 atheer-orchestrator = { path = "../atheer-orchestrator" }

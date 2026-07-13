@@ -33,6 +33,12 @@ pub struct AtheerConfig {
     pub checkpoint_on_terminate: bool,
     /// Clear GPU-side KV cache after low-memory checkpoint.
     pub clear_on_low_memory: bool,
+    /// 32-byte AES-256 key for cache/checkpoint encryption.
+    /// When set alongside `checkpoint_dir`, enables encrypted L3 persistence.
+    /// If `checkpoint_dir` is set but this is `None`, an ephemeral key is
+    /// generated per session (cache is still encrypted but unrecoverable
+    /// after process exit — same security level for V1).
+    pub cache_encryption_key: Option<Vec<u8>>,
     #[serde(skip)]
     pub model_credential: Option<ModelCredential>,
     /// Raw Ed25519 public key bytes (32 bytes) for model signature verification.
@@ -70,6 +76,7 @@ impl Default for AtheerConfig {
             checkpoint_on_low_memory: true,
             checkpoint_on_terminate: true,
             clear_on_low_memory: true,
+            cache_encryption_key: None,
             model_credential: None,
             model_signature_public_key: None,
             model_expected_sha256: None,

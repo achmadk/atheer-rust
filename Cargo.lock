@@ -320,6 +320,7 @@ dependencies = [
  "candle-core",
  "hex",
  "hkdf",
+ "rand 0.8.6",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -376,14 +377,18 @@ dependencies = [
 name = "atheer-memory-bank"
 version = "0.1.0"
 dependencies = [
+ "aes-gcm",
  "lz4",
  "parking_lot",
+ "rand 0.8.6",
  "serde",
  "serde_json",
+ "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "tracing",
  "uuid",
+ "zeroize",
 ]
 
 [[package]]

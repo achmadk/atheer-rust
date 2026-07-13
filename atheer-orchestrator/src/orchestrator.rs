@@ -528,7 +528,7 @@ mod tests {
     fn test_check_memory_pressure_returns_false_when_under_threshold() {
         let config = OrchestratorConfig::default();
         let orchestrator = Orchestrator::new(config);
-        let memory_bank = atheer_memory_bank::MemoryBank::new(1024);
+        let memory_bank = atheer_memory_bank::MemoryBank::new(1024, None);
 
         let has_pressure = orchestrator.check_memory_pressure(&memory_bank);
         assert!(!has_pressure);
@@ -539,7 +539,7 @@ mod tests {
         let mut config = OrchestratorConfig::default();
         config.memory_threshold_mb = 1; // Very low threshold
         let orchestrator = Orchestrator::new(config);
-        let memory_bank = atheer_memory_bank::MemoryBank::new(1024);
+        let memory_bank = atheer_memory_bank::MemoryBank::new(1024, None);
 
         // Even with small usage, with 1MB threshold it should detect pressure
         let has_pressure = orchestrator.check_memory_pressure(&memory_bank);

@@ -1,24 +1,31 @@
-use crate::{HandoffProtocol, L1ActiveCache, L2WarmCache, L3CompressedStorage, Result};
+use crate::{EncryptedStore, HandoffProtocol, L1ActiveCache, L2WarmCache, Result};
 use parking_lot::RwLock;
 use std::sync::Arc;
+use zeroize::Zeroize;
 
 #[allow(dead_code)]
 pub struct MemoryBank {
     l1: Arc<RwLock<Option<L1ActiveCache>>>,
     l2: Arc<RwLock<Option<L2WarmCache>>>,
-    l3: Arc<RwLock<Option<L3CompressedStorage>>>,
+    l3: Arc<RwLock<Option<EncryptedStore>>>,
     handoff: Arc<RwLock<HandoffProtocol>>,
     max_size_mb: usize,
+    encryption_key: Option<Box<[u8; 32]>>,
 }
 
 impl MemoryBank {
-    pub fn new(max_size_mb: usize) -> Self {
+    /// Create a new `MemoryBank`.
+    ///
+    /// When `encryption_key` is `Some`, enables encrypted L3 persistence.
+    /// When `None`, L3 storage is unavailable (returns `StorageNotInitialized`).
+    pub fn new(max_size_mb: usize, encryption_key: Option<[u8; 32]>) -> Self {
         Self {
             l1: Arc::new(RwLock::new(None)),
             l2: Arc::new(RwLock::new(None)),
             l3: Arc::new(RwLock::new(None)),
             handoff: Arc::new(RwLock::new(HandoffProtocol::new())),
             max_size_mb,
+            encryption_key: encryption_key.map(Box::new),
         }
     }
 
@@ -226,6 +233,14 @@ impl MemoryBank {
         }
     }
 
+    /// Configure L3 encrypted storage with a checkpoint directory and key.
+    /// Called after construction when the checkpoint dir becomes available.
+    pub fn set_l3_storage(&self, storage_dir: std::path::PathBuf, key: [u8; 32]) {
+        if let Ok(store) = EncryptedStore::new(storage_dir, key) {
+            *self.l3.write() = Some(store);
+        }
+    }
+
     // ── VRAM pressure monitoring (Group 4) ────────────────────────────────
 
     /// Estimated VRAM (bytes) consumed by the active L1 KV cache, based on
@@ -308,27 +323,35 @@ impl MemoryBank {
     }
 }
 
+impl Drop for MemoryBank {
+    fn drop(&mut self) {
+        if let Some(ref mut key) = self.encryption_key {
+            key.zeroize();
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_memory_bank_creation() {
-        let bank = MemoryBank::new(512);
+        let bank = MemoryBank::new(512, None);
         assert!(bank.l1_active().is_none());
         assert!(bank.l2_warm().is_none());
     }
 
     #[test]
     fn test_load_l1() {
-        let bank = MemoryBank::new(512);
+        let bank = MemoryBank::new(512, None);
         bank.load_l1("test-model").unwrap();
         assert_eq!(bank.l1_active(), Some("test-model".to_string()));
     }
 
     #[test]
     fn test_alignment_score() {
-        let bank = MemoryBank::new(512);
+        let bank = MemoryBank::new(512, None);
         assert_eq!(bank.alignment_score(), 0.0);
     }
 
@@ -336,7 +359,7 @@ mod tests {
 
     #[test]
     fn test_initialize_kv_cache_sets_up_l1() {
-        let bank = MemoryBank::new(512);
+        let bank = MemoryBank::new(512, None);
         bank.load_l1("test").unwrap();
         bank.initialize_kv_cache(4, 8, 128, 512);
 
@@ -348,7 +371,7 @@ mod tests {
 
     #[test]
     fn test_promote_to_l2_stores_snapshot() {
-        let bank = MemoryBank::new(512);
+        let bank = MemoryBank::new(512, None);
         bank.load_l1("l1-model").unwrap();
         bank.initialize_kv_cache(2, 2, 4, 64);
         bank.load_l2("l2-model").unwrap();
@@ -387,7 +410,7 @@ mod tests {
 
     #[test]
     fn test_update_from_snapshot_with_offset() {
-        let bank = MemoryBank::new(512);
+        let bank = MemoryBank::new(512, None);
         bank.load_l2("l2-model").unwrap();
 
         let n_kv_head = 1usize;
@@ -417,7 +440,7 @@ mod tests {
 
     #[test]
     fn test_handoff_save_restore_roundtrip() {
-        let bank = MemoryBank::new(512);
+        let bank = MemoryBank::new(512, None);
         bank.load_l1("l1-model").unwrap();
         bank.initialize_kv_cache(1, 1, 4, 64);
         bank.load_l2("l2-model").unwrap();
@@ -436,7 +459,7 @@ mod tests {
 
     #[test]
     fn test_freeze_thaw_l3_roundtrip() {
-        let bank = MemoryBank::new(512);
+        let bank = MemoryBank::new(512, None);
         bank.load_l2("l2-model").unwrap();
 
         // Set up L2 with snapshot data
@@ -445,10 +468,11 @@ mod tests {
         let snapshot = vec![(vec![1.0, 2.0, 3.0, 4.0], vec![5.0, 6.0, 7.0, 8.0])];
         bank.update_from_snapshot(&snapshot, n_kv_head, head_dim, 0);
 
-        // Set up L3 storage
+        // Set up L3 storage — provide a dummy encryption key for the test
         let temp_dir = std::env::temp_dir().join("aether_test_l3_wiring");
-        let l3 = L3CompressedStorage::new(temp_dir.clone()).unwrap();
-        *bank.l3.write() = Some(l3);
+        let dummy_key = [0u8; 32];
+        let enc_store = EncryptedStore::new(temp_dir.clone(), dummy_key).unwrap();
+        *bank.l3.write() = Some(enc_store);
 
         // Freeze
         let snap_id = bank.freeze_to_l3("test-model", 1).unwrap();
@@ -469,7 +493,7 @@ mod tests {
 
     #[test]
     fn test_empty_l2_returns_empty_snapshot() {
-        let bank = MemoryBank::new(512);
+        let bank = MemoryBank::new(512, None);
         bank.load_l2("l2-model").unwrap();
 
         let extracted = bank.handoff_restore_l2(3);
@@ -482,7 +506,7 @@ mod tests {
 
     #[test]
     fn test_freeze_fails_without_l3() {
-        let bank = MemoryBank::new(512);
+        let bank = MemoryBank::new(512, None);
         bank.load_l2("l2-model").unwrap();
         bank.update_from_snapshot(&[(vec![1.0], vec![2.0])], 1, 1, 0);
 
@@ -494,7 +518,7 @@ mod tests {
 
     #[test]
     fn test_vram_bytes_returns_zero_when_empty() {
-        let bank = MemoryBank::new(512);
+        let bank = MemoryBank::new(512, None);
         assert_eq!(bank.l1_vram_bytes(), 0);
         assert_eq!(bank.l2_vram_bytes(), 0);
         assert_eq!(bank.total_vram_bytes(), 0);
@@ -502,7 +526,7 @@ mod tests {
 
     #[test]
     fn test_vram_pressure_ratio() {
-        let bank = MemoryBank::new(1); // 1 MB max → pressure will be high
+        let bank = MemoryBank::new(1, None); // 1 MB max → pressure will be high
         assert_eq!(bank.vram_pressure_ratio(), 0.0);
 
         bank.load_l1("test").unwrap();
@@ -525,7 +549,7 @@ mod tests {
     fn test_demote_l1_to_l2_on_high_pressure() {
         // Use a minimal budget (1 byte) so any KV data triggers pressure.
         // The method clamps to 0, then vram_pressure_ratio returns 1.0.
-        let bank = MemoryBank::new(0);
+        let bank = MemoryBank::new(0, None);
         bank.load_l1("l1").unwrap();
         bank.initialize_kv_cache(1, 1, 4, 32);
         bank.load_l2("l2").unwrap();
@@ -547,7 +571,7 @@ mod tests {
 
     #[test]
     fn test_demote_skipped_when_pressure_below_threshold() {
-        let bank = MemoryBank::new(1024); // huge budget → no pressure
+        let bank = MemoryBank::new(1024, None); // huge budget → no pressure
         bank.load_l1("l1").unwrap();
         bank.initialize_kv_cache(1, 1, 4, 32);
         bank.load_l2("l2").unwrap();
@@ -559,7 +583,7 @@ mod tests {
 
     #[test]
     fn test_demote_skipped_with_empty_snapshot() {
-        let bank = MemoryBank::new(1);
+        let bank = MemoryBank::new(1, None);
         bank.load_l1("l1").unwrap();
         bank.load_l2("l2").unwrap();
 
