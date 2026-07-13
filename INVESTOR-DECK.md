@@ -94,7 +94,7 @@
 |---|---|---|
 | **NPU-first acceleration** | Raw NDK FFI (~20 extern fns) + CoreML ANE. Requires deep platform expertise. | llama.cpp doesn't have it. MLC LLM doesn't have it. ExecuTorch has Qualcomm-only. |
 | **Predictive thermal orchestration** | Least-squares regression on live telemetry. Pre-emptive downgrade. | No competitor has any thermal awareness at all. |
-| **L1/L2/L3 KV cache** | Three-tier with promotion scoring and handoff protocols. | Every competitor uses a single flat cache. |
+| **L1/L2/L3 KV cache** | Three-tier with alignment gating and handoff protocols. *(Promotion scoring heuristics not yet implemented — the alignment_score is currently a manually-set placeholder.)* | Every competitor uses a single flat cache. |
 | **Grammar-constrained decoding** | Pushdown automaton as a first-class Rust trait. Thread-safe. | Only llama.cpp has comparable GBNF, but it's a C bolt-on. |
 | **Built-in agent loop** | Autonomous tool-calling with configurable max steps. | Every other engine requires you to build this yourself. |
 | **UniFFI cross-platform** | One UDL → Swift + Kotlin. No platform-specific SDK maintenance. | Competitors require separate binding efforts per platform. |

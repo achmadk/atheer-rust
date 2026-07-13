@@ -559,7 +559,7 @@
       <div class="feature-card reveal">
         <div class="feature-icon feature-icon-amber">⊞</div>
         <h3>#3 &mdash; L1/L2/L3 KV Cache Hierarchy</h3>
-        <p>A three-tier cache with promotion scoring and explicit handoff protocols. L1 holds the active session, L2 retains recent sessions for fast recall, and L3 stores compressed/archived context &mdash; designed for multi-turn agent sessions on memory-constrained devices.</p>
+        <p>A three-tier cache with alignment gating and explicit handoff protocols. L1 holds the active session, L2 retains recent sessions for fast recall, and L3 stores compressed/archived context &mdash; designed for multi-turn agent sessions on memory-constrained devices. <em>(Note: promotion scoring heuristics are not yet implemented — the alignment score is currently a manually-set placeholder.)</em></p>
         <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> Every other engine uses a single flat KV cache with no tiering, no promotion, and no cross-session handoff.</p>
       </div>
 

@@ -28,8 +28,8 @@ regime. It introduces four novel architectural contributions:
    the OS thermal throttle activates, replacing the sudden performance cliff with
    graceful degradation.
 3. **L1/L2/L3 hierarchical KV cache** — a three-tier cache with explicit handoff
-   protocols and promotion scoring, designed for multi-turn agent sessions on
-   memory-constrained devices.
+   protocols and alignment gating, designed for multi-turn agent sessions on
+   memory-constrained devices. *(Note: the alignment_score field tracks promotion readiness, but the heuristic scoring logic for intelligent promotion decisions is not yet implemented — currently a manually-set placeholder.)*
 4. **Grammar-constrained decoding as a first-class trait** — a pushdown automaton
    for guaranteed-valid structured output, integrated with a built-in agent loop
    for autonomous tool-calling.
@@ -413,13 +413,16 @@ eviction.
 └─────────────────────────────────────────────────────┘
 ```
 
-### 5.3 Promotion Protocol
+### 5.3 Promotion Gating
 
-Cache promotion follows a scoring mechanism:
+Cache promotion is governed by an `alignment_score` field that tracks whether L2 contains sufficient context. The current implementation provides the scaffolding for scoring but does **not** yet implement heuristic-based promotion decisions — the score is manually set to `1.0` whenever data is loaded:
 
 ```rust
 impl MemoryBank {
     /// Score how well L2's cached state aligns with the new session
+    /// ⚠️ Currently a manually-set placeholder (1.0 on load, 0.0 default).
+    ///   Real scoring heuristics (recency, frequency, semantic relevance)
+    ///   are not yet implemented.
     pub fn alignment_score(&self) -> f32;
 
     /// True when L2 has accumulated enough context for promotion
