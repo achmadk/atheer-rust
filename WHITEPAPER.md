@@ -101,8 +101,9 @@ Atheer-Rust was designed for the mobile column from day one.
                           │       │
               ┌───────────┴───────┴──┐
               │   atheer-memory-bank │
-              │   (L1/L2/L3 KV cache, handoff)
-              └──────────────────────┘
+               │   (L1/L2/L3 KV cache, handoff,
+               │    EncryptedStore AES-256-GCM)
+               └──────────────────────┘
                           ▲
                           │ health snapshot (1 Hz)
               ┌───────────┴───────────┐
@@ -118,7 +119,7 @@ The workspace consists of six core crates, a benchmarking binary, and a fuzzing 
 | `atheer-core` | Inference engine: model loading, tokenization, generation loop |
 | `atheer-accel` | Hardware acceleration: Metal, Vulkan, NNAPI, CoreML, CPU backends |
 | `atheer-orchestrator` | Mode selection, grammar-constrained sampling, agent execution |
-| `atheer-memory-bank` | L1/L2/L3 KV cache hierarchy with handoff protocols |
+| `atheer-memory-bank` | L1/L2/L3 KV cache hierarchy with handoff protocols and AES-256-GCM encryption at rest |
 | `atheer-hardware` | Platform hardware telemetry (thermal, memory, battery) |
 | `atheer-ffi` | UniFFI bindings to Swift (iOS) and Kotlin (Android) |
 | `perf-bench` | Throughput, energy, and sustained-performance benchmarking |
@@ -401,8 +402,11 @@ eviction.
 │                     ▼                               │
 │  L3 (Compressed) Archived, compact                 │
 │  ┌──────────────────────────────────────────────┐   │
-│  │  L3CompressedStorage { }                     │   │
-│  │  Compressed representation, slowest recall    │   │
+│  │  EncryptedStore (AES-256-GCM)                │   │
+│  │  ┌────────────────────────────────────────┐   │   │
+│  │  │  L3CompressedStorage (LZ4 + file I/O)  │   │   │
+│  │  └────────────────────────────────────────┘   │   │
+│  │  LZ4 → encrypt with random 12B nonce           │   │
 │  └──────────────────────────────────────────────┘   │
 │                                                      │
 │  HandoffProtocol: cross-session handshake           │
@@ -632,11 +636,11 @@ The backend system is designed for graceful degradation at every level:
 | `atheer-accel` (backends) | ✅ Production | 29 |
 | `atheer-orchestrator` | ✅ Production | Integration |
 | `atheer-hardware` | ✅ Production | 6 |
-| `atheer-memory-bank` | ✅ Production | Integration |
+| `atheer-memory-bank` | ✅ Production | 40 |
 | `perf-bench` | ✅ Production | 9 benches |
 | `atheer-fuzz` | ✅ Active | 3 fuzz targets |
 
-**Total: ~390 tests** across all crates, verified via `cargo test --workspace`.
+**Total: ~400 tests** across all crates, verified via `cargo test --workspace`.
 
 ### 10.2 Remaining Work
 
@@ -666,6 +670,7 @@ The backend system is designed for graceful degradation at every level:
 | Per-op device routing | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Predictive thermal orchestration | ✅ | ❌ | ❌ | ❌ | ❌ |
 | L1/L2/L3 KV cache | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Encrypted cache at rest | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Grammar-constrained decoding | ✅ | ✅ GBNF | ❌ | ❌ | ❌ |
 | Built-in agent loop | ✅ | ❌ | ❌ | ❌ | ❌ |
 | UniFFI Swift + Kotlin | ✅ | ❌ C API | ✅ separate | ❌ | ❌ Swift only |

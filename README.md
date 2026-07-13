@@ -8,6 +8,7 @@ Mobile inference engine for LLMs on iOS and Android.
 - **Agentic Workflows**: Built-in support for tool-calling definitions, extraction, and autonomous agent loops.
 - **Structured Output**: Native grammar-constrained decoding (Pushdown Automaton) guaranteeing valid JSON output.
 - **Memory hierarchy**: L1/L2/L3 KV caching with intelligent eviction policies.
+- **Cache encryption**: L3 KV cache snapshots encrypted at rest via AES-256-GCM (LZ4 compress → encrypt with random 12-byte nonce, distinct AAD `"atheer-cache-v1"`). Encryption key zeroized on drop. Key resolved at engine init: config key → ephemeral session key → None (L3 disabled).
 - **Dynamic mode switching**: Eco, Balanced, and Turbo modes based on live hardware telemetry (thermal, memory, battery) sampled at 1 Hz.
 - **Platform hardware telemetry**: Android JNI bridge for thermal headroom, available memory, and battery level; iOS/macOS telemetry via `objc2` FFI (`IosMonitor` with 1 Hz sampling thread).
 - **Performance-per-watt measurement**: Benchmarking infrastructure for throughput, energy, and thermal throttling curves (Criterion benches + perf-bench binary).
@@ -38,7 +39,8 @@ Mobile inference engine for LLMs on iOS and Android.
          │                   │
 ┌────────▼───────────────────▼────────┐
 │        atheer-memory-bank           │
-│   (L1/L2/L3 KV cache, handoff)      │
+│   (L1/L2/L3 KV cache, handoff,      │
+│    EncryptedStore AES-256-GCM)      │
 └─────────────────────────────────────┘
          ▲
          │ health snapshot (1 Hz)
@@ -242,7 +244,7 @@ xcode-select --install
 
 ## Testing
 
-The workspace contains **~390 tests** across all crates, verified via `cargo test --workspace`:
+The workspace contains **~400 tests** across all crates, verified via `cargo test --workspace`:
 
 | Crate | Test Count | Scope |
 |-------|-----------|-------|
@@ -250,7 +252,7 @@ The workspace contains **~390 tests** across all crates, verified via `cargo tes
 | `atheer-core` | 99+ | Model loading, KV cache, block manager, accuracy, security, lifecycle, streaming, session management, multi-turn conversation |
 | `atheer-ffi` | 8 | Config roundtrip, backend type conversion, engine lifecycle |
 | `atheer-hardware` | 6 | Monitor creation, sampling thread, health status edge cases |
-| Integration (memory-bank) | ~6 | L1/L2/L3 cache, handoff protocol, alignment scoring |
+| `atheer-memory-bank` | 40 | L1/L2/L3 cache, EncryptedStore (AES-256-GCM), handoff protocol, alignment scoring, VRAM monitoring |
 | Integration (orchestrator) | ~5 | NGram cache, Eco mode, mode switching with telemetry |
 | `atheer-fuzz` | 3 | Fuzz-resistant KV cache, token, config parsing |
 
@@ -298,7 +300,7 @@ cargo bench -p perf-bench
 | `atheer-accel` | Hardware acceleration backends (Metal, Vulkan, NNAPI, CoreML, CPU) | 29 |
 | `atheer-orchestrator` | Mode selection, grammar sampling, and agent execution loop | integration |
 | `atheer-hardware` | Platform hardware telemetry (thermal, memory, battery) | 6 |
-| `atheer-memory-bank` | KV cache hierarchy (L1/L2/L3 with handoff) | integration |
+| `atheer-memory-bank` | KV cache hierarchy (L1/L2/L3 with handoff) + `EncryptedStore` (AES-256-GCM) | 40 |
 | `perf-bench` | Performance-per-watt benchmarking binary and model-dependent Criterion harnesses | 1 binary + 9 benches |
 | `atheer-benches` (tests/benches) | Model-free Criterion microbenchmarks (kv_cache, ngram_cache, orchestrator) | 3 benches |
 
@@ -314,7 +316,19 @@ cargo bench -p perf-bench
   xcode-select --install
   ```
 
-## Remaining Work
+## Completed Work
+
+### KV Cache Encryption (V2/V3) ✅
+
+AES-256-GCM encryption for L2/L3 KV cache snapshots at rest, completed July 2026:
+
+1. **`EncryptedStore` struct** — wraps `L3CompressedStorage` with encrypt-on-write / decrypt-on-read. Format: `[12 B random nonce || AES-256-GCM ciphertext + tag]`. LZ4 compresses before encrypting, never reverses order.
+2. **`MemoryBank` integration** — `l3` field changed to `Option<EncryptedStore>`, `encryption_key` stored as `Option<Box<[u8; 32]>>` for zeroize-on-drop, `set_l3_storage()` method for deferred initialization.
+3. **Key resolution** — at `AtheerEngine::new()` time: `config.cache_encryption_key` (if 32 bytes) → ephemeral session key (if `checkpoint_dir` set) → `None` (L3 unavailable).
+4. **`AtheerConfig.cache_encryption_key`** — `Option<Vec<u8>>` field (default `None`) for apps to provide a persistent key.
+5. **6 unit tests** — encrypt/decrypt roundtrip, wrong key fails, corrupted file fails, nonce uniqueness, large payload, empty payload. All 40 memory-bank tests pass.
+
+**Architecture distinction**: KV cache tier-3 snapshots use `EncryptedStore`. Engine-level model checkpoint save/restore continues using plain `L3CompressedStorage` (checkpoint data is not KV cache context).
 
 ### CoreML/ANE Production Inference ✅
 

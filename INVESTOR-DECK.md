@@ -176,7 +176,7 @@
 | Metric | Value |
 |---|---|
 | Lines of Rust | ~18,000 |
-| Tests | ~390 |
+| Tests | ~400 |
 | Crates | 7 production + perf-bench |
 | Backends | 5 (CoreML, Metal, NNAPI, Vulkan, CPU) |
 | Supported model architectures | LLaMA, Mistral, Gemma, Phi, Qwen 2+ |
@@ -189,6 +189,7 @@
 - CoreML/ANE compatibility detection with fallback chain
 - Predictive thermal model with least-squares trend estimation
 - L1/L2/L3 KV cache with HandoffProtocol
+- AES-256-GCM encrypted L3 cache at rest (EncryptedStore)
 - Grammar-constrained decoding (38-state pushdown automaton)
 - Built-in agent loop with tool-calling support
 - UniFFI-generated Swift and Kotlin bindings
