@@ -179,7 +179,10 @@ mod tests {
         assert_eq!(reporter.crash_count(), 1);
 
         // Log file should not exist (nothing was written)
-        assert!(!log_path.exists(), "log file should not exist in Ephemeral mode");
+        assert!(
+            !log_path.exists(),
+            "log file should not exist in Ephemeral mode"
+        );
 
         fs::remove_dir_all(dir).ok();
     }
@@ -240,7 +243,10 @@ mod tests {
 
         let id = reporter.record_crash_scrubbed("TestError", "sensitive data", "sensitive");
         assert_eq!(id, 1);
-        assert!(!log_path.exists(), "log file should not exist in Ephemeral mode (scrubbed)");
+        assert!(
+            !log_path.exists(),
+            "log file should not exist in Ephemeral mode (scrubbed)"
+        );
 
         fs::remove_dir_all(dir).ok();
     }

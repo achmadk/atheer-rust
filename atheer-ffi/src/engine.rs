@@ -137,7 +137,7 @@ impl AtheerEngine {
                         None
                     }
                 })
-            };
+        };
 
         // Initialize L3-compressed storage for checkpoint save/restore
         let l3_storage = config
@@ -870,7 +870,7 @@ impl AtheerEngine {
             }
         };
 
-                trace_if_ok!(self.should_log(), info, target: "atheer::engine::lifecycle", "on_low_memory: L3 snapshot saved {snapshot_id}");
+        trace_if_ok!(self.should_log(), info, target: "atheer::engine::lifecycle", "on_low_memory: L3 snapshot saved {snapshot_id}");
 
         if self.config.clear_on_low_memory {
             if let Ok(mut guard) = self.inference_engine.lock() {
@@ -1520,10 +1520,7 @@ mod tests {
         let mut config = minimal_config();
         config.privacy_mode = Some(AtheerPrivacyMode::Ephemeral);
         let engine = AtheerEngine::new(config);
-        assert_eq!(
-            engine.privacy_mode,
-            Some(AtheerPrivacyMode::Ephemeral)
-        );
+        assert_eq!(engine.privacy_mode, Some(AtheerPrivacyMode::Ephemeral));
     }
 
     #[test]
@@ -1531,10 +1528,7 @@ mod tests {
         let mut config = minimal_config();
         config.privacy_mode = Some(AtheerPrivacyMode::Audited);
         let engine = AtheerEngine::new(config);
-        assert_eq!(
-            engine.privacy_mode,
-            Some(AtheerPrivacyMode::Audited)
-        );
+        assert_eq!(engine.privacy_mode, Some(AtheerPrivacyMode::Audited));
     }
 
     #[test]
@@ -1567,11 +1561,15 @@ mod tests {
         config.privacy_mode = Some(AtheerPrivacyMode::Ephemeral);
         let engine = AtheerEngine::new(config);
         // record a crash — it should NOT create a file
-        let id = engine.crash_reporter.record_crash("test_error", "test context");
+        let id = engine
+            .crash_reporter
+            .record_crash("test_error", "test context");
         // The crash was "recorded" (returned an ID) but no file was written.
         // Verify no crash file was written by checking the log path.
-        assert!(engine.crash_reporter.crash_log_path().is_none(),
-            "Ephemeral mode should not write crash log files");
+        assert!(
+            engine.crash_reporter.crash_log_path().is_none(),
+            "Ephemeral mode should not write crash log files"
+        );
         // Reset to avoid test pollution
         engine.crash_reporter.reset_crashes();
         let _ = id;
