@@ -1,8 +1,8 @@
 # Atheer-Rust Progress Report
 
-> Generated: 2026-06-25
-> Scope: Full workspace analysis — 15 crates/packages, ~19K Rust source lines, ~393 tests
-> Status: **92% complete across all subsystems** (+9% since last report: P0 fixes applied)
+> Generated: 2026-07-14
+> Scope: Full workspace analysis — 15 crates/packages, ~19K Rust source lines, ~401 tests
+> Status: **94% complete across all subsystems** (+2% since last report: PrivacyMode V1 completed)
 
 ---
 
@@ -51,6 +51,7 @@
 |------|-------|-------|--------|
 | Model loading | 306 (mmap) | — | ✅ GGUF/GGML via candle |
 | Inference | 1,418 | 163 total | ✅ Full pipeline |
+| Privacy | 13 (+29 FFI) | 8 (crash), 3 (FFI) | ✅ PrivacyMode enum, crash reporter, engine integration, FFI type |
 | KV Cache | 321 | ✅ | ✅ Quantized, snapshot/restore |
 | Lifecycle | 612 | ✅ | ✅ Initialize/load/unload/reload |
 | Safety | 541 | ✅ | ✅ Crash handling, fallbacks |
@@ -131,12 +132,12 @@
 - No real iOS device testing (requires macOS + Xcode + provisioning profile)
 - Android JNI bridge requires `init_jni()` call from application code (documented)
 
-### 2.6 `atheer-ffi` — Foreign Function Interface ✅ (85%)
+### 2.6 `atheer-ffi` — Foreign Function Interface ✅ (90%)
 
 | Area | Lines | Tests | Status |
 |------|-------|-------|--------|
 | Engine (uniffi) | 303 | — | ✅ new, initialize, generate, set_mode, streaming |
-| Config | 46 | — | ✅ AtheerConfig with defaults |
+| Config | 46 | — | ✅ AtheerConfig with defaults, privacy_mode field |
 | Types | 65 | — | ✅ GenerationRequest/Response |
 | Backend type | 47 | — | ✅ CoreML/Metal/Vulkan/NNAPI/CPU |
 | Inference mode | 29 | — | ✅ Turbo/Balanced/Eco |
@@ -247,6 +248,12 @@ _All P0 items from previous report have been addressed: `perf-bench` crate exist
 | 6 | **Bench** | **BENCHMARKS.md all "TBD"** — no actual baseline numbers | No performance regression detection |
 | 7 | **CI** | **No macOS CI runner** — CoreML/Metal/iOS telemetry unverified | Platform-specific features may regress |
 
+### P1a — Privacy Mode (V1) ✅
+
+| # | Area | Issue | Impact |
+|---|------|-------|--------|
+| — | **Privacy** | **V1: Configurable privacy mode completed** — `PrivacyMode` enum (Normal/Ephemeral/Audited) with FFI type, config field, crash reporter integration, and engine-level logging suppression. Ephemeral mode skips crash log writes, disables L3 persistence, and suppresses all non-error tracing. | ✅ Completed July 2026 |
+
 ### P2 — Polish & Hygiene
 
 | # | Area | Issue |
@@ -270,16 +277,16 @@ _All P0 items from previous report have been addressed: `perf-bench` crate exist
 ```
 Crate                  Total   Pass   Fail   Ignored   Notes
 ─────────────────────────────────────────────────────────────
-atheer-core             163    ~160    0       3       (3 ignored need GGUF model)
+atheer-core             171    ~168    0       3       (3 ignored need GGUF model) +8 privacy tests
 atheer-accel             60      46    14*     0       * 4 Metal panics + 10 platform-gated (NNAPI)
 atheer-orchestrator      70      70     0       0
 atheer-memory-bank       40      40     0       0       +7 tests from EncryptedStore module
 atheer-hardware          23      23     0       0
-atheer-ffi                8       8     0       0
+atheer-ffi               11      11     0       0       +3 privacy FFI tests
 tests/src (integ.)       36      36     0       0
 fuzz                      1*      1*    0       0       * skeleton harness
 ─────────────────────────────────────────────────────────────
-Total                   ~401   ~384    14       3
+Total                   ~412   ~395    14       3
 
 * NNAPI tests (10) are `#[cfg(target_os = "android")]` — don't run on macOS
   4 Metal tests fail on this macOS machine (no Metal GPU)

@@ -704,6 +704,14 @@
             <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
           </tr>
           <tr style="border-bottom: 1px solid rgba(56,189,248,.06); background: rgba(56,189,248,.03);">
+            <td style="padding: .7rem 1rem; color: #22C55E; font-weight: 500;">Privacy mode (Normal/Ephemeral/Audited)</td>
+            <td style="text-align:center; padding: .7rem .5rem;"><span style="color:#22C55E; font-weight: 600;">✅ Unique</span></td>
+            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
+            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
+            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
+            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
+          </tr>
+          <tr style="border-bottom: 1px solid rgba(56,189,248,.06); background: rgba(56,189,248,.03);">
             <td style="padding: .7rem 1rem; color: #F59E0B; font-weight: 500;">Prompt guardrails</td>
             <td style="text-align:center; padding: .7rem .5rem;"><span style="color:#F59E0B; font-weight: 600;">📋 Planned</span></td>
             <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
@@ -734,7 +742,7 @@
       ✅ Shipped &mdash; 📋 Planned = gap identified, prioritized in roadmap below ⬇️
     </p>
     <p style="margin-top: 1.5rem; font-size: .9rem; color: #94A3B8; text-align: center; max-width: 650px; margin-left: auto; margin-right: auto; line-height: 1.7;">
-      <strong style="color: #38BDF8;">Key insight:</strong> The gaps we&rsquo;ve identified (prompt guardrails, privacy manifesto, session isolation) are not "catching up" items — <strong style="color: #E2E8F0;">nobody else does them either</strong>. These are genuine greenfield differentiation opportunities. Atheer has <strong style="color: #22C55E;">already shipped model file encryption (AES-256-GCM), KV cache encryption (AES-256-GCM), Ed25519 signature verification, load-time SHA-256 hash checks, and speculative decoding</strong> — the only open engine with all five. Adding privacy mode next makes it the engine you choose when you need to "run AI on customer devices and prove nothing leaves."
+      <strong style="color: #38BDF8;">Key insight:</strong> The gaps we&rsquo;ve identified (prompt guardrails, privacy manifesto, session isolation) are not "catching up" items — <strong style="color: #E2E8F0;">nobody else does them either</strong>. These are genuine greenfield differentiation opportunities. Atheer has <strong style="color: #22C55E;">already shipped model file encryption (AES-256-GCM), KV cache encryption (AES-256-GCM), Ed25519 signature verification, load-time SHA-256 hash checks, speculative decoding, and a three-tier privacy mode (Normal/Ephemeral/Audited)</strong> — the only open engine with all six. Privacy mode makes it the engine you choose when you need to "run AI on customer devices and prove nothing leaves."
     </p>
   </div>
 </section>
@@ -1036,7 +1044,7 @@ engine.initialize()
         <div style="margin-bottom: .75rem;">
           <span style="font-size: .7rem; color: #64748B; font-family: 'JetBrains Mono', monospace;">Phase 2</span>
           <h3 style="font-size: 1rem; font-weight: 700; margin-top: .15rem;">Security &amp; Privacy Hardening</h3>
-          <span style="font-size: .75rem; color: #64748B;">3&ndash;4 weeks · 9 items (4 complete)</span>
+          <span style="font-size: .75rem; color: #64748B;">3&ndash;4 weeks · 9 items (5 complete)</span>
         </div>
         <ul style="list-style: none; padding: 0; margin: 0;">
           <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
@@ -1048,7 +1056,7 @@ engine.initialize()
           <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
             <span style="color: #06B6D4;">🔐</span> GGUF format validation
           <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #06B6D4;">🔐</span> Configurable privacy mode (<code style="font-size: .75rem;">PrivacyMode</code>)
+            <span style="color: #22C55E;">✓</span> Configurable privacy mode (<code style="font-size: .75rem;">PrivacyMode</code>)
           </li>
           <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
             <span style="color: #06B6D4;">🔐</span> Prompt injection guardrails

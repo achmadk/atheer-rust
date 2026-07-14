@@ -9,6 +9,7 @@ Mobile inference engine for LLMs on iOS and Android.
 - **Structured Output**: Native grammar-constrained decoding (Pushdown Automaton) guaranteeing valid JSON output.
 - **Memory hierarchy**: L1/L2/L3 KV caching with intelligent eviction policies.
 - **Cache encryption**: L3 KV cache snapshots encrypted at rest via AES-256-GCM (LZ4 compress → encrypt with random 12-byte nonce, distinct AAD `"atheer-cache-v1"`). Encryption key zeroized on drop. Key resolved at engine init: config key → ephemeral session key → None (L3 disabled).
+- **Privacy Modes**: Normal (crash reports, disk caching, full logging), Ephemeral (no disk writes, no logging beyond ring buffer), and Audited (full decision logging for compliance) — controlled via `privacy_mode` on `AtheerConfig`.
 - **Dynamic mode switching**: Eco, Balanced, and Turbo modes based on live hardware telemetry (thermal, memory, battery) sampled at 1 Hz.
 - **Platform hardware telemetry**: Android JNI bridge for thermal headroom, available memory, and battery level; iOS/macOS telemetry via `objc2` FFI (`IosMonitor` with 1 Hz sampling thread).
 - **Performance-per-watt measurement**: Benchmarking infrastructure for throughput, energy, and thermal throttling curves (Criterion benches + perf-bench binary).
@@ -295,7 +296,7 @@ cargo bench -p perf-bench
 
 | Crate | Description | Tests |
 |-------|-------------|-------|
-| `atheer-core` | Core inference engine (powered by `candle` and `tokenizers`) | 17 |
+| `atheer-core` | Core inference engine (powered by `candle` and `tokenizers`) + privacy mode | 17 |
 | `atheer-ffi` | FFI bindings via uniffi (Swift/Kotlin) | 8 |
 | `atheer-accel` | Hardware acceleration backends (Metal, Vulkan, NNAPI, CoreML, CPU) | 29 |
 | `atheer-orchestrator` | Mode selection, grammar sampling, and agent execution loop | integration |
@@ -342,6 +343,17 @@ The `CoreMLBackend` now supports real ANE inference via `candle-coreml` integrat
 6. **16 unit tests** — all passing.
 
 **Remaining**: Create the `atheer-npu/candle-coreml` GitHub fork (upstream dep bump from 0.9.1 to 0.10.2 and API adaptation), then uncomment the git dep in `atheer-accel/Cargo.toml` and verify the `coreml` feature compiles end-to-end.
+
+### Privacy Modes (V1) ✅
+
+Three-tier runtime privacy mode governing crash reporting, persistence, and logging — completed July 2026:
+
+1. **`PrivacyMode` enum** in `atheer-core/src/privacy.rs` — `Normal`, `Ephemeral`, and `Audited` variants with doc-comment guardrails describing exact behavior.
+2. **`AtheerPrivacyMode` FFI type** in `atheer-ffi/src/privacy.rs` — uniffi enum with bidirectional `From` conversions.
+3. **`AtheerConfig.privacy_mode`** — `Option<AtheerPrivacyMode>` field (default `None` = Normal behavior) with documentation explaining Ephemeral and Audited semantics.
+4. **Crash reporter integration** — `CrashReporter` stores privacy mode atomically; Ephemeral mode skips all crash log file writes (counter still increments). `record_crash_scrubbed()` redacts sensitive key IDs before logging. 8 unit tests covering all three modes.
+5. **Engine integration** — `AtheerEngine` stores `privacy_mode`, uses `trace_if_ok!` macro to suppress `info`/`warn`/`debug` in Ephemeral mode (errors always emit). Ephemeral mode also forces `encryption_key` to `None`, disabling L3 cache persistence entirely.
+6. **5 files touched** — `atheer-core/src/privacy.rs`, `atheer-core/src/crash.rs`, `atheer-core/src/lib.rs`, `atheer-ffi/src/privacy.rs`, `atheer-ffi/src/config.rs`, `atheer-ffi/src/engine.rs`.
 
 ### Metal Backend Stability
 

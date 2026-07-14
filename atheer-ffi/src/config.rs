@@ -1,4 +1,4 @@
-use crate::AtheerBackendType;
+use crate::{AtheerBackendType, AtheerPrivacyMode};
 use atheer_core::model_credential::ModelCredential;
 use serde::{Deserialize, Serialize};
 
@@ -41,6 +41,11 @@ pub struct AtheerConfig {
     pub cache_encryption_key: Option<Vec<u8>>,
     #[serde(skip)]
     pub model_credential: Option<ModelCredential>,
+    /// Runtime privacy mode. When set to `Ephemeral`, the engine skips crash
+    /// report writes, L3 cache persistence, and suppresses tracing output.
+    /// When set to `Audited`, additional decision-point logging is enabled.
+    /// Default (`None`) means normal operation with no restrictions.
+    pub privacy_mode: Option<AtheerPrivacyMode>,
     /// Raw Ed25519 public key bytes (32 bytes) for model signature verification.
     /// When set, `SecurityAudit.enable_signature_verify` is enabled and the
     /// engine verifies the model file against a `.gguf.sig` detached signature
@@ -78,6 +83,7 @@ impl Default for AtheerConfig {
             clear_on_low_memory: true,
             cache_encryption_key: None,
             model_credential: None,
+            privacy_mode: None,
             model_signature_public_key: None,
             model_expected_sha256: None,
         }

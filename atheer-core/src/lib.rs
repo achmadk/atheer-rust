@@ -18,6 +18,7 @@ pub mod model_encryption;
 #[cfg(feature = "model-registry")]
 pub mod model_registry;
 pub mod model_verifier;
+pub mod privacy;
 pub mod production;
 pub mod quantization_resolver;
 pub mod safety;
@@ -42,6 +43,7 @@ pub use model::Model;
 pub use model_credential::ModelCredential;
 pub use model_encryption::{aes256_gcm::Aes256GcmEncryption, ModelEncryption};
 pub use model_verifier::ModelVerifier;
+pub use privacy::PrivacyMode;
 pub use production::{ConfigError, ProductionConfig};
 pub use quantization_resolver::{GpuTier, QuantizationResolver};
 pub use safety::{
