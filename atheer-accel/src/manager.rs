@@ -44,13 +44,18 @@ impl BackendManager {
         }
     }
 
-    /// Configure a CoreML model path for ANE inference.
+    /// Configure a CoreML model path for ANE inference with background pre-heat.
     ///
     /// When a model path is provided and we're on an Apple platform with the
     /// `coreml` feature, this replaces the default `CoreMLBackend::new()` with
-    /// `CoreMLBackend::with_model()` — loading the actual `.mlpackage` for
-    /// real ANE inference. On non-Apple platforms or without the feature, the
-    /// path is stored but has no effect (the backend falls back to Metal/CPU).
+    /// `CoreMLBackend::for_preheat()` — storing the model path and computing
+    /// ANE compatibility without synchronously loading the `.mlpackage`.
+    /// The actual model loading happens in the background via [`preheat_ane`]
+    /// (called later from [`AtheerEngine::initialize`]), eliminating cold-start
+    /// ANE compilation latency on first inference.
+    ///
+    /// On non-Apple platforms or without the feature, the path is stored but
+    /// has no effect (the backend falls back to Metal/CPU).
     pub fn with_coreml_model(
         mut self,
         model_path: &str,
@@ -66,7 +71,10 @@ impl BackendManager {
             .iter()
             .position(|b| b.backend_type() == BackendType::CoreML)
         {
-            self.backends[pos] = Arc::new(CoreMLBackend::with_model(
+            let architecture = _architecture;
+            let quantization = _quantization;
+            let param_count_m = _param_count_m;
+            self.backends[pos] = Arc::new(CoreMLBackend::for_preheat(
                 architecture,
                 quantization,
                 param_count_m,

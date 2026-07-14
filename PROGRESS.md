@@ -2,7 +2,7 @@
 
 > Generated: 2026-07-14
 > Scope: Full workspace analysis — 15 crates/packages, ~19K Rust source lines, ~399 tests
-> Status: **96% complete across all subsystems** (+2% since last report: S4 Prompt Injection Guardrails completed)
+> Status: **97% complete across all subsystems** (+1% since last report: P5 ANE compilation pre-heat completed)
 
 ---
 
@@ -79,7 +79,7 @@
 | Metal (iOS/macOS) | 164 | 4 tests | ⚠️ 4 tests panic on empty device list (`swap_remove` — upstream candle-core bug) |
 | Vulkan (Android) | 1,120 | — | ⚠️ 2 shaders compile (GEMV, Attention); build.rs gated |
 | NNAPI (Android) | 1,455 + 553 | 17 | ✅ Full graph builder, compiler, executor |
-| CoreML/ANE (macOS) | 676 | 16 | ✅ All tests pass |
+| CoreML/ANE (macOS) | ~720 | 20 | ✅ All tests pass — background ANE pre-heat added |
 | Backend manager | 227 | ✅ | ✅ Probe-order routing |
 | Traits | 44 | — | ✅ `AccelBackend` trait |
 
@@ -285,7 +285,7 @@ _All P0 items from previous report have been addressed: `perf-bench` crate exist
 Crate                  Total   Pass   Fail   Ignored   Notes
 ─────────────────────────────────────────────────────────────
 atheer-core             209     206     0       3       42 guardrail tests (21 unit + 21 suite/integration), 3 ignored need GGUF model
-atheer-accel             51      51    14*     0       * 4 Metal panics + 10 platform-gated (NNAPI)
+atheer-accel             55      51    14*     0       * 4 Metal panics + 10 platform-gated (NNAPI) + 4 CoreML cfg-gated preheat tests
 atheer-orchestrator      70      70     0       0
 atheer-memory-bank       40      40     0       0
 atheer-hardware          18      18     0       0
@@ -293,7 +293,7 @@ atheer-ffi               35      35     0       0       +3 guardrail FFI + +3 pr
 tests/src (integ.)       36      36     0       0
 fuzz                      3       3     0       0       skeleton harness, 3 targets
 ─────────────────────────────────────────────────────────────
-Total                   ~462   ~459    14       3
+Total                   ~466   ~463    14       3
 
 * NNAPI tests (10) are `#[cfg(target_os = "android")]` — don't run on macOS
   4 Metal tests fail on this macOS machine (no Metal GPU)
@@ -301,7 +301,7 @@ Total                   ~462   ~459    14       3
 ```
 
 **Caveats:**
-- Platform-gated tests: 17 NNAPI tests (Android-only) + 1 CoreML feature-gated test don't run on standard CI
+- Platform-gated tests: 17 NNAPI tests (Android-only) + 5 CoreML feature-gated tests don't run on standard CI
 - Metal tests fail on any machine without a Metal GPU (CI, VMs, virtualized macOS)
 - 3 accuracy tests need a 350 MB GGUF model downloaded via `scripts/download-test-model.sh`
 

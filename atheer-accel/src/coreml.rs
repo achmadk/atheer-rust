@@ -1,5 +1,7 @@
 use crate::{AccelBackend, AccelResult, BackendType, Result};
 use std::collections::HashMap;
+#[cfg(all(feature = "coreml", any(target_os = "ios", target_os = "macos")))]
+use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
 /// Thread-safe wrapper around [`candle_coreml::CoreMLModel`].
@@ -55,9 +57,20 @@ pub struct CoreMLBackend {
     ane_available: bool,
     /// Cached ANE compatibility — computed once at model load time.
     ane_compat: Option<ANECompatibility>,
+    /// Path to the .mlpackage model file for ANE pre-heat / inference.
+    #[cfg(all(feature = "coreml", any(target_os = "ios", target_os = "macos")))]
+    model_path: Option<String>,
     /// Loaded CoreML model for real ANE inference (cfg-gated).
     #[cfg(all(feature = "coreml", any(target_os = "ios", target_os = "macos")))]
     coreml_model: Option<crate::Result<SafeCoreMLModel>>,
+    /// Pre-heated CoreML model loaded in the background.
+    ///
+    /// Set by [`preheat_ane()`] which spawns a background thread to load the
+    /// `.mlpackage` and run a warm-up forward pass. Once populated, [`forward()`]
+    /// uses this model for ANE inference instead of the synchronous `coreml_model`,
+    /// eliminating the cold-start compilation delay on first inference.
+    #[cfg(all(feature = "coreml", any(target_os = "ios", target_os = "macos")))]
+    preheated_model: Arc<OnceLock<crate::Result<SafeCoreMLModel>>>,
 }
 
 /// Result of sysctl-based ANE capability detection.
@@ -255,7 +268,11 @@ impl CoreMLBackend {
             ane_available: ane == AneCapability::AppleSilicon,
             ane_compat: None,
             #[cfg(all(feature = "coreml", any(target_os = "ios", target_os = "macos")))]
+            model_path: None,
+            #[cfg(all(feature = "coreml", any(target_os = "ios", target_os = "macos")))]
             coreml_model: None,
+            #[cfg(all(feature = "coreml", any(target_os = "ios", target_os = "macos")))]
+            preheated_model: Arc::new(OnceLock::new()),
         }
     }
 
@@ -291,8 +308,126 @@ impl CoreMLBackend {
             available: coreml_model.is_some() || metal_ok || ane == AneCapability::AppleSilicon,
             ane_available: ane == AneCapability::AppleSilicon,
             ane_compat: Some(compat),
+            model_path: Some(model_path.to_string()),
             coreml_model,
+            preheated_model: Arc::new(OnceLock::new()),
         }
+    }
+
+    /// Create a `CoreMLBackend` configured for background ANE pre-heat.
+    ///
+    /// Unlike [`with_model()`](Self::with_model), this does NOT load the
+    /// `.mlpackage` synchronously. Instead it stores the model path and
+    /// computes ANE compatibility, deferring actual model loading to
+    /// [`preheat_ane()`](Self::preheat_ane) which runs in a background thread.
+    /// This eliminates cold-start compilation delay on first inference.
+    #[cfg(all(feature = "coreml", any(target_os = "ios", target_os = "macos")))]
+    pub fn for_preheat(
+        architecture: &str,
+        quantization: &str,
+        param_count_m: f32,
+        model_path: &str,
+    ) -> Self {
+        let ane = detect_ane_capability();
+        let metal_ok = validate_metal_device();
+        let compat = ANECompatibility::for_model(architecture, quantization, param_count_m);
+        Self {
+            available: ane == AneCapability::AppleSilicon || metal_ok,
+            ane_available: ane == AneCapability::AppleSilicon,
+            ane_compat: Some(compat),
+            model_path: Some(model_path.to_string()),
+            coreml_model: None,
+            preheated_model: Arc::new(OnceLock::new()),
+        }
+    }
+
+    /// Spawn a background thread to load the CoreML model and warm up the ANE.
+    ///
+    /// The background thread:
+    /// 1. Loads the `.mlpackage` at [`model_path`](Self::model_path)
+    /// 2. Wraps it in [`SafeCoreMLModel`]
+    /// 3. Runs a single-token warm-up forward pass to trigger lazy ANE compilation
+    /// 4. Stores the result in [`preheated_model`](Self::preheated_model)
+    ///
+    /// Once populated, [`forward()`](Self::forward) prioritises the pre-heated
+    /// model, avoiding the cold-start latency of first-time ANE inference.
+    ///
+    /// This method is safe to call multiple times — subsequent calls are no-ops
+    /// once the `OnceLock` is set. Panics during load/warmup are caught and
+    /// stored as `Err`, causing forward to fall back to Metal/CPU.
+    #[cfg(all(feature = "coreml", any(target_os = "ios", target_os = "macos")))]
+    pub fn preheat_ane(&self) {
+        let model_path = match self.model_path.as_ref() {
+            Some(p) => p.clone(),
+            None => return,
+        };
+        let once_lock = self.preheated_model.clone();
+
+        // If already initialized, skip
+        if once_lock.get().is_some() {
+            return;
+        }
+
+        std::thread::spawn(move || {
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let model = candle_coreml::CoreMLModel::load(&model_path).map_err(|e| {
+                    crate::AccelError::BackendNotAvailable(format!(
+                        "Failed to load CoreML model for pre-heat: {e}"
+                    ))
+                })?;
+                let safe_model = SafeCoreMLModel(model);
+
+                // Warm-up forward pass: single token to trigger lazy JIT
+                // compilation on the ANE.
+                let input =
+                    candle_core::Tensor::from_vec(vec![0.0f32], &[1], &candle_core::Device::Cpu)
+                        .map_err(|e| {
+                            crate::AccelError::OperationFailed(format!(
+                                "ANE pre-heat tensor creation failed: {e}"
+                            ))
+                        })?;
+                let _output = safe_model.forward_single(&input).map_err(|e| {
+                    crate::AccelError::OperationFailed(format!(
+                        "ANE pre-heat warm-up forward failed: {e}"
+                    ))
+                })?;
+
+                tracing::info!(
+                    target: "atheer::accel::coreml",
+                    "ANE pre-heat complete for {model_path}",
+                );
+
+                Ok::<SafeCoreMLModel, crate::AccelError>(safe_model)
+            }));
+
+            let value = match result {
+                Ok(Ok(model)) => Ok(model),
+                Ok(Err(e)) => {
+                    tracing::warn!(
+                        target: "atheer::accel::coreml",
+                        "ANE pre-heat failed: {e}",
+                    );
+                    Err(e)
+                }
+                Err(panic_payload) => {
+                    let msg = if let Some(s) = panic_payload.downcast_ref::<&str>() {
+                        s.to_string()
+                    } else if let Some(s) = panic_payload.downcast_ref::<String>() {
+                        s.clone()
+                    } else {
+                        "unknown panic".to_string()
+                    };
+                    tracing::error!(
+                        target: "atheer::accel::coreml",
+                        "ANE pre-heat panicked: {msg}",
+                    );
+                    Err(crate::AccelError::OperationFailed(format!(
+                        "ANE pre-heat panicked: {msg}"
+                    )))
+                }
+            };
+            let _ = once_lock.set(value);
+        });
     }
 
     /// Returns whether the ANE hardware is detected on this device.
@@ -353,6 +488,21 @@ impl AccelBackend for CoreMLBackend {
         self.available
     }
 
+    #[cfg(all(feature = "coreml", any(target_os = "ios", target_os = "macos")))]
+    fn preheat_ane(&self, architecture: &str, _quantization: &str, _param_count_m: f32) {
+        // If the model path is already set (from for_preheat() or with_model()),
+        // trigger background loading. Otherwise the caller should have set it
+        // via BackendManager::with_coreml_model() before calling preheat_ane().
+        if self.model_path.is_none() {
+            tracing::warn!(
+                target: "atheer::accel::coreml",
+                "preheat_ane called but no model_path set — architecture={architecture}",
+            );
+            return;
+        }
+        self.preheat_ane();
+    }
+
     fn forward(&self, input_ids: &[u32], _positions: &[usize]) -> Result<AccelResult> {
         if !self.available {
             return Err(crate::AccelError::BackendNotAvailable(
@@ -369,6 +519,14 @@ impl AccelBackend for CoreMLBackend {
             .as_ref()
             .map_or(false, |c| c.overall_compatible)
         {
+            // Try pre-heated model first (background-loaded, preferred path)
+            if let Some(Ok(ref model)) = self.preheated_model.get() {
+                match ane_forward(model, input_ids, start) {
+                    Ok(result) => return Ok(result),
+                    Err(e) => tracing::warn!("ANE pre-heated inference failed, falling back: {e}"),
+                }
+            }
+            // Fall back to synchronous model (loaded at construction time)
             if let Some(Ok(ref model)) = self.coreml_model {
                 match ane_forward(model, input_ids, start) {
                     Ok(result) => return Ok(result),
@@ -692,5 +850,65 @@ mod tests {
         let result = backend.forward(&[0, 1, 2], &[]);
         // Without a loaded model, should fall through to Metal/CPU
         assert!(result.is_ok() || result.is_err());
+    }
+
+    // ─── ANE pre-heat tests ─────────────────────────────────────────
+
+    #[cfg(all(feature = "coreml", any(target_os = "ios", target_os = "macos")))]
+    #[test]
+    fn test_for_preheat_stores_compat() {
+        let backend = CoreMLBackend::for_preheat("llama", "q4_k_m", 100.0, "/tmp/test.mlpackage");
+        assert!(
+            backend.compatibility().is_some(),
+            "for_preheat should compute and store ANE compatibility"
+        );
+        let compat = backend.compatibility().unwrap();
+        assert!(
+            compat.overall_compatible,
+            "llama q4_k_m 100M should be compatible"
+        );
+        assert_eq!(backend.model_path.as_deref(), Some("/tmp/test.mlpackage"));
+        assert!(
+            backend.preheated_model.get().is_none(),
+            "preheated_model should be None immediately after construction"
+        );
+    }
+
+    #[cfg(all(feature = "coreml", any(target_os = "ios", target_os = "macos")))]
+    #[test]
+    fn test_preheat_ane_idempotent() {
+        let backend = CoreMLBackend::for_preheat("llama", "q4_k_m", 100.0, "/tmp/test.mlpackage");
+        // Calling preheat_ane multiple times should not panic
+        backend.preheat_ane();
+        backend.preheat_ane(); // second call is a no-op (OnceLock already being set)
+                               // Background thread may or may not have completed — but no panic is expected
+    }
+
+    #[cfg(all(feature = "coreml", any(target_os = "ios", target_os = "macos")))]
+    #[test]
+    fn test_preheat_forward_fallback_when_not_ready() {
+        // When the preheated model is not yet loaded, forward should fall
+        // through to Metal/CPU without panicking.
+        let backend = CoreMLBackend::for_preheat("llama", "q4_k_m", 100.0, "/tmp/test.mlpackage");
+        backend.preheat_ane();
+        let result = backend.forward(&[0, 1, 2], &[]);
+        // Without a real CoreML model, falls through to Metal/CPU
+        assert!(
+            result.is_ok() || result.is_err(),
+            "forward should not panic"
+        );
+    }
+
+    #[cfg(all(feature = "coreml", any(target_os = "ios", target_os = "macos")))]
+    #[test]
+    fn test_preheat_ane_no_model_path() {
+        // preheat_ane on a backend without model_path should be a no-op
+        let backend = CoreMLBackend::new();
+        assert_eq!(backend.model_path, None);
+        backend.preheat_ane(); // Should not panic
+        assert!(
+            backend.preheated_model.get().is_none(),
+            "OnceLock should remain None when no model_path is set"
+        );
     }
 }

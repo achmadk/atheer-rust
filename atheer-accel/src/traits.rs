@@ -15,6 +15,15 @@ pub trait AccelBackend: Send + Sync {
     fn supports_quantization(&self, _quantization: &str) -> bool {
         true
     }
+
+    /// Trigger background ANE model pre-heat if supported by this backend.
+    ///
+    /// Default no-op. Backends that support pre-heating (e.g. `CoreMLBackend`)
+    /// override this to spawn a background thread that loads the model and
+    /// runs a warm-up forward pass, eliminating cold-start ANE compilation
+    /// latency on the first real inference call.
+    fn preheat_ane(&self, _architecture: &str, _quantization: &str, _param_count_m: f32) {}
+
     #[deprecated(since = "0.1.0", note = "use InferenceEngine::generate() instead")]
     fn forward(&self, input_ids: &[u32], positions: &[usize]) -> Result<AccelResult>;
 }

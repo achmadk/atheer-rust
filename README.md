@@ -341,9 +341,23 @@ The `CoreMLBackend` now supports real ANE inference via `candle-coreml` integrat
 3. **ANE→Metal→CPU fallback chain** — ANE path via `candle_coreml::CoreMLModel::forward()`, fallback to `candle_core::Device::Metal`, then CPU one-hot.
 4. **`catch_unwind` protection** — ANE forward panics are caught gracefully.
 5. **Caching** — compatibility computed at load time and stored on the `CoreMLBackend` instance.
-6. **16 unit tests** — all passing.
+6. **16 unit tests** — all passing (20 with pre-heat tests, cfg-gated).
 
 **Remaining**: Create the `atheer-npu/candle-coreml` GitHub fork (upstream dep bump from 0.9.1 to 0.10.2 and API adaptation), then uncomment the git dep in `atheer-accel/Cargo.toml` and verify the `coreml` feature compiles end-to-end.
+
+### ANE Compilation Pre-Heat (P5) ✅
+
+Background ANE compilation pre-heat to eliminate cold-start ANE inference latency, completed July 2026:
+
+1. **`CoreMLBackend::for_preheat()`** — new constructor that stores the `.mlpackage` path and sets `preheated_model: Arc<OnceLock<CoreMLModel>>` instead of loading synchronously.
+2. **`CoreMLBackend::preheat_ane()`** — spawns a background thread to load the `.mlpackage` into `candle_coreml::CoreMLModel`, runs a warm-up forward pass with a dummy input tensor, then atomically swaps the handle into the `OnceLock`.
+3. **`forward()` modification** — checks `preheated_model.get()` first; if the preheated model is ready, uses it directly; otherwise falls through to the standard Metal → CPU fallback chain.
+4. **`AccelBackend::preheat_ane()`** — default no-op method on the `AccelBackend` trait (other backends don't need pre-heating).
+5. **`BackendManager::with_coreml_model()`** — uses `for_preheat()` instead of synchronous `with_model()`.
+6. **`AtheerEngine::initialize()` trigger** — after GGUF model is loaded, calls `preheat_ane()` on the backend manager's CoreML backend, kicking off the background load.
+7. **4 cfg-gated tests** — `test_for_preheat_stores_compat`, `test_preheat_ane_idempotent`, `test_preheat_forward_fallback_when_not_ready`, `test_preheat_ane_no_model_path` — all passing.
+
+Builds clean with and without `--features coreml` on macOS. 55/56 tests pass (1 pre-existing Metal failure).
 
 ### Privacy Modes (V1) ✅
 

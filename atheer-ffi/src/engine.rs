@@ -368,6 +368,21 @@ impl AtheerEngine {
             }
         };
 
+        // ── Trigger ANE pre-heat after GGUF model is loaded ──────────
+        //
+        // The CoreML model path and ANE compatibility are already stored on
+        // the backend from AtheerEngine::new(). We trigger background loading
+        // here (after the GGUF model is verified and loaded) so the ANE
+        // pre-heat runs in parallel with the remaining initialization steps
+        // (tokenizer, InferenceEngine setup). Pre-heat failure is non-fatal —
+        // forward() falls back to Metal/CPU if the ANE model isn't ready.
+        let architecture = self.config.model_id.as_deref().unwrap_or("llama");
+        let quantization = &self.config.quantization;
+        let param_count_m = parse_param_count(architecture);
+        self.backend_manager
+            .current()
+            .preheat_ane(architecture, quantization, param_count_m);
+
         let tokenizer = atheer_core::Tokenizer::from_file(tokenizer_path).map_err(|e| {
             AtheerError::TokenizerLoadFailed {
                 message: format!("{e}"),

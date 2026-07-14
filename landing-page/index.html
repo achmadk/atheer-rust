@@ -895,7 +895,7 @@
       <div class="backend-card">
         <div class="backend-platform">iOS — Priority 1</div>
         <h4>CoreML / ANE</h4>
-        <p>Apple Neural Engine via <code>candle-coreml</code> integration. <code>ANECompatibility</code> struct with per-layer heuristics, model size ceiling, and quantization whitelist. Falls back to Metal for incompatible architectures. <code>catch_unwind</code> protected.</p>
+        <p>Apple Neural Engine via <code>candle-coreml</code> integration. <code>ANECompatibility</code> struct with per-layer heuristics, model size ceiling, and quantization whitelist. Background ANE compilation pre-heat via background thread loads and warms up the model at engine init — atomically swapped via <code>Arc&lt;OnceLock&gt;</code> to eliminate cold-start latency. Falls back to Metal for incompatible architectures. <code>catch_unwind</code> protected.</p>
         <span class="backend-priority">ANE detection · macOS build</span>
       </div>
       <div class="backend-card">
@@ -1105,7 +1105,7 @@ engine.initialize()
         <div style="margin-bottom: .75rem;">
           <span style="font-size: .7rem; color: #64748B; font-family: 'JetBrains Mono', monospace;">Phase 2</span>
           <h3 style="font-size: 1rem; font-weight: 700; margin-top: .15rem;">Security &amp; Privacy Hardening</h3>
-          <span style="font-size: .75rem; color: #64748B;">3&ndash;4 weeks · 9 items (6 complete)</span>
+          <span style="font-size: .75rem; color: #64748B;">3&ndash;4 weeks · 9 items (7 complete)</span>
         </div>
         <ul style="list-style: none; padding: 0; margin: 0;">
           <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
@@ -1123,7 +1123,7 @@ engine.initialize()
             <span style="color: #22C55E;">✓</span> Prompt injection guardrails (L1/L2/L3)
           </li>
           <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #F59E0B;">⚡</span> ANE compilation pre-heat (background)
+            <span style="color: #22C55E;">✓</span> ANE compilation pre-heat (background)
           </li>
           <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
             <span style="color: #22C55E;">✓</span> KV cache checkpoint persistence
