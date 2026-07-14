@@ -3,12 +3,66 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Atheer-Rust — Mobile Inference Engine for LLMs</title>
+<title>Atheer-Rust: On-Device LLM Inference Engine for iOS &amp; Android | Safe Rust NPU GPU</title>
+<meta name="description" content="Atheer is a safe-Rust inference engine that runs large language models locally on iOS and Android. Custom Vulkan compute shaders, raw NNAPI NDK bindings, grammar-constrained decoding, predictive thermal management, AES-256-GCM cache encryption — 100% safe Rust business logic, zero unsafe in production code.">
+<meta name="keywords" content="LLM inference, on-device AI, mobile inference, Rust inference engine, iOS LLM, Android LLM, CoreML, NNAPI, Vulkan compute, Metal GPU, grammar-constrained decoding, KV cache encryption, on-device LLM, NPU inference">
+<meta name="robots" content="index, follow">
+<meta name="author" content="Atheer-Rust Team">
+<meta name="theme-color" content="#0B1120">
+
+<!-- Canonical URL -->
+<link rel="canonical" href="https://atheer-rust.dev/">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://atheer-rust.dev/">
+<meta property="og:title" content="Atheer-Rust: On-Device LLM Inference Engine for iOS &amp; Android">
+<meta property="og:description" content="Safe-Rust inference engine for running LLMs locally on iOS and Android. 5 hardware backends, predictive thermal orchestration, L1/L2/L3 KV cache, AES-256-GCM encryption, grammar-constrained decoding — zero unsafe in business logic.">
+<meta property="og:image" content="https://atheer-rust.dev/og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:locale" content="en_US">
+<meta property="og:site_name" content="Atheer-Rust">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Atheer-Rust: On-Device LLM Inference Engine for iOS &amp; Android">
+<meta name="twitter:description" content="Safe-Rust inference engine for running LLMs locally. 5 hardware backends, predictive thermal management, encrypted KV cache, grammar-constrained decoding.">
+<meta name="twitter:image" content="https://atheer-rust.dev/og-image.png">
+
+<!-- Preconnect & Fonts -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>
-  /* ─── Reset & Base ─── */
+
+<!-- JSON-LD Structured Data -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Atheer-Rust",
+  "applicationCategory": "DeveloperApplication",
+  "operatingSystem": "iOS 15+, Android API 26+",
+  "description": "Safe-Rust inference engine that runs large language models locally on iOS and Android. Custom Vulkan compute shaders, raw NNAPI NDK bindings, grammar-constrained decoding, predictive thermal management, AES-256-GCM cache encryption, Ed25519 signature verification, and autonomous agent loops.",
+  "url": "https://atheer-rust.dev",
+  "sameAs": "https://github.com/achmadk/atheer-rust",
+  "license": "https://opensource.org/licenses/MIT OR https://opensource.org/licenses/Apache-2.0",
+  "author": {
+    "@type": "Organization",
+    "name": "Atheer-Rust Team"
+  },
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "softwareVersion": "0.1.0",
+  "releaseNotes": "https://github.com/achmadk/atheer-rust/releases",
+  "keywords": "LLM inference, on-device AI, Rust inference engine, mobile LLM, CoreML, NNAPI, Vulkan compute, grammar-constrained decoding",
+  "featureList": "Multi-backend GPU/NPU acceleration, Predictive thermal orchestration, L1/L2/L3 hierarchical KV cache, Grammar-constrained decoding, AES-256-GCM cache encryption, Ed25519 model signature verification, Built-in agent loops, UniFFI Swift/Kotlin cross-platform bindings"
+}
+</script>
+<style>  /* ─── Reset & Base ─── */
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   html { scroll-behavior: smooth; }
   body {
@@ -490,9 +544,9 @@
     <a href="#quickstart" onclick="closeNav()">Quick Start</a>
     <a href="#benchmarks" onclick="closeNav()">Benchmarks</a>
     <a href="#roadmap" onclick="closeNav()">Roadmap</a>
-    <a href="https://github.com/achmadk/atheer-rust" class="nav-cta" target="_blank" rel="noopener">GitHub →</a>
+    <a href="https://github.com/achmadk/atheer-rust" class="nav-cta" target="_blank" rel="noopener noreferrer" title="View source code on GitHub">GitHub →</a>
   </div>
-  <button class="nav-mobile-toggle" id="nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false">☰</button>
+  <button class="nav-mobile-toggle" id="nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false" title="Toggle navigation menu">☰</button>
 </nav>
 
 <!-- ─── Hero ─── -->
@@ -508,10 +562,10 @@
       decoding, and real-time adaptive performance across 5 hardware backends.
     </p>
     <div class="hero-actions">
-      <button class="btn btn-primary" onclick="document.getElementById('quickstart').scrollIntoView({behavior:'smooth'})">
+      <button class="btn btn-primary" onclick="document.getElementById('quickstart').scrollIntoView({behavior:'smooth'})" title="Jump to installation and code examples">
         Get Started →
       </button>
-      <button class="btn btn-secondary" onclick="document.getElementById('architecture').scrollIntoView({behavior:'smooth'})">
+      <button class="btn btn-secondary" onclick="document.getElementById('architecture').scrollIntoView({behavior:'smooth'})" title="View crate architecture diagram">
         View Architecture
       </button>
     </div>
@@ -525,7 +579,7 @@
 <!-- ─── Stats ─── -->
 <section class="stats-bar" id="stats">
   <div class="stats-grid">
-    <div class="stat-item reveal"><div class="stat-number" data-target="401">0</div><div class="stat-label">Tests</div></div>
+    <div class="stat-item reveal"><div class="stat-number" data-target="399">0</div><div class="stat-label">Tests</div></div>
     <div class="stat-item reveal"><div class="stat-number" data-target="7">0</div><div class="stat-label">Platform Crates</div></div>
     <div class="stat-item reveal"><div class="stat-number" data-target="5">0</div><div class="stat-label">GPU/NPU + CPU Backends</div></div>
     <div class="stat-item reveal"><div class="stat-number" data-target="100" data-suffix="%">0</div><div class="stat-label">Safe Rust</div></div>
@@ -587,8 +641,8 @@
       <div class="feature-card reveal">
         <div class="feature-icon feature-icon-blue">◈</div>
         <h3>#7 &mdash; Safe Rust, Not C/C++</h3>
-        <p>Rust&rsquo;s ownership model guarantees no use-after-free, no data races, and no GC pauses. <code>catch_unwind</code> wraps ANE forward calls so accelerator panics don&rsquo;t crash the host app. Memory safety at the FFI boundary, zero-cost abstractions everywhere.</p>
-        <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> Most mobile inference engines are written in C/C++ with manual memory management. Only MLX Swift shares Rust&rsquo;s safety guarantees &mdash; but it&rsquo;s Apple-only.</p>
+        <p>Rust&rsquo;s ownership model guarantees no use-after-free, no data races, and no GC pauses. <code>catch_unwind</code> wraps ANE forward calls so accelerator panics don&rsquo;t crash the host app. <strong>Every line of business logic across inference, grammar, cache, and orchestration is safe Rust</strong> — the only <code>unsafe</code> in the entire codebase is at platform FFI boundaries (C ABI export, NDK, Vulkan, ObjC), exactly the same discipline as Servo, wgpu, and Tokio.</p>
+        <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> Most mobile inference engines are written in C/C++ with manual memory management across their entire codebase. Only MLX Swift shares Rust&rsquo;s safety guarantees &mdash; but it&rsquo;s Apple-only.</p>
       </div>
 
       <div class="feature-card reveal">
@@ -879,7 +933,7 @@
       <pre class="code-block"><code><span class="comment"># Build the entire workspace</span>
 cargo build --workspace
 
-<span class="comment"># Run all 520+ tests</span>
+<span class="comment"># Run all 400+ tests</span>
 cargo test --workspace
 
 <span class="comment"># Download a test model (~350 MB)</span>
@@ -1132,7 +1186,7 @@ engine.initialize()
     </div>
 
     <p style="margin-top: 2rem; font-size: .85rem; color: #64748B; text-align: center; max-width: 650px; margin-left: auto; margin-right: auto; line-height: 1.7;">
-      Full analysis at <a href="https://github.com/achmadk/atheer-rust/blob/main/FURTHER_RESEARCHS.md" target="_blank" rel="noopener" style="color: #38BDF8;">FURTHER_RESEARCHS.md</a> — 7 dimensions, 40+ identified gaps, competitive landscape matrix, critical bugs, and per-item implementation guide with file paths and effort estimates.
+      Full analysis at <a href="https://github.com/achmadk/atheer-rust/blob/main/FURTHER_RESEARCHS.md" target="_blank" rel="noopener noreferrer" title="Research gaps and roadmap analysis — opens in new tab" style="color: #38BDF8;">FURTHER_RESEARCHS.md</a> — 7 dimensions, 40+ identified gaps, competitive landscape matrix, critical bugs, and per-item implementation guide with file paths and effort estimates.
     </p>
   </div>
 </section>
@@ -1155,13 +1209,17 @@ engine.initialize()
       </div>
       <div class="footer-col">
         <h5>Code</h5>
-        <a href="https://github.com/achmadk/atheer-rust" target="_blank" rel="noopener">GitHub</a>
-        <a href="https://github.com/achmadk/atheer-rust" target="_blank" rel="noopener">MIT OR Apache-2.0</a>
+        <a href="https://github.com/achmadk/atheer-rust" target="_blank" rel="noopener noreferrer" title="Source code on GitHub">GitHub</a>
+        <a href="https://github.com/achmadk/atheer-rust" target="_blank" rel="noopener noreferrer" title="MIT OR Apache-2.0 License">MIT OR Apache-2.0</a>
       </div>
     </div>
   </div>
   <div class="footer-bottom">
     <p>&copy; 2026 Atheer-Rust Team. MIT OR Apache-2.0.</p>
+    <div class="footer-bottom-links">
+      <a href="https://github.com/achmadk/atheer-rust" target="_blank" rel="noopener noreferrer">Source Code</a>
+      <a href="https://github.com/achmadk/atheer-rust/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">License</a>
+    </div>
   </div>
 </footer>
 
@@ -1275,7 +1333,13 @@ function copyCode(btn) {
     entries.forEach(entry => {
       if (entry.isIntersecting) {
         navLinks.forEach(link => {
-          link.classList.toggle('nav-active', link.getAttribute('href') === '#' + entry.target.id);
+          const isActive = link.getAttribute('href') === '#' + entry.target.id;
+          link.classList.toggle('nav-active', isActive);
+          if (isActive) {
+            link.setAttribute('aria-current', 'section');
+          } else {
+            link.removeAttribute('aria-current');
+          }
         });
       }
     });
