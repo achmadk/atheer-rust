@@ -95,8 +95,22 @@ impl Model {
             })?;
         }
 
+        // S6: pre-allocation header gate. Closes the S5 encryption bypass and
+        // rejects crafted inputs before candle's parser allocates Vec<u8>
+        // buffers sized from file-supplied lengths.
+        crate::safe_content::parse_header(reader, &crate::safe_content::SafeLoadLimits::default())
+            .map_err(map_safe_load_error)?;
+
         let gguf = candle_core::quantized::gguf_file::Content::read(reader)
             .map_err(|e| AtheerCoreError::ModelLoadFailed(format!("GGUF parse: {e}")))?;
+
+        #[cfg(feature = "gguf-validator")]
+        {
+            let validator = crate::gguf_validator::GgufValidator::new(u64::MAX);
+            validator
+                .validate_full(&gguf, u64::MAX)
+                .map_err(|e| AtheerCoreError::ModelLoadFailed(format!("GGUF validation: {e}")))?;
+        }
 
         // Architecture-aware dispatch: reads general.architecture from GGUF
         // metadata and selects the appropriate ModelWeights implementation.
@@ -134,6 +148,15 @@ impl Model {
         let mut reader = std::io::BufReader::new(&mut file);
 
         let device = device.clone();
+
+        // S6: pre-allocation header gate. Runs before candle's parser
+        // allocates Vec<u8> buffers sized from file-supplied lengths.
+        crate::safe_content::parse_header(
+            &mut reader,
+            &crate::safe_content::SafeLoadLimits::default(),
+        )
+        .map_err(map_safe_load_error)?;
+
         let gguf = candle_core::quantized::gguf_file::Content::read(&mut reader)
             .map_err(|e| AtheerCoreError::ModelLoadFailed(format!("GGUF parse: {e}")))?;
 
@@ -141,7 +164,7 @@ impl Model {
         {
             let validator = crate::gguf_validator::GgufValidator::new(file_size);
             validator
-                .validate(&gguf)
+                .validate_full(&gguf, file_size)
                 .map_err(|e| AtheerCoreError::ModelLoadFailed(format!("GGUF validation: {e}")))?;
         }
 
@@ -204,6 +227,29 @@ impl KvCacheBridge for Model {
     }
 }
 
+/// Map a [`crate::safe_content::SafeLoadError`] into the typed
+/// [`AtheerCoreError`] variants introduced by S6.
+fn map_safe_load_error(e: crate::safe_content::SafeLoadError) -> AtheerCoreError {
+    use crate::safe_content::SafeLoadError as S;
+    match e {
+        S::InvalidMagic { actual } => AtheerCoreError::InvalidMagic { actual },
+        S::InvalidVersion { version } => AtheerCoreError::InvalidVersion { version },
+        S::InvalidCounts {
+            tensor_count,
+            metadata_kv_count,
+            max_tensor_bytes,
+            requested_tensor_bytes,
+        } => AtheerCoreError::InvalidCounts {
+            tensor_count,
+            metadata_kv_count,
+            max_tensor_bytes,
+            requested_tensor_bytes,
+        },
+        S::InvalidAlignment { value } => AtheerCoreError::InvalidAlignment { value },
+        S::Io(msg) => AtheerCoreError::ModelLoadFailed(format!("GGUF header read: {msg}")),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -220,5 +266,63 @@ mod tests {
         // Can't construct a real model without GGUF; tests will need an actual file
         // For now, verify the trait impl compiles and error paths work
         assert!(true);
+    }
+
+    /// S6 (closes G1 regression): `from_gguf_reader` — the path used by the
+    /// decryption pipeline — must reject crafted headers via the
+    /// `parse_header` gate before `Content::read` allocates from file-derived
+    /// sizes. The S5 change added validation but only invoked it from the
+    /// file-path loader; S6 makes the pre-allocation chokepoint universal.
+    #[test]
+    fn test_from_gguf_reader_rejects_crafted_header() {
+        // Buffer = 4 bytes of magic 'XXXX' which is not GGUF. parse_header
+        // rejects via InvalidMagic, model load never gets to candle's parser.
+        let buf = b"XXXXXXXX".to_vec();
+        let mut cursor = std::io::Cursor::new(buf);
+        let device = candle_core::Device::Cpu;
+        let result = Model::from_gguf_reader(&mut cursor, &device, None);
+        assert!(result.is_err(), "crafted header must be rejected");
+        match result {
+            Err(AtheerCoreError::InvalidMagic { .. }) => {}
+            Err(other) => panic!("expected InvalidMagic, got: {other}"),
+            Ok(_) => panic!("expected error, got Ok"),
+        }
+    }
+
+    /// S6: a buffer with valid GGUF magic + version + a tensor_count that
+    /// exceeds the ceiling must be rejected at the header gate, never
+    /// reaching candle's parser.
+    #[test]
+    fn test_from_gguf_reader_rejects_tensor_count_explosion() {
+        // GGUF V3 header: magic + version 3 + tensor_count = u64::MAX.
+        let mut buf = Vec::new();
+        buf.extend_from_slice(b"GGUF");
+        buf.extend_from_slice(&3u32.to_le_bytes());
+        buf.extend_from_slice(&u64::MAX.to_le_bytes());
+        let mut cursor = std::io::Cursor::new(buf);
+        let device = candle_core::Device::Cpu;
+        let result = Model::from_gguf_reader(&mut cursor, &device, None);
+        assert!(result.is_err(), "tensor-count explosion must be rejected");
+        match result {
+            Err(AtheerCoreError::InvalidCounts { .. })
+            | Err(AtheerCoreError::ModelLoadFailed(_)) => {}
+            Err(other) => panic!("expected InvalidCounts or ModelLoadFailed, got: {other}"),
+            Ok(_) => panic!("expected error, got Ok"),
+        }
+    }
+
+    /// S6: a buffer whose metadata KV count exceeds the ceiling must be
+    /// rejected at the header gate.
+    #[test]
+    fn test_from_gguf_reader_rejects_metadata_kv_explosion() {
+        let mut buf = Vec::new();
+        buf.extend_from_slice(b"GGUF");
+        buf.extend_from_slice(&3u32.to_le_bytes());
+        buf.extend_from_slice(&0u64.to_le_bytes()); // tensor_count = 0
+        buf.extend_from_slice(&200_000u64.to_le_bytes()); // metadata_kv_count exceeds ceiling
+        let mut cursor = std::io::Cursor::new(buf);
+        let device = candle_core::Device::Cpu;
+        let result = Model::from_gguf_reader(&mut cursor, &device, None);
+        assert!(result.is_err());
     }
 }

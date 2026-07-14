@@ -45,11 +45,27 @@ impl MmapModel {
             .map_err(|e| AtheerCoreError::ModelLoadFailed(format!("File metadata: {e}")))?
             .len();
 
+        // S6: pre-allocation header gate. Reads the GGUF magic, version,
+        // counts, and `general.alignment` from `&mut file` BEFORE we mmap
+        // the file. This prevents an adversarial sparse file from forcing
+        // an OOM via a multi-TiB mmap request before we know whether the
+        // file is a valid GGUF. Only after the header passes validation do
+        // we commit to materializing the file into memory.
+        crate::safe_content::parse_header(
+            &mut file,
+            &crate::safe_content::SafeLoadLimits::default(),
+        )
+        .map_err(map_safe_load_error)?;
+
         // Safety: the file is not modified while mapped. We keep the Mmap alive for
-        // the struct lifetime so the mapping remains valid.
+        // the struct lifetime so the mapping remains valid. The pre-allocation
+        // header gate (S6) ran above against `&mut file` before this mmap,
+        // so we only commit to materializing pages for files with a valid
+        // GGUF header.
         let mmap = unsafe { Mmap::map(&file) }
             .map_err(|e| AtheerCoreError::ModelLoadFailed(format!("mmap failed: {e}")))?;
 
+        let mmap_size = mmap.len() as u64;
         let mut cursor = Cursor::new(&mmap[..]);
 
         // Parse GGUF metadata only (tensor infos, header). This is a small read.
@@ -58,10 +74,9 @@ impl MmapModel {
 
         #[cfg(feature = "gguf-validator")]
         {
-            let mmap_size = mmap.len() as u64;
             let validator = crate::gguf_validator::GgufValidator::new(mmap_size);
             validator
-                .validate(&ct)
+                .validate_full(&ct, mmap_size)
                 .map_err(|e| AtheerCoreError::ModelLoadFailed(format!("GGUF validation: {e}")))?;
         }
 
@@ -194,6 +209,31 @@ impl KvCacheBridge for MmapModel {
         self.weights
             .kv_cache_restore(snapshot)
             .map_err(|e| AtheerCoreError::KvCacheError(e.to_string()))
+    }
+}
+
+/// Map a [`crate::safe_content::SafeLoadError`] into the typed
+/// [`AtheerCoreError`] variants introduced by S6. Mirrors the helper in
+/// `model.rs` since this crate uses an independent compilation unit under
+/// the `mmap` feature flag.
+fn map_safe_load_error(e: crate::safe_content::SafeLoadError) -> AtheerCoreError {
+    use crate::safe_content::SafeLoadError as S;
+    match e {
+        S::InvalidMagic { actual } => AtheerCoreError::InvalidMagic { actual },
+        S::InvalidVersion { version } => AtheerCoreError::InvalidVersion { version },
+        S::InvalidCounts {
+            tensor_count,
+            metadata_kv_count,
+            max_tensor_bytes,
+            requested_tensor_bytes,
+        } => AtheerCoreError::InvalidCounts {
+            tensor_count,
+            metadata_kv_count,
+            max_tensor_bytes,
+            requested_tensor_bytes,
+        },
+        S::InvalidAlignment { value } => AtheerCoreError::InvalidAlignment { value },
+        S::Io(msg) => AtheerCoreError::ModelLoadFailed(format!("GGUF header read: {msg}")),
     }
 }
 

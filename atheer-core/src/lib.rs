@@ -24,6 +24,7 @@ pub mod model_verifier;
 pub mod privacy;
 pub mod production;
 pub mod quantization_resolver;
+pub mod safe_content;
 pub mod safety;
 pub mod sampler;
 pub mod security;

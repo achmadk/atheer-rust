@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Atheer-Rust: On-Device LLM Inference Engine for iOS &amp; Android | Safe Rust NPU GPU</title>
-<meta name="description" content="Atheer is a safe-Rust inference engine that runs large language models locally on iOS and Android. Custom Vulkan compute shaders, raw NNAPI NDK bindings, grammar-constrained decoding, predictive thermal management, AES-256-GCM cache encryption — 100% safe Rust business logic, zero unsafe in production code.">
+<meta name="description" content="Atheer is a safe-Rust inference engine that runs large language models locally on iOS and Android. Custom Vulkan compute shaders, raw NNAPI NDK bindings, grammar-constrained decoding, predictive thermal management, AES-256-GCM cache encryption, Ed25519 model signatures, and a pre-allocation GGUF header gate — 100% safe Rust business logic, zero unsafe in production code.">
 <meta name="keywords" content="LLM inference, on-device AI, mobile inference, Rust inference engine, iOS LLM, Android LLM, CoreML, NNAPI, Vulkan compute, Metal GPU, grammar-constrained decoding, KV cache encryption, on-device LLM, NPU inference">
 <meta name="robots" content="index, follow">
 <meta name="author" content="Atheer-Rust Team">
@@ -27,7 +27,7 @@
 <!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Atheer-Rust: On-Device LLM Inference Engine for iOS &amp; Android">
-<meta name="twitter:description" content="Safe-Rust inference engine for running LLMs locally. 5 hardware backends, predictive thermal management, encrypted KV cache, grammar-constrained decoding.">
+<meta name="twitter:description" content="Safe-Rust inference engine for running LLMs locally. 5 hardware backends, predictive thermal management, AES-256-GCM encryption, Ed25519 model signatures, pre-allocation GGUF header gate.">
 <meta name="twitter:image" content="https://atheer-rust.dev/og-image.png">
 
 <!-- Preconnect & Fonts -->
@@ -43,7 +43,7 @@
   "name": "Atheer-Rust",
   "applicationCategory": "DeveloperApplication",
   "operatingSystem": "iOS 15+, Android API 26+",
-  "description": "Safe-Rust inference engine that runs large language models locally on iOS and Android. Custom Vulkan compute shaders, raw NNAPI NDK bindings, grammar-constrained decoding, predictive thermal management, AES-256-GCM cache encryption, Ed25519 signature verification, and autonomous agent loops.",
+  "description": "Safe-Rust inference engine that runs large language models locally on iOS and Android. Custom Vulkan compute shaders, raw NNAPI NDK bindings, grammar-constrained decoding, predictive thermal management, AES-256-GCM cache encryption, Ed25519 signature verification, pre-allocation GGUF header gate, and autonomous agent loops.",
   "url": "https://atheer-rust.dev",
   "sameAs": "https://github.com/achmadk/atheer-rust",
   "license": "https://opensource.org/licenses/MIT OR https://opensource.org/licenses/Apache-2.0",
@@ -59,7 +59,7 @@
   "softwareVersion": "0.1.0",
   "releaseNotes": "https://github.com/achmadk/atheer-rust/releases",
   "keywords": "LLM inference, on-device AI, Rust inference engine, mobile LLM, CoreML, NNAPI, Vulkan compute, grammar-constrained decoding",
-  "featureList": "Multi-backend GPU/NPU acceleration, Predictive thermal orchestration, L1/L2/L3 hierarchical KV cache, Grammar-constrained decoding, AES-256-GCM cache encryption, Ed25519 model signature verification, Built-in agent loops, UniFFI Swift/Kotlin cross-platform bindings"
+  "featureList": "Multi-backend GPU/NPU acceleration, Predictive thermal orchestration, L1/L2/L3 hierarchical KV cache, Grammar-constrained decoding, AES-256-GCM cache encryption, Ed25519 model signature verification, Pre-allocation GGUF header gate, Built-in agent loops, UniFFI Swift/Kotlin cross-platform bindings"
 }
 </script>
 <style>  /* ─── Reset & Base ─── */
@@ -579,7 +579,7 @@
 <!-- ─── Stats ─── -->
 <section class="stats-bar" id="stats">
   <div class="stats-grid">
-    <div class="stat-item reveal"><div class="stat-number" data-target="462">0</div><div class="stat-label">Tests</div></div>
+    <div class="stat-item reveal"><div class="stat-number" data-target="486">0</div><div class="stat-label">Tests</div></div>
     <div class="stat-item reveal"><div class="stat-number" data-target="7">0</div><div class="stat-label">Platform Crates</div></div>
     <div class="stat-item reveal"><div class="stat-number" data-target="5">0</div><div class="stat-label">GPU/NPU + CPU Backends</div></div>
     <div class="stat-item reveal"><div class="stat-number" data-target="100" data-suffix="%">0</div><div class="stat-label">Safe Rust</div></div>
@@ -647,9 +647,9 @@
 
       <div class="feature-card reveal">
         <div class="feature-icon feature-icon-green">🔐</div>
-        <h3>#8 &mdash; Model-Level &amp; Cache Encryption, Signature Verification</h3>
-        <p>AES-256-GCM encryption for GGUF and .mlpackage model files at rest, with a three-strategy decryption pipeline &mdash; ServerDistributed keys, DeviceDerived via HKDF-SHA256, or Custom provider. Ed25519 detached signature verification validates model origin and integrity before loading. GGUF format validation rejects malformed model files with overflow checks and bounds validation before they can cause OOB reads via <code>mmap</code>. <strong>KV cache snapshots at rest are also encrypted</strong> via the same AES-256-GCM primitive (LZ4 compress &rarr; encrypt with random 12-byte nonce, distinct AAD <code>b"atheer-cache-v1"</code>), with the encryption key zeroized on drop. This is the only open engine with model files, signatures, <em>and</em> cache encryption.</p>
-        <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> No other open engine encrypts models, signs models, <em>or</em> encrypts their KV cache at rest.</p>
+        <h3>#8 &mdash; Model-Level &amp; Cache Encryption, Signature Verification, Safe Load Pipeline</h3>
+        <p>AES-256-GCM encryption for GGUF and .mlpackage model files at rest, with a three-strategy decryption pipeline &mdash; ServerDistributed keys, DeviceDerived via HKDF-SHA256, or Custom provider. Ed25519 detached signature verification validates model origin and integrity before loading. <strong style="color:#7DD3FC;">A pre-allocation header gate</strong> (<code>safe_content::parse_header</code>) runs before <em>any</em> <code>Vec&lt;u8&gt;</code> allocation, rejecting crafted GGUF headers via length-pre-validated metadata scans and bounds-checked counts &mdash; with <code>parse_header</code> running <em>before</em> <code>Mmap::map</code> so adversarial sparse files cannot trigger mmap-OOM. Six typed <code>AtheerCoreError</code> variants (<code>InvalidMagic</code>, <code>InvalidCounts</code>, <code>InvalidTensorBounds</code>, &hellip;) replace the prior string-only failure mode, with structured fields emitted through the FFI boundary. <strong>KV cache snapshots at rest are also encrypted</strong> via the same AES-256-GCM primitive (LZ4 compress &rarr; encrypt with random 12-byte nonce, distinct AAD <code>b"atheer-cache-v1"</code>), with the encryption key zeroized on drop. This is the only open engine with model files, signatures, safe loading, <em>and</em> cache encryption.</p>
+        <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> No other open engine encrypts models, signs models, gates GGUF allocation, <em>or</em> encrypts their KV cache at rest.</p>
       </div>
 
       <div class="feature-card reveal">
@@ -803,7 +803,7 @@
       ✅ Shipped &mdash; 📋 Planned = gap identified, prioritized in roadmap below ⬇️
     </p>
     <p style="margin-top: 1.5rem; font-size: .9rem; color: #94A3B8; text-align: center; max-width: 650px; margin-left: auto; margin-right: auto; line-height: 1.7;">
-      <strong style="color: #38BDF8;">Key insight:</strong> The gaps we&rsquo;ve identified (prompt guardrails, privacy manifesto, session isolation) are not "catching up" items — <strong style="color: #E2E8F0;">nobody else does them either</strong>. These are genuine greenfield differentiation opportunities. Atheer has <strong style="color: #22C55E;">already shipped model file encryption (AES-256-GCM), KV cache encryption (AES-256-GCM), Ed25519 signature verification, load-time SHA-256 hash checks, speculative decoding, and a three-tier privacy mode (Normal/Ephemeral/Audited)</strong> — the only open engine with all six. Privacy mode makes it the engine you choose when you need to "run AI on customer devices and prove nothing leaves."
+      <strong style="color: #38BDF8;">Key insight:</strong> The gaps we&rsquo;ve identified (prompt guardrails, privacy manifesto, session isolation) are not "catching up" items — <strong style="color: #E2E8F0;">nobody else does them either</strong>. These are genuine greenfield differentiation opportunities. Atheer has <strong style="color: #22C55E;">already shipped model file encryption (AES-256-GCM), KV cache encryption (AES-256-GCM), Ed25519 signature verification, load-time SHA-256 hash checks, a pre-allocation GGUF header gate (S6), speculative decoding, and a three-tier privacy mode (Normal/Ephemeral/Audited)</strong> — the only open engine with all seven. Privacy mode makes it the engine you choose when you need to "run AI on customer devices and prove nothing leaves."
     </p>
   </div>
 </section>
@@ -875,6 +875,7 @@
       <span class="arch-pill">◆ INT8/INT4 KV cache quant</span>
       <span class="arch-pill">🔐 AES-256-GCM model + cache encrypt</span>
       <span class="arch-pill">🔐 Ed25519 sig verify + SHA-256</span>
+      <span class="arch-pill">🛡️ Pre-allocation GGUF header gate (S6)</span>
     </div>
     <p style="text-align:center;margin-top:1.5rem;font-size:.8rem;color:#475569;font-family:'JetBrains Mono',monospace;">
       atheer-hardware ─1 Hz→ orchestrator ─mode→ atheer-core ─tensor→ atheer-accel
@@ -940,7 +941,7 @@
       <pre class="code-block"><code><span class="comment"># Build the entire workspace</span>
 cargo build --workspace
 
-<span class="comment"># Run all 460+ tests</span>
+<span class="comment"># Run all 480+ tests</span>
 cargo test --workspace
 
 <span class="comment"># Download a test model (~350 MB)</span>
@@ -1101,11 +1102,11 @@ engine.initialize()
 
       <!-- Phase 2 -->
       <div class="feature-card" style="border-color: rgba(6,182,212,.18); position: relative;">
-        <div style="position: absolute; top: -.6rem; right: 1rem; background: #38BDF8; color: #0B1120; font-size: .6rem; font-weight: 700; padding: .15rem .7rem; border-radius: 100px; text-transform: uppercase; letter-spacing: .06em;">NOW</div>
+        <div style="position: absolute; top: -.6rem; right: 1rem; background: #22C55E; color: #0B1120; font-size: .6rem; font-weight: 700; padding: .15rem .7rem; border-radius: 100px; text-transform: uppercase; letter-spacing: .06em;">DONE</div>
         <div style="margin-bottom: .75rem;">
           <span style="font-size: .7rem; color: #64748B; font-family: 'JetBrains Mono', monospace;">Phase 2</span>
           <h3 style="font-size: 1rem; font-weight: 700; margin-top: .15rem;">Security &amp; Privacy Hardening</h3>
-          <span style="font-size: .75rem; color: #64748B;">3&ndash;4 weeks · 9 items (8 complete)</span>
+          <span style="font-size: .75rem; color: #22C55E;">3&ndash;4 weeks · 10 items · ✅ Complete</span>
         </div>
         <ul style="list-style: none; padding: 0; margin: 0;">
           <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
@@ -1115,7 +1116,11 @@ engine.initialize()
             <span style="color: #22C55E;">✓</span> Model signature + hash verification (S2+S3)
           </li>
           <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #22C55E;">✓</span> GGUF format validation
+            <span style="color: #22C55E;">✓</span> GGUF format validation (S5)
+          </li>
+          <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
+            <span style="color: #22C55E;">✓</span> <strong style="color:#7DD3FC;">Pre-allocation header gate (S6)</strong> — <code style="font-size: .75rem;">safe_content::parse_header</code> rejects crafted GGUF headers before any <code style="font-size: .75rem;">Vec&lt;u8&gt;</code> allocation; closes the S5 encryption bypass; 6 typed <code style="font-size: .75rem;">AtheerCoreError</code> variants
+          </li>
           <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
             <span style="color: #22C55E;">✓</span> Configurable privacy mode (<code style="font-size: .75rem;">PrivacyMode</code>)
           </li>
@@ -1129,12 +1134,15 @@ engine.initialize()
             <span style="color: #22C55E;">✓</span> KV cache checkpoint persistence
           </li>
           <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #22C55E;">✓</span> Model hash verify (S3)
+            <span style="color: #22C55E;">✓</span> Model loading retry + CPU degrade fallback
           </li>
           <li style="padding: .45rem 0; font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #06B6D4;">🔐</span> Certificate pinning for model downloads
+            <span style="color: #22C55E;">✓</span> Sampling thread heartbeat watchdog
           </li>
         </ul>
+        <div style="margin-top: .75rem; padding-top: .75rem; border-top: 1px solid rgba(34,197,94,.15); font-size: .75rem; color: #22C55E;">
+          ✅ All 10 items complete &mdash; Phase 2 closed
+        </div>
       </div>
 
       <!-- Phase 3 -->
@@ -1142,7 +1150,7 @@ engine.initialize()
         <div style="margin-bottom: .75rem;">
           <span style="font-size: .7rem; color: #64748B; font-family: 'JetBrains Mono', monospace;">Phase 3</span>
           <h3 style="font-size: 1rem; font-weight: 700; margin-top: .15rem;">Polish &amp; Performance</h3>
-          <span style="font-size: .75rem; color: #64748B;">4&ndash;6 weeks · 8 items</span>
+          <span style="font-size: .75rem; color: #64748B;">4&ndash;6 weeks · 9 items</span>
         </div>
         <ul style="list-style: none; padding: 0; margin: 0;">
           <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
@@ -1166,8 +1174,11 @@ engine.initialize()
           <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
             <span style="color: #F59E0B;">◆</span> GDPR docs + <code style="font-size: .75rem;">delete_all_user_data()</code> API
           </li>
-          <li style="padding: .45rem 0; font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
+          <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
             <span style="color: #F59E0B;">◆</span> Audit logging (tamper-evident)
+          </li>
+          <li style="padding: .45rem 0; font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
+            <span style="color: #F59E0B;">◆</span> Certificate pinning for model downloads (S7)
           </li>
         </ul>
       </div>

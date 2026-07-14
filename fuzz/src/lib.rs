@@ -39,6 +39,20 @@ fn fuzz_token_validation(data: &[u8]) {
     }
 }
 
+/// S6: feed random bytes to the pre-allocation GGUF header gate.
+///
+/// Contract: `parse_header` must never panic, even on adversarial inputs that
+/// declare absurdly large metadata string lengths or unbounded tensor counts.
+/// Any panic found by this fuzz target would indicate an unsafe allocation
+/// or unchecked index — both regressions against the S6 design goal.
+fn fuzz_gguf_header(data: &[u8]) {
+    use atheer_core::safe_content::{parse_header, SafeLoadLimits};
+    use std::io::Cursor;
+
+    let mut cursor = Cursor::new(data.to_vec());
+    let _ = parse_header(&mut cursor, &SafeLoadLimits::default());
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -57,10 +71,24 @@ mod tests {
     fn test_fuzz_token_empty() {
         fuzz_token_validation(b"");
     }
+
+    /// S6: smoke test for the GGUF header fuzz target. Ensures it compiles
+    /// and doesn't panic on a small hand-crafted buffer.
+    #[test]
+    fn test_fuzz_gguf_header_smoke() {
+        // Valid minimal header: GGUF magic + version 3 + zero counts.
+        let buf = b"GGUF\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00";
+        fuzz_gguf_header(buf);
+        // Empty input — must return Io error, not panic.
+        fuzz_gguf_header(&[]);
+        // Wrong magic — must return InvalidMagic error, not panic.
+        fuzz_gguf_header(b"NOPE\x03\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00");
+    }
 }
 
 libfuzzer_sys::fuzz_target!(|data: &[u8]| {
     fuzz_config_parse(data);
     fuzz_kv_cache_operations(data);
     fuzz_token_validation(data);
+    fuzz_gguf_header(data);
 });

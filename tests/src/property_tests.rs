@@ -131,5 +131,36 @@ mod property_tests {
 
             prop_assert_eq!(bank.l1_active(), Some(model_id.to_string()));
         }
+
+        /// S6: feed random byte streams to `parse_header` and verify it never
+        /// panics. Random inputs must produce `Err(SafeLoadError)`, never an
+        /// OOM panic or out-of-bounds crash. This is the canonical fuzz-style
+        /// regression test for the S6 pre-allocation header gate.
+        #[test]
+        fn test_parse_header_never_panics_on_random_bytes(
+            data: Vec<u8>
+        ) {
+            use atheer_core::safe_content::{parse_header, SafeLoadLimits};
+            use std::io::Cursor;
+
+            let mut cursor = Cursor::new(data);
+            let _ = parse_header(&mut cursor, &SafeLoadLimits::default());
+            // panics caught at process boundary; if we reach here, parse_header
+            // returned without panicking, which is the contract under test.
+        }
+
+        /// S6: short random byte streams should return an Io or Invalid*
+        /// error, never panic on truncation.
+        #[test]
+        fn test_parse_header_handles_short_inputs(
+            len in 0usize..=64
+        ) {
+            use atheer_core::safe_content::{parse_header, SafeLoadLimits};
+            use std::io::Cursor;
+
+            let data = vec![0u8; len];
+            let mut cursor = Cursor::new(data);
+            let _ = parse_header(&mut cursor, &SafeLoadLimits::default());
+        }
     }
 }
