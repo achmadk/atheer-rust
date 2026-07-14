@@ -43,6 +43,8 @@ pub struct GenerationResponse {
     pub inference_time_ms: u64,
     pub mode: String,
     pub tool_calls: Vec<ToolCall>,
+    pub guardrail_blocked: bool,
+    pub guardrail_warnings: Vec<String>,
 }
 
 impl GenerationResponse {
@@ -53,6 +55,20 @@ impl GenerationResponse {
             inference_time_ms: time_ms,
             mode: mode.to_string(),
             tool_calls: Vec::new(),
+            guardrail_blocked: false,
+            guardrail_warnings: Vec::new(),
+        }
+    }
+
+    pub fn blocked(text: String, warnings: Vec<String>) -> Self {
+        Self {
+            text,
+            tokens_generated: 0,
+            inference_time_ms: 0,
+            mode: "blocked".to_string(),
+            tool_calls: Vec::new(),
+            guardrail_blocked: true,
+            guardrail_warnings: warnings,
         }
     }
 

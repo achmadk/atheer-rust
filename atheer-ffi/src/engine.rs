@@ -3,6 +3,7 @@ use crate::{
     GenerationRequest, GenerationResponse,
 };
 use atheer_accel::BackendManager;
+use atheer_core::guardrails::{GuardrailConfig, GuardrailDetector, GuardrailVerdict};
 use atheer_core::model_credential::ModelCredential;
 use atheer_core::model_encryption::{aes256_gcm::Aes256GcmEncryption, ModelEncryption};
 use atheer_core::model_verifier::ModelVerifier;
@@ -74,6 +75,7 @@ pub struct AtheerEngine {
     last_heartbeat_count: Arc<AtomicU64>,
     /// Privacy mode governing crash reporting, persistence, and logging.
     privacy_mode: Option<AtheerPrivacyMode>,
+    guardrail_detector: Arc<Mutex<Option<GuardrailDetector>>>,
 }
 
 #[uniffi::export]
@@ -161,6 +163,28 @@ impl AtheerEngine {
 
         let privacy_mode: Option<AtheerPrivacyMode> = config.privacy_mode;
 
+        let guardrail_detector = {
+            let level = config
+                .guardrail_level
+                .map(|l| l.into())
+                .unwrap_or(atheer_core::GuardrailLevel::None);
+            let gc = GuardrailConfig::new(
+                level,
+                config.guardrail_patterns_path.clone(),
+                config.guardrail_custom_patterns.clone(),
+            );
+            match gc.build_detector() {
+                Ok(det) => Arc::new(Mutex::new(Some(det))),
+                Err(e) => {
+                    tracing::warn!(
+                        target: "atheer::engine",
+                        "Failed to build guardrail detector: {e}, guardrails disabled"
+                    );
+                    Arc::new(Mutex::new(None))
+                }
+            }
+        };
+
         // Build the crash reporter with privacy mode awareness
         let crash_reporter = match privacy_mode {
             Some(mode) => CrashReporter::new().with_privacy_mode(mode.into()),
@@ -187,6 +211,7 @@ impl AtheerEngine {
             l3_storage: Arc::new(Mutex::new(l3_storage)),
             last_heartbeat_count: Arc::new(AtomicU64::new(u64::MAX)),
             privacy_mode,
+            guardrail_detector,
         }
     }
 }
@@ -527,6 +552,37 @@ impl AtheerEngine {
         let security = SecurityAudit::new();
         let prompt = security.sanitize_prompt(&request.prompt);
 
+        let mut guardrail_warnings: Vec<String> = Vec::new();
+        let mut guardrail_blocked = false;
+        if let Ok(detector_guard) = self.guardrail_detector.lock() {
+            if let Some(ref detector) = *detector_guard {
+                let verdicts = detector.check_input(&prompt, None);
+                for v in &verdicts {
+                    match v {
+                        GuardrailVerdict::Block { evidence, .. } => {
+                            guardrail_blocked = true;
+                            guardrail_warnings.push(evidence.clone());
+                        }
+                        GuardrailVerdict::Flag { evidence, .. } => {
+                            guardrail_warnings.push(evidence.clone());
+                        }
+                        GuardrailVerdict::Pass => {}
+                    }
+                }
+                if guardrail_blocked {
+                    trace_if_ok!(self.should_log(), warn,
+                        target: "atheer::engine::guardrails",
+                        "Prompt blocked by guardrails: {} warnings",
+                        guardrail_warnings.len(),
+                    );
+                    return Ok(GenerationResponse::blocked(
+                        String::new(),
+                        guardrail_warnings,
+                    ));
+                }
+            }
+        }
+
         let use_speculation =
             orch.is_draft_loaded() && orch.speculation_depth() > 0 && request.json_schema.is_none();
         // JSON-schema-constrained output currently uses grammar sampling which
@@ -578,12 +634,10 @@ impl AtheerEngine {
                 acceptance_rate,
             });
 
-            return Ok(GenerationResponse::new(
-                text,
-                tokens_gen,
-                time_ms,
-                mode.as_str(),
-            ));
+            return Ok(GenerationResponse {
+                guardrail_warnings,
+                ..GenerationResponse::new(text, tokens_gen, time_ms, mode.as_str())
+            });
         }
 
         let (text, tokens_gen, time_ms) = engine
@@ -602,12 +656,10 @@ impl AtheerEngine {
             acceptance_rate: None,
         });
 
-        Ok(GenerationResponse::new(
-            text,
-            tokens_gen,
-            time_ms,
-            mode.as_str(),
-        ))
+        Ok(GenerationResponse {
+            guardrail_warnings,
+            ..GenerationResponse::new(text, tokens_gen, time_ms, mode.as_str())
+        })
     }
 
     pub fn status(&self) -> EngineStatus {
@@ -930,6 +982,25 @@ impl AtheerEngine {
         }
         // Fall back to sidecar
         self.read_latest_checkpoint_sidecar().is_some()
+    }
+
+    pub fn reload_guardrail_patterns(&self) -> std::result::Result<(), AtheerError> {
+        let mut guard = self
+            .guardrail_detector
+            .lock()
+            .map_err(|_| AtheerError::NotInitialized)?;
+        if let Some(ref mut detector) = *guard {
+            detector
+                .reload_patterns()
+                .map_err(|e| AtheerError::GenerationFailed {
+                    message: format!("reload_guardrail_patterns: {e}"),
+                })?;
+            trace_if_ok!(self.should_log(), info,
+                target: "atheer::engine::guardrails",
+                "Guardrail patterns reloaded",
+            );
+        }
+        Ok(())
     }
 }
 

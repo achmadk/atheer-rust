@@ -30,6 +30,8 @@ zeroize = { version = "1", features = ["zeroize_derive"] }
 hkdf = "0.12"
 dirs = "5.0"
 filetime = "0.2"
+unicode-normalization = "0.1"
+base64 = "0.22"
 reqwest = { workspace = true, features = ["blocking"], optional = true }
 atheer-memory-bank = { path = "../atheer-memory-bank", optional = true }
 atheer-accel = { path = "../atheer-accel", optional = true }

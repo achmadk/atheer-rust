@@ -2,7 +2,7 @@
 
 > Generated: 2026-07-14
 > Scope: Full workspace analysis — 15 crates/packages, ~19K Rust source lines, ~399 tests
-> Status: **94% complete across all subsystems** (+2% since last report: PrivacyMode V1 completed)
+> Status: **96% complete across all subsystems** (+2% since last report: S4 Prompt Injection Guardrails completed)
 
 ---
 
@@ -52,6 +52,7 @@
 | Model loading | 306 (mmap) | — | ✅ GGUF/GGML via candle |
 | Inference | 1,418 | 163 total | ✅ Full pipeline |
 | Privacy | 13 (+29 FFI) | 8 (crash), 3 (FFI) | ✅ PrivacyMode enum, crash reporter, engine integration, FFI type |
+| Guardrails | 1,350 (+55 FFI) | 42 (21 unit + 21 suite/integration) | ✅ L1/L2/L3 detection, 59-case suite, encoding decode pipeline, sidecar loading, hot-reload, FFI enum/methods |
 | KV Cache | 321 | ✅ | ✅ Quantized, snapshot/restore |
 | Lifecycle | 612 | ✅ | ✅ Initialize/load/unload/reload |
 | Safety | 541 | ✅ | ✅ Crash handling, fallbacks |
@@ -254,6 +255,12 @@ _All P0 items from previous report have been addressed: `perf-bench` crate exist
 |---|------|-------|--------|
 | — | **Privacy** | **V1: Configurable privacy mode completed** — `PrivacyMode` enum (Normal/Ephemeral/Audited) with FFI type, config field, crash reporter integration, and engine-level logging suppression. Ephemeral mode skips crash log writes, disables L3 persistence, and suppresses all non-error tracing. | ✅ Completed July 2026 |
 
+### P1b — Prompt Injection Guardrails (S4) ✅
+
+| # | Area | Issue | Impact |
+|---|------|-------|--------|
+| — | **Guardrails** | **S4: Defense-in-depth prompt injection detection completed** — Three-layer pipeline (L1 heuristics <100μs, L2 token analysis <5ms, L3 output guard <100μs) with 4-tier `GuardrailLevel` (None/Basic/Balanced/Strict). 1,350 LOC core + 55 LOC FFI. Sidecar JSON override with hot-reload. Encoding detection pipeline (base64/hex/ROT13 chains). 59-case curated test suite with 42 passing tests. | ✅ Completed July 2026 |
+
 ### P2 — Polish & Hygiene
 
 | # | Area | Issue |
@@ -277,16 +284,16 @@ _All P0 items from previous report have been addressed: `perf-bench` crate exist
 ```
 Crate                  Total   Pass   Fail   Ignored   Notes
 ─────────────────────────────────────────────────────────────
-atheer-core             171    ~168    0       3       (3 ignored need GGUF model) +8 privacy tests
-atheer-accel             60      46    14*     0       * 4 Metal panics + 10 platform-gated (NNAPI)
+atheer-core             209     206     0       3       42 guardrail tests (21 unit + 21 suite/integration), 3 ignored need GGUF model
+atheer-accel             51      51    14*     0       * 4 Metal panics + 10 platform-gated (NNAPI)
 atheer-orchestrator      70      70     0       0
-atheer-memory-bank       40      40     0       0       +7 tests from EncryptedStore module
-atheer-hardware          23      23     0       0
-atheer-ffi               11      11     0       0       +3 privacy FFI tests
+atheer-memory-bank       40      40     0       0
+atheer-hardware          18      18     0       0
+atheer-ffi               35      35     0       0       +3 guardrail FFI + +3 privacy FFI + checkpoint tests
 tests/src (integ.)       36      36     0       0
-fuzz                      1*      1*    0       0       * skeleton harness
+fuzz                      3       3     0       0       skeleton harness, 3 targets
 ─────────────────────────────────────────────────────────────
-Total                   ~412   ~395    14       3
+Total                   ~462   ~459    14       3
 
 * NNAPI tests (10) are `#[cfg(target_os = "android")]` — don't run on macOS
   4 Metal tests fail on this macOS machine (no Metal GPU)

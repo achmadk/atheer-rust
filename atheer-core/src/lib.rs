@@ -4,6 +4,7 @@ pub mod accuracy;
 pub mod block_manager;
 pub mod crash;
 pub mod error;
+pub mod guardrails;
 pub mod inference;
 pub mod kv_cache;
 pub mod kv_cache_bridge;
@@ -34,6 +35,7 @@ pub mod weights;
 pub use block_manager::{BlockId, BlockManager, DEFAULT_BLOCK_SIZE, NULL_BLOCK};
 pub use crash::CrashReporter;
 pub use error::{AtheerCoreError, Result};
+pub use guardrails::{GuardrailConfig, GuardrailDetector, GuardrailLevel, GuardrailVerdict};
 pub use inference::InferenceEngine;
 pub use latency_budget::{LatencyBudget, LatencyTracker};
 pub use lifecycle::{

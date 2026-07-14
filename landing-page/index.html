@@ -579,7 +579,7 @@
 <!-- ─── Stats ─── -->
 <section class="stats-bar" id="stats">
   <div class="stats-grid">
-    <div class="stat-item reveal"><div class="stat-number" data-target="399">0</div><div class="stat-label">Tests</div></div>
+    <div class="stat-item reveal"><div class="stat-number" data-target="462">0</div><div class="stat-label">Tests</div></div>
     <div class="stat-item reveal"><div class="stat-number" data-target="7">0</div><div class="stat-label">Platform Crates</div></div>
     <div class="stat-item reveal"><div class="stat-number" data-target="5">0</div><div class="stat-label">GPU/NPU + CPU Backends</div></div>
     <div class="stat-item reveal"><div class="stat-number" data-target="100" data-suffix="%">0</div><div class="stat-label">Safe Rust</div></div>
@@ -590,9 +590,9 @@
 <section id="why-atheer" style="background: #0A0F1C;">
   <div class="section-inner reveal">
     <div class="section-label">Why Atheer</div>
-    <h2 class="section-title">8 Reasons Atheer Is Different</h2>
+    <h2 class="section-title">9 Reasons Atheer Is Different</h2>
     <p class="section-desc section-desc-wide">
-      Every mobile inference engine runs LLMs. Here&rsquo;s why Atheer is the only one built for the NPU era &mdash; with predictive thermal management, hierarchical memory, structured output, model-level encryption, and autonomous agents, all in safe Rust.
+      Every mobile inference engine runs LLMs. Here&rsquo;s why Atheer is the only one built for the NPU era &mdash; with predictive thermal management, hierarchical memory, structured output, model-level encryption, prompt injection guardrails, and autonomous agents, all in safe Rust.
     </p>
     <div class="features-grid" id="reasons-grid">
 
@@ -650,6 +650,13 @@
         <h3>#8 &mdash; Model-Level &amp; Cache Encryption, Signature Verification</h3>
         <p>AES-256-GCM encryption for GGUF and .mlpackage model files at rest, with a three-strategy decryption pipeline &mdash; ServerDistributed keys, DeviceDerived via HKDF-SHA256, or Custom provider. Ed25519 detached signature verification validates model origin and integrity before loading. <strong>KV cache snapshots at rest are also encrypted</strong> via the same AES-256-GCM primitive (LZ4 compress &rarr; encrypt with random 12-byte nonce, distinct AAD <code>b"atheer-cache-v1"</code>), with the encryption key zeroized on drop. This is the only open engine with model files, signatures, <em>and</em> cache encryption.</p>
         <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> No other open engine encrypts models, signs models, <em>or</em> encrypts their KV cache at rest.</p>
+      </div>
+
+      <div class="feature-card reveal">
+        <div class="feature-icon feature-icon-cyan">🛡️</div>
+        <h3>#9 &mdash; Prompt Injection Guardrails (L1/L2/L3)</h3>
+        <p>Three-layer defense-in-depth against prompt injection — L1 fast heuristics (pattern matching, Unicode normalization, leetspeak, homoglyphs, proximity scoring) in <strong>&lt;100&thinsp;&mu;s</strong>, L2 token-level statistical analysis (repetition ratio, entropy anomaly, adversarial suffix detection) in <strong>&lt;5&thinsp;ms</strong>, and L3 output guard (system prompt leakage detection, jailbreak success markers) in <strong>&lt;100&thinsp;&mu;s</strong>. Encoding detection pipeline automatically decodes base64/hex/ROT13 and re-checks decoded text.</p>
+        <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> No other mobile inference engine ships built-in guardrails at any layer, let alone a configurable three-tier pipeline with sidecar pattern loading and encoding detection.</p>
       </div>
 
     </div>
@@ -766,8 +773,8 @@
             <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
           </tr>
           <tr style="border-bottom: 1px solid rgba(56,189,248,.06); background: rgba(56,189,248,.03);">
-            <td style="padding: .7rem 1rem; color: #F59E0B; font-weight: 500;">Prompt guardrails</td>
-            <td style="text-align:center; padding: .7rem .5rem;"><span style="color:#F59E0B; font-weight: 600;">📋 Planned</span></td>
+            <td style="padding: .7rem 1rem; color: #22C55E; font-weight: 500;">Prompt guardrails</td>
+            <td style="text-align:center; padding: .7rem .5rem;"><span style="color:#22C55E; font-weight: 600;">✅ L1/L2/L3</span></td>
             <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
             <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
             <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
@@ -933,7 +940,7 @@
       <pre class="code-block"><code><span class="comment"># Build the entire workspace</span>
 cargo build --workspace
 
-<span class="comment"># Run all 400+ tests</span>
+<span class="comment"># Run all 460+ tests</span>
 cargo test --workspace
 
 <span class="comment"># Download a test model (~350 MB)</span>
@@ -1098,7 +1105,7 @@ engine.initialize()
         <div style="margin-bottom: .75rem;">
           <span style="font-size: .7rem; color: #64748B; font-family: 'JetBrains Mono', monospace;">Phase 2</span>
           <h3 style="font-size: 1rem; font-weight: 700; margin-top: .15rem;">Security &amp; Privacy Hardening</h3>
-          <span style="font-size: .75rem; color: #64748B;">3&ndash;4 weeks · 9 items (5 complete)</span>
+          <span style="font-size: .75rem; color: #64748B;">3&ndash;4 weeks · 9 items (6 complete)</span>
         </div>
         <ul style="list-style: none; padding: 0; margin: 0;">
           <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
@@ -1113,7 +1120,7 @@ engine.initialize()
             <span style="color: #22C55E;">✓</span> Configurable privacy mode (<code style="font-size: .75rem;">PrivacyMode</code>)
           </li>
           <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #06B6D4;">🔐</span> Prompt injection guardrails
+            <span style="color: #22C55E;">✓</span> Prompt injection guardrails (L1/L2/L3)
           </li>
           <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
             <span style="color: #F59E0B;">⚡</span> ANE compilation pre-heat (background)

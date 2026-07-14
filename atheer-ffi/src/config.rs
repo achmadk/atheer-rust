@@ -1,4 +1,4 @@
-use crate::{AtheerBackendType, AtheerPrivacyMode};
+use crate::{AtheerBackendType, AtheerGuardrailLevel, AtheerPrivacyMode};
 use atheer_core::model_credential::ModelCredential;
 use serde::{Deserialize, Serialize};
 
@@ -55,6 +55,12 @@ pub struct AtheerConfig {
     /// When set, the engine verifies the model file hash before loading.
     /// Computed via streaming SHA-256 at load time.
     pub model_expected_sha256: Option<String>,
+    /// Guardrail detection level. Default (`None`) means disabled.
+    pub guardrail_level: Option<AtheerGuardrailLevel>,
+    /// Path to a sidecar JSON pattern file for guardrail detection.
+    pub guardrail_patterns_path: Option<String>,
+    /// Additional custom patterns appended to the guardrail pattern set.
+    pub guardrail_custom_patterns: Vec<String>,
 }
 
 impl Default for AtheerConfig {
@@ -86,6 +92,9 @@ impl Default for AtheerConfig {
             privacy_mode: None,
             model_signature_public_key: None,
             model_expected_sha256: None,
+            guardrail_level: None,
+            guardrail_patterns_path: None,
+            guardrail_custom_patterns: Vec::new(),
         }
     }
 }

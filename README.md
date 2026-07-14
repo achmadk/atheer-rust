@@ -13,6 +13,7 @@ Mobile inference engine for LLMs on iOS and Android.
 - **Dynamic mode switching**: Eco, Balanced, and Turbo modes based on live hardware telemetry (thermal, memory, battery) sampled at 1 Hz.
 - **Platform hardware telemetry**: Android JNI bridge for thermal headroom, available memory, and battery level; iOS/macOS telemetry via `objc2` FFI (`IosMonitor` with 1 Hz sampling thread).
 - **Performance-per-watt measurement**: Benchmarking infrastructure for throughput, energy, and thermal throttling curves (Criterion benches + perf-bench binary).
+- **Prompt Injection Guardrails**: Three-layer defense-in-depth against prompt injection — L1 fast heuristics (pattern matching, Unicode normalization, leetspeak, homoglyphs, proximity scoring via synonym-expanded word pairs) in <100μs, L2 token-level statistical analysis (repetition ratio, entropy anomaly, adversarial suffix detection) in <5ms, L3 output guard (system prompt leakage detection, jailbreak success markers) in <100μs. Default level **Basic** (L1 only), configurable to **Balanced** (L1+L2) or **Strict** (L1+L2+L3). Sidecar JSON file allows overriding/replacing builtin patterns; custom patterns can be appended programmatically.
 - **Production-ready**: Memory safe (Rust), crash reporting with `atheer-core`, graceful degradation to CPU when accelerators are unavailable.
 
 ## Architecture
@@ -245,16 +246,16 @@ xcode-select --install
 
 ## Testing
 
-The workspace contains **~400 tests** across all crates, verified via `cargo test --workspace`:
+The workspace contains **~462 tests** across all crates, verified via `cargo test --workspace`:
 
 | Crate | Test Count | Scope |
 |-------|-----------|-------|
-| `atheer-accel` | 29 | Backend creation, forward pass, fallback, quantization, probe order |
-| `atheer-core` | 99+ | Model loading, KV cache, block manager, accuracy, security, lifecycle, streaming, session management, multi-turn conversation |
-| `atheer-ffi` | 8 | Config roundtrip, backend type conversion, engine lifecycle |
-| `atheer-hardware` | 6 | Monitor creation, sampling thread, health status edge cases |
+| `atheer-accel` | 51 | Backend creation, forward pass, fallback, quantization, probe order, CoreML compatibility |
+| `atheer-core` | 251 | Model loading, KV cache, block manager, accuracy, security, lifecycle, streaming, session management, multi-turn conversation, **prompt injection guardrails (42 tests)** |
+| `atheer-ffi` | 35 | Config roundtrip, backend type conversion, engine lifecycle, guardrail FFI, privacy FFI, checkpoint lifecycle |
+| `atheer-hardware` | 18 | Monitor creation, sampling thread, health status edge cases, iOS telemetry |
 | `atheer-memory-bank` | 40 | L1/L2/L3 cache, EncryptedStore (AES-256-GCM), handoff protocol, alignment scoring, VRAM monitoring |
-| Integration (orchestrator) | ~5 | NGram cache, Eco mode, mode switching with telemetry |
+| Integration (orchestrator) | ~36 | NGram cache, Eco mode, mode switching with telemetry, property-based fuzz tests |
 | `atheer-fuzz` | 3 | Fuzz-resistant KV cache, token, config parsing |
 
 A further 4 tests remain `#[ignore]` (structurally blocked — they use `unsafe` construct patterns that cannot be safely tested without a real model).
@@ -296,11 +297,11 @@ cargo bench -p perf-bench
 
 | Crate | Description | Tests |
 |-------|-------------|-------|
-| `atheer-core` | Core inference engine (powered by `candle` and `tokenizers`) + privacy mode | 17 |
-| `atheer-ffi` | FFI bindings via uniffi (Swift/Kotlin) | 8 |
-| `atheer-accel` | Hardware acceleration backends (Metal, Vulkan, NNAPI, CoreML, CPU) | 29 |
+| `atheer-core` | Core inference engine (powered by `candle` and `tokenizers`) + privacy mode + guardrails | 251 |
+| `atheer-ffi` | FFI bindings via uniffi (Swift/Kotlin) | 35 |
+| `atheer-accel` | Hardware acceleration backends (Metal, Vulkan, NNAPI, CoreML, CPU) | 51 |
 | `atheer-orchestrator` | Mode selection, grammar sampling, and agent execution loop | integration |
-| `atheer-hardware` | Platform hardware telemetry (thermal, memory, battery) | 6 |
+| `atheer-hardware` | Platform hardware telemetry (thermal, memory, battery) | 18 |
 | `atheer-memory-bank` | KV cache hierarchy (L1/L2/L3 with handoff) + `EncryptedStore` (AES-256-GCM) | 40 |
 | `perf-bench` | Performance-per-watt benchmarking binary and model-dependent Criterion harnesses | 1 binary + 9 benches |
 | `atheer-benches` (tests/benches) | Model-free Criterion microbenchmarks (kv_cache, ngram_cache, orchestrator) | 3 benches |
@@ -354,6 +355,18 @@ Three-tier runtime privacy mode governing crash reporting, persistence, and logg
 4. **Crash reporter integration** — `CrashReporter` stores privacy mode atomically; Ephemeral mode skips all crash log file writes (counter still increments). `record_crash_scrubbed()` redacts sensitive key IDs before logging. 8 unit tests covering all three modes.
 5. **Engine integration** — `AtheerEngine` stores `privacy_mode`, uses `trace_if_ok!` macro to suppress `info`/`warn`/`debug` in Ephemeral mode (errors always emit). Ephemeral mode also forces `encryption_key` to `None`, disabling L3 cache persistence entirely.
 6. **5 files touched** — `atheer-core/src/privacy.rs`, `atheer-core/src/crash.rs`, `atheer-core/src/lib.rs`, `atheer-ffi/src/privacy.rs`, `atheer-ffi/src/config.rs`, `atheer-ffi/src/engine.rs`.
+
+### Prompt Injection Guardrails (S4) ✅
+
+Defense-in-depth prompt injection detection pipeline, completed July 2026:
+
+1. **Three-layer architecture** — L1 fast heuristics (pattern matching, Unicode normalization via NFKC+homoglyph map+leetspeak, zero-width char stripping, proximity scoring with synonym-expanded word pairs) under **<100μs**; L2 token-level statistical analysis (repetition ratio, entropy anomaly, adversarial suffix detection) under **<5ms**; L3 output guard (system prompt leakage detection, jailbreak success markers) under **<100μs**.
+2. **`GuardrailLevel`** — Four-tier configuration: `None` (disabled), `Basic` (L1 only, default), `Balanced` (L1+L2), `Strict` (L1+L2+L3). Each level uses score thresholds for block and flag verdicts.
+3. **59-case curated test suite** (`s4_guardrails_test_suite.json`) — Covers 9 categories: direct override, role-play jailbreak, encoding (base64/hex/ROT13), Unicode confusables, leetspeak, proximity scoring, benign FP stress tests, multi-turn simulation, meta-jailbreak extraction. All 42 guardrail tests pass.
+4. **Sidecar pattern loading** — `GuardrailConfig` accepts an optional `patterns_path: Option<String>` for a JSON sidecar that replaces builtin patterns, plus `custom_patterns: Vec<String>` for appending low-severity patterns. Hot-reload via `reload_guardrail_patterns()` without engine restart.
+5. **Encoding detection pipeline** — Automatically detects base64, hex, and ROT13 encodings (including chains like base64→ROT13), decodes each layer, and re-checks decoded text against L1 patterns. Any decoded injection content produces a Block verdict — encoded injection is inherently more suspicious.
+6. **UniFFI integration** — `AtheerGuardrailLevel` enum with bidirectional `From` conversions, `guardrail_level`/`guardrail_patterns_path`/`guardrail_custom_patterns` fields on `AtheerConfig`, `guardrail_warnings`/`guardrail_blocked` fields on `GenerationResponse`, and `AtheerEngine::reload_guardrail_patterns()` method.
+7. **8 source files** created — `atheer-core/src/guardrails/` (mod.rs, verdict.rs, normalizer.rs, patterns.rs, builtin_patterns.json, analyzer.rs, output_check.rs, detector.rs, test_suite.rs) + 3 FFI files (`atheer-ffi/src/guardrails.rs`, `atheer-ffi/src/config.rs` fields, `atheer-ffi/src/types.rs` fields, `atheer-ffi/src/engine.rs` methods).
 
 ### Metal Backend Stability
 
