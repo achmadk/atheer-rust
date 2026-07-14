@@ -124,7 +124,7 @@ The [security.rs](atheer-core/src/security.rs) module now covers path allowlisti
 > **S4 completed ✅** — Prompt injection guardrails (L1/L2/L3 defense-in-depth pipeline).
 
 > [!CAUTION]
-> Model integrity is the #1 attack surface for on-device AI. A malicious GGUF file can execute arbitrary computation through crafted weight values. With S1 (encryption), S2 (Ed25519 signing), and S3 (load-time hash) completed, the engine now cryptographically verifies model provenance. The remaining gap is GGUF format structural validation (previously S4, now S11) — a malformed GGUF with forged signature metadata could still cause OOB reads via `mmap`.
+> Model integrity is the #1 attack surface for on-device AI. A malicious GGUF file can execute arbitrary computation through crafted weight values. With S1 (encryption), S2 (Ed25519 signing), S3 (load-time hash), and S5 (GGUF format validation) completed, the engine now cryptographically verifies model provenance and rejects malformed GGUF files before they can cause OOB reads via `mmap`.
 
 ### Gaps & Recommendations
 
@@ -134,7 +134,7 @@ The [security.rs](atheer-core/src/security.rs) module now covers path allowlisti
 | S2 | **Model signature verification** | ✅ Completed | Ed25519 detached signature verification via `ModelVerifier` (`atheer-core/src/model_verifier.rs`). `SecurityAudit.enable_signature_verify` wired through `AtheerConfig.model_signature_public_key`. 7 unit tests covering valid sig, tampered file, wrong key, invalid sig, missing file, key parse failure. |
 | S3 | **Load-time SHA-256 hash verification** | ✅ Completed | `Model::from_gguf()` and `from_gguf_reader()` accept `expected_hash: Option<[u8; 32]>`, compute streaming SHA-256 before GGUF parsing. `SecurityAudit::verify_model_hash()` activated. 5 unit tests covering match, mismatch, nonexistent file, error message format. |
 | S4 | **Prompt injection guardrails** | ✅ Completed | Three-layer defense-in-depth: L1 fast heuristics (pattern matching, NFKC normalization, homoglyph/leetspeak decoding, zero-width char stripping, synonym-expanded proximity scoring) in <100μs with encoding detection pipeline (base64/hex/ROT13 → decode → re-check); L2 token-level statistical analysis (repetition ratio, entropy anomaly, adversarial suffix detection) in <5ms; L3 output guard (system prompt leakage detection, jailbreak success markers) in <100μs. Four-tier `GuardrailLevel` (None/Basic/Balanced/Strict), configurable score thresholds, sidecar JSON pattern loading with hot-reload. See `atheer-core/src/guardrails/` (8 files) + `atheer-ffi/src/guardrails.rs`. 42 tests, 59-case curated suite. |
-| S5 | **No GGUF format validation** | 🟠 High | The engine trusts GGUF metadata (tensor shapes, quantization markers) without validation. Malformed GGUF files could cause OOB reads via `mmap`. Add GGUF header/metadata validation before mmap. |
+| S5 | **GGUF format validation** | ✅ Completed | `GgufValidator` in `gguf-validator` feature-gated module (`atheer-core/src/gguf_validator.rs`). Pre-flight ceilings on tensor_count (≤10,000) and metadata_kv_count (≤100,000). Post-parse validation: dimension count 1–16 with zero-dimension rejection, tensor offset overflow via `u64::checked_add`, bounds checks (offset + size ≤ file size), alignment power-of-2 and ≤4096 ceiling, metadata string length ≤10MB, tensor name length ≤1MB. Integrated into `Model::from_gguf_inner()` and `MmapModel::from_gguf()`. 11 unit tests. Default-enabled. |
 | S6 | **No memory-safe tensor bounds checking** | 🟡 Medium | The `mmap` model loading trusts file offsets. Add bounds checks to prevent mmap OOB access from malformed files. |
 | S7 | **HTTP downloads over plain reqwest** | 🟡 Medium | Model downloads from HuggingFace happen without certificate pinning. On mobile networks, MITM is a real risk. Add TLS certificate pinning for model download endpoints. |
 | S8 | **No sandboxing of model execution** | 🟡 Medium | The NNAPI and Vulkan backends execute compute on shared device resources. Consider seccomp/SELinux policy recommendations for Android deployments. |
@@ -148,7 +148,7 @@ The [security.rs](atheer-core/src/security.rs) module now covers path allowlisti
 atheer-core/src/
 ├── guardrails/           # ✅ L1/L2/L3 prompt injection guardrails (implemented)
 ├── model_verifier.rs      # ✅ Ed25519 signature verification at load time (implemented)
-├── gguf_validator.rs      # GGUF header/metadata structural validation
+├── gguf_validator.rs      # ✅ GGUF header/metadata structural validation (implemented)
 ├── model_encryption/      # ✅ AES-256-GCM decrypt pipeline (implemented)
 ├── secure_memory.rs       # Zeroize wrappers for sensitive buffers
 └── audit_log.rs          # Append-only local audit trail
@@ -477,7 +477,7 @@ S4 ✓
 |--------|-------|------|
 | Low (≤1 day) | 0.5-1 day | R2 ✅, R3 ✅, R5 ✅, R7, R9 ✅, R10, R13, R14, R6, P5 ✅, S3 ✅, S4 ✅, S9 ✅ |
 | Medium (2-5 days) | 2-5 days | R1 ✅, R4, R8, R11, P1 ✅, P2 ✅, P9, P10 |
-| Med-High (5-10 days) | 5-10 days | S2 ✅, S5, S6, S7, S8, V1 ✅, V2 ✅, V3 ✅, V4, V5, E1, E2 |
+| Med-High (5-10 days) | 5-10 days | S2 ✅, S5 ✅, S6, S7, S8, V1 ✅, V2 ✅, V3 ✅, V4, V5, E1, E2 |
 | High (10+ days) | 10+ days | S5 (sandboxing), S7 (side-channel), V7 (DP analytics) |
 
 ---
@@ -503,6 +503,7 @@ S4 ✓
 | S2+S3: Model signature + hash verification | `model_verifier.rs`, `model.rs`, `engine.rs`, `security.rs` | ✅ |
 | V1: Configurable privacy mode (Normal/Ephemeral/Audited) | `privacy.rs`, `crash.rs`, `config.rs`, `engine.rs` | ✅ |
 | S4: Prompt injection guardrails (L1/L2/L3) | `atheer-core/src/guardrails/` (8 files), `atheer-ffi/src/guardrails.rs`, `test_data/s4_guardrails_test_suite.json` | ✅ |
+| S5: GGUF format validation | `gguf_validator.rs` (new), `model.rs`, `mmap_model.rs`, `Cargo.toml` (feature), `lib.rs` (module) | ✅ |
 | R4 / P3: KV cache checkpoint persistence | `atheer-core/src/lifecycle.rs`, `AtheerEngine` lifecycle FFI, sidecar `latest_checkpoint.txt`, generational cleanup, LZ4 L3 snapshot/thaw | ✅ |
 | R8: Fix 14 test failures + 40+ warnings | Entire workspace — see `fix-test-failures-warnings-ci` change | ✅ |
 | R9: CI env var bug | `.github/workflows/ci.yml` — moved `env:` block above step references | ✅ |
@@ -535,7 +536,7 @@ S4 ✓
 atheer-core/src/
 ├── guardrails/           # ✅ L1/L2/L3 prompt injection guardrails (implemented)
 ├── model_verifier.rs      # ✅ Ed25519 signature verification at load time (implemented)
-├── gguf_validator.rs      # GGUF header/metadata structural validation
+├── gguf_validator.rs      # ✅ GGUF header/metadata structural validation (implemented)
 ├── model_encryption/      # ✅ AES-256-GCM decrypt pipeline (implemented)
 ├── secure_memory.rs       # Zeroize wrappers for sensitive buffers
 └── audit_log.rs          # Append-only local audit trail

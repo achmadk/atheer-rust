@@ -40,6 +40,11 @@ impl MmapModel {
         let file = std::fs::File::open(path)
             .map_err(|e| AtheerCoreError::ModelLoadFailed(e.to_string()))?;
 
+        let file_size = file
+            .metadata()
+            .map_err(|e| AtheerCoreError::ModelLoadFailed(format!("File metadata: {e}")))?
+            .len();
+
         // Safety: the file is not modified while mapped. We keep the Mmap alive for
         // the struct lifetime so the mapping remains valid.
         let mmap = unsafe { Mmap::map(&file) }
@@ -50,6 +55,15 @@ impl MmapModel {
         // Parse GGUF metadata only (tensor infos, header). This is a small read.
         let ct = candle_core::quantized::gguf_file::Content::read(&mut cursor)
             .map_err(|e| AtheerCoreError::ModelLoadFailed(format!("GGUF parse: {e}")))?;
+
+        #[cfg(feature = "gguf-validator")]
+        {
+            let mmap_size = mmap.len() as u64;
+            let validator = crate::gguf_validator::GgufValidator::new(mmap_size);
+            validator
+                .validate(&ct)
+                .map_err(|e| AtheerCoreError::ModelLoadFailed(format!("GGUF validation: {e}")))?;
+        }
 
         // Snapshot tensor regions for MADV advisory use before ct is consumed.
         let tensor_data_offset = ct.tensor_data_offset;

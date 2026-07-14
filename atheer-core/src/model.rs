@@ -127,11 +127,23 @@ impl Model {
 
         let mut file = std::fs::File::open(path)
             .map_err(|e| AtheerCoreError::ModelLoadFailed(e.to_string()))?;
+        let file_size = file
+            .metadata()
+            .map_err(|e| AtheerCoreError::ModelLoadFailed(format!("File metadata: {e}")))?
+            .len();
         let mut reader = std::io::BufReader::new(&mut file);
 
         let device = device.clone();
         let gguf = candle_core::quantized::gguf_file::Content::read(&mut reader)
             .map_err(|e| AtheerCoreError::ModelLoadFailed(format!("GGUF parse: {e}")))?;
+
+        #[cfg(feature = "gguf-validator")]
+        {
+            let validator = crate::gguf_validator::GgufValidator::new(file_size);
+            validator
+                .validate(&gguf)
+                .map_err(|e| AtheerCoreError::ModelLoadFailed(format!("GGUF validation: {e}")))?;
+        }
 
         // Architecture-aware dispatch: reads general.architecture from GGUF
         // metadata and selects the appropriate ModelWeights implementation.

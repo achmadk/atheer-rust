@@ -46,6 +46,7 @@ __pycache__/
 *.log
 
 .omo
+.kilo
 */.wrangler
 
 node_modules

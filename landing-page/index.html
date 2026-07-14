@@ -648,7 +648,7 @@
       <div class="feature-card reveal">
         <div class="feature-icon feature-icon-green">🔐</div>
         <h3>#8 &mdash; Model-Level &amp; Cache Encryption, Signature Verification</h3>
-        <p>AES-256-GCM encryption for GGUF and .mlpackage model files at rest, with a three-strategy decryption pipeline &mdash; ServerDistributed keys, DeviceDerived via HKDF-SHA256, or Custom provider. Ed25519 detached signature verification validates model origin and integrity before loading. <strong>KV cache snapshots at rest are also encrypted</strong> via the same AES-256-GCM primitive (LZ4 compress &rarr; encrypt with random 12-byte nonce, distinct AAD <code>b"atheer-cache-v1"</code>), with the encryption key zeroized on drop. This is the only open engine with model files, signatures, <em>and</em> cache encryption.</p>
+        <p>AES-256-GCM encryption for GGUF and .mlpackage model files at rest, with a three-strategy decryption pipeline &mdash; ServerDistributed keys, DeviceDerived via HKDF-SHA256, or Custom provider. Ed25519 detached signature verification validates model origin and integrity before loading. GGUF format validation rejects malformed model files with overflow checks and bounds validation before they can cause OOB reads via <code>mmap</code>. <strong>KV cache snapshots at rest are also encrypted</strong> via the same AES-256-GCM primitive (LZ4 compress &rarr; encrypt with random 12-byte nonce, distinct AAD <code>b"atheer-cache-v1"</code>), with the encryption key zeroized on drop. This is the only open engine with model files, signatures, <em>and</em> cache encryption.</p>
         <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> No other open engine encrypts models, signs models, <em>or</em> encrypts their KV cache at rest.</p>
       </div>
 
@@ -1105,7 +1105,7 @@ engine.initialize()
         <div style="margin-bottom: .75rem;">
           <span style="font-size: .7rem; color: #64748B; font-family: 'JetBrains Mono', monospace;">Phase 2</span>
           <h3 style="font-size: 1rem; font-weight: 700; margin-top: .15rem;">Security &amp; Privacy Hardening</h3>
-          <span style="font-size: .75rem; color: #64748B;">3&ndash;4 weeks · 9 items (7 complete)</span>
+          <span style="font-size: .75rem; color: #64748B;">3&ndash;4 weeks · 9 items (8 complete)</span>
         </div>
         <ul style="list-style: none; padding: 0; margin: 0;">
           <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
@@ -1115,7 +1115,7 @@ engine.initialize()
             <span style="color: #22C55E;">✓</span> Model signature + hash verification (S2+S3)
           </li>
           <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #06B6D4;">🔐</span> GGUF format validation
+            <span style="color: #22C55E;">✓</span> GGUF format validation
           <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
             <span style="color: #22C55E;">✓</span> Configurable privacy mode (<code style="font-size: .75rem;">PrivacyMode</code>)
           </li>

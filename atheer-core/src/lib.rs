@@ -4,6 +4,8 @@ pub mod accuracy;
 pub mod block_manager;
 pub mod crash;
 pub mod error;
+#[cfg(feature = "gguf-validator")]
+pub mod gguf_validator;
 pub mod guardrails;
 pub mod inference;
 pub mod kv_cache;
