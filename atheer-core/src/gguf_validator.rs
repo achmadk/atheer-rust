@@ -246,7 +246,8 @@ impl GgufValidator {
             _ => return Ok(()),
         };
         let required: &[&str] = match arch {
-            "llama" | "lfm2" => &["llama.block_count"],
+            "llama" => &["llama.block_count"],
+            "lfm2" => &["lfm2.block_count"],
             _ => return Ok(()),
         };
         for key in required {
@@ -505,6 +506,37 @@ mod tests {
         content
             .metadata
             .insert("llama.block_count".to_string(), Value::U32(32));
+        let validator = GgufValidator::new(1024 * 1024);
+        assert!(validator.validate_full(&content, 1024 * 1024).is_ok());
+    }
+
+    #[test]
+    fn test_missing_required_metadata_for_lfm2_rejected() {
+        let mut content = make_content(1, 1);
+        content.metadata.insert(
+            "general.architecture".to_string(),
+            Value::String("lfm2".to_string()),
+        );
+        let validator = GgufValidator::new(1024 * 1024);
+        let result = validator.validate_full(&content, 1024 * 1024);
+        assert!(result.is_err());
+        let err = result.unwrap_err().to_string();
+        assert!(
+            err.contains("lfm2.block_count"),
+            "expected missing metadata error, got: {err}"
+        );
+    }
+
+    #[test]
+    fn test_lfm2_required_metadata_present_passes() {
+        let mut content = make_content(1, 2);
+        content.metadata.insert(
+            "general.architecture".to_string(),
+            Value::String("lfm2".to_string()),
+        );
+        content
+            .metadata
+            .insert("lfm2.block_count".to_string(), Value::U32(32));
         let validator = GgufValidator::new(1024 * 1024);
         assert!(validator.validate_full(&content, 1024 * 1024).is_ok());
     }

@@ -47,6 +47,7 @@ __pycache__/
 
 .omo
 .kilo
+.hallmark
 */.wrangler
 
 node_modules
