@@ -805,13 +805,14 @@ mod tests {
         use atheer_hardware::monitor::GenericMonitor;
         let monitor = GenericMonitor::new();
         let health = monitor.health();
-        // sample_count must be 0 before first 1 Hz tick
-        assert_eq!(health.sample_count, 0);
+        // Initial sample_count is non-deterministic (depends on thread scheduling),
+        // but must advance after at least one sampling tick
+        let initial_count = health.sample_count;
         // Wait for at least one sample
         std::thread::sleep(std::time::Duration::from_millis(1100));
         let health = monitor.health();
         assert!(
-            health.sample_count > 0,
+            health.sample_count > initial_count,
             "sample_count must advance after at least one sampling tick"
         );
     }

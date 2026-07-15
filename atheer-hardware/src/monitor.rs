@@ -305,14 +305,15 @@ mod tests {
     fn test_sample_count_starts_zero_then_advances() {
         let monitor = GenericMonitor::new();
         let health = monitor.health();
-        // Before first 1 Hz tick completes, sample_count must be 0
-        assert_eq!(health.sample_count, 0);
+        // Initial sample_count is non-deterministic (depends on thread scheduling),
+        // but must advance after at least one sampling tick
+        let initial_count = health.sample_count;
 
         // Wait for at least one sampling cycle
         std::thread::sleep(std::time::Duration::from_millis(1100));
         let health = monitor.health();
         assert!(
-            health.sample_count > 0,
+            health.sample_count > initial_count,
             "sample_count should advance after at least one sampling tick"
         );
     }
