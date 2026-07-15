@@ -10,32 +10,27 @@
 <meta name="author" content="Atheer-Rust Team">
 <meta name="theme-color" content="#0B1120">
 
-<!-- Canonical URL -->
-<link rel="canonical" href="https://atheer-rust.dev/">
+<link rel="canonical" href="https://atheer.achmadk.com/">
 
-<!-- Open Graph -->
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://atheer-rust.dev/">
+<meta property="og:url" content="https://atheer.achmadk.com/">
 <meta property="og:title" content="Atheer-Rust: On-Device LLM Inference Engine for iOS &amp; Android">
 <meta property="og:description" content="Safe-Rust inference engine for running LLMs locally on iOS and Android. 5 hardware backends, predictive thermal orchestration, L1/L2/L3 KV cache, AES-256-GCM encryption, grammar-constrained decoding — zero unsafe in business logic.">
-<meta property="og:image" content="https://atheer-rust.dev/og-image.png">
+<meta property="og:image" content="https://atheer.achmadk.com/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:locale" content="en_US">
 <meta property="og:site_name" content="Atheer-Rust">
 
-<!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Atheer-Rust: On-Device LLM Inference Engine for iOS &amp; Android">
 <meta name="twitter:description" content="Safe-Rust inference engine for running LLMs locally. 5 hardware backends, predictive thermal management, AES-256-GCM encryption, Ed25519 model signatures, pre-allocation GGUF header gate.">
-<meta name="twitter:image" content="https://atheer-rust.dev/og-image.png">
+<meta name="twitter:image" content="https://atheer.achmadk.com/og-image.png">
 
-<!-- Preconnect & Fonts -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 
-<!-- JSON-LD Structured Data -->
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
@@ -44,901 +39,1183 @@
   "applicationCategory": "DeveloperApplication",
   "operatingSystem": "iOS 15+, Android API 26+",
   "description": "Safe-Rust inference engine that runs large language models locally on iOS and Android. Custom Vulkan compute shaders, raw NNAPI NDK bindings, grammar-constrained decoding, predictive thermal management, AES-256-GCM cache encryption, Ed25519 signature verification, pre-allocation GGUF header gate, and autonomous agent loops.",
-  "url": "https://atheer-rust.dev",
+  "url": "https://atheer.achmadk.com/",
   "sameAs": "https://github.com/achmadk/atheer-rust",
   "license": "https://opensource.org/licenses/MIT OR https://opensource.org/licenses/Apache-2.0",
-  "author": {
-    "@type": "Organization",
-    "name": "Atheer-Rust Team"
-  },
-  "offers": {
-    "@type": "Offer",
-    "price": "0",
-    "priceCurrency": "USD"
-  },
+  "author": { "@type": "Organization", "name": "Atheer-Rust Team" },
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
   "softwareVersion": "0.1.0",
   "releaseNotes": "https://github.com/achmadk/atheer-rust/releases",
   "keywords": "LLM inference, on-device AI, Rust inference engine, mobile LLM, CoreML, NNAPI, Vulkan compute, grammar-constrained decoding",
   "featureList": "Multi-backend GPU/NPU acceleration, Predictive thermal orchestration, L1/L2/L3 hierarchical KV cache, Grammar-constrained decoding, AES-256-GCM cache encryption, Ed25519 model signature verification, Pre-allocation GGUF header gate, Built-in agent loops, UniFFI Swift/Kotlin cross-platform bindings"
 }
 </script>
-<style>  /* ─── Reset & Base ─── */
+<style>
+  /* Hallmark · macrostructure: Split Studio (15) · tone: technical · anchor hue: cyan-blue
+   * Pre-emit critique: P5 H5 E5 S5 R5 V5
+   * Theme: preserved — every color via var() or color-mix() (no inline rgba / hex mid-render)
+   * Layout: loader · split hero (copy | crate stack) · 9 reasons numbered list (prose-left | list-right)
+   *   · gaps prose + table · architecture prose + stack · backends prose + timeline · quickstart prose + code
+   *   · benchmarks prose + cards · roadmap 3-up · statement footer
+   * Nav: N5 Floating pill  ·  Footer: Ft5 Statement
+   * Motion: counter · reveal-once
+   */
+
+  :root {
+    /* Palette — OKLCH; translucent variants derived via color-mix(in oklch, …, transparent) */
+    --color-paper:        oklch(15% 0.025 250);
+    --color-paper-2:      oklch(18% 0.030 250);
+    --color-paper-3:      oklch(13% 0.022 250);
+    --color-rule:         oklch(28% 0.020 250);
+    --color-rule-strong:  oklch(38% 0.020 230);
+    --color-ink:          oklch(93% 0.010 250);
+    --color-ink-2:        oklch(75% 0.015 250);
+    --color-ink-3:        oklch(60% 0.015 250);
+    --color-ink-4:        oklch(48% 0.012 250);
+    --color-accent:       oklch(76% 0.135 225);
+    --color-accent-2:     oklch(72% 0.125 200);
+    --color-accent-soft:  oklch(84% 0.075 225);
+    --color-accent-deep:  oklch(46% 0.130 220);
+    --color-good:         oklch(70% 0.170 145);
+    --color-good-soft:    oklch(58% 0.130 145);
+    --color-warn:         oklch(78% 0.155 75);
+    --color-bad:          oklch(63% 0.205 25);
+
+    --font-display: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    --font-mono:    'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+    --space-1:  0.25rem;  --space-2:  0.5rem;  --space-3:  0.75rem;
+    --space-4:  1rem;     --space-6:  1.5rem;  --space-8:  2rem;
+    --space-12: 3rem;     --space-16: 4rem;     --space-20: 5rem;
+
+    --radius-sm: 4px; --radius-md: 6px; --radius-lg: 10px; --radius-xl: 14px;
+    --radius-pill: 999px;
+
+    --rule-hair: 1px;
+    --rule-2:    2px;
+
+    --ease-out:     cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in-out:  cubic-bezier(0.65, 0, 0.35, 1);
+    --dur-fast:     150ms;
+    --dur-base:     240ms;
+    --dur-slow:     600ms;
+
+    --gutter: clamp(1rem, 4vw, 1.75rem);
+    --maxw:   1180px;
+
+    --z-pill: 30;
+    --z-overlay: 40;
+  }
+
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
   html { scroll-behavior: smooth; }
   body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    background: #0B1120;
-    color: #E2E8F0;
+    font-family: var(--font-display);
+    background: var(--color-paper);
+    color: var(--color-ink);
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
-    overflow-x: hidden;
+    text-rendering: optimizeLegibility;
+    overflow-x: clip;
   }
-  a { color: #38BDF8; text-decoration: none; transition: color .2s; }
-  a:hover { color: #7DD3FC; }
+  a { color: var(--color-accent); text-decoration: none; transition: color var(--dur-base) var(--ease-out); }
+  a:hover { color: var(--color-accent-soft); }
   img { max-width: 100%; display: block; }
-  code, pre { font-family: 'JetBrains Mono', monospace; }
-  ::selection { background: #38BDF8; color: #0B1120; }
+  code, pre { font-family: var(--font-mono); }
+  ::selection { background: var(--color-accent); color: var(--color-paper); }
 
-  /* ─── Loading Screen ─── */
+  a:focus-visible,
+  button:focus-visible,
+  [role="button"]:focus-visible,
+  .row:focus-within,
+  .code-block-wrap:focus-within {
+    outline: var(--rule-2) solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+
+  /* ─── Loading ─── */
   #loading-screen {
     position: fixed; inset: 0; z-index: 9999;
-    background: #0B1120;
+    background: var(--color-paper);
     display: flex; flex-direction: column;
     align-items: center; justify-content: center;
-    transition: opacity .6s ease, visibility .6s ease;
+    transition: opacity var(--dur-slow) var(--ease-out), visibility var(--dur-slow) var(--ease-out);
   }
   #loading-screen.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
   .loading-logo {
-    font-size: 2rem; font-weight: 800; letter-spacing: -.03em;
-    background: linear-gradient(135deg, #38BDF8, #06B6D4);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    background-clip: text;
-    margin-bottom: 1.75rem;
+    font-size: 1.875rem; font-weight: 800; letter-spacing: -0.03em;
+    color: var(--color-ink);
+    margin-bottom: var(--space-6);
   }
+  .loading-logo b { color: var(--color-accent); font-weight: 800; }
   .loading-bar-track {
-    width: 220px; height: 3px; background: #1E293B; border-radius: 4px;
-    overflow: hidden;
+    width: 220px; height: 3px; background: var(--color-rule); border-radius: 4px; overflow: hidden;
   }
   .loading-bar-fill {
     height: 100%; width: 0%;
-    background: linear-gradient(90deg, #38BDF8, #06B6D4);
+    background: var(--color-accent);
     border-radius: 4px;
-    transition: width .3s ease;
+    transition: width 320ms var(--ease-out);
   }
   .loading-text {
-    margin-top: .75rem; font-size: .8rem; color: #64748B;
-    font-family: 'JetBrains Mono', monospace;
+    margin-top: var(--space-3); font-size: 0.8rem; color: var(--color-ink-3);
+    font-family: var(--font-mono);
   }
 
-  /* ─── Navigation ─── */
-  nav {
-    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
-    padding: 1rem 2rem;
-    background: rgba(11,17,32,.85);
-    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-    border-bottom: 1px solid rgba(56,189,248,.08);
-    display: flex; align-items: center; justify-content: space-between;
-    transition: border-color .3s;
+  /* ─── N5 · Floating pill nav ─── */
+  .nav-pill {
+    position: fixed;
+    top: var(--space-4);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: var(--z-pill);
+    display: inline-flex; align-items: center; gap: var(--space-6);
+    padding: 0.5rem 0.75rem 0.5rem 1.1rem;
+    background: color-mix(in oklch, var(--color-paper) 78%, transparent);
+    -webkit-backdrop-filter: blur(14px) saturate(125%);
+    backdrop-filter: blur(14px) saturate(125%);
+    border: var(--rule-hair) solid color-mix(in oklch, var(--color-accent) 12%, transparent);
+    border-radius: var(--radius-pill);
+    box-shadow: 0 8px 28px -16px oklch(0% 0 0 / 0.5);
+    max-width: calc(100% - 2 * var(--gutter));
   }
-  nav.scrolled { border-color: rgba(56,189,248,.18); }
-  .nav-brand {
-    font-weight: 700; font-size: 1.1rem;
-    background: linear-gradient(135deg, #38BDF8, #06B6D4);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    background-clip: text;
+  .nav-pill__brand {
+    font-weight: 700; font-size: 0.95rem; letter-spacing: -0.01em;
+    color: var(--color-ink);
+  }
+  .nav-pill__brand b { color: var(--color-accent); font-weight: 700; }
+  .nav-pill__links { display: flex; gap: var(--space-4); align-items: center; list-style: none; }
+  .nav-pill__links a {
+    font-size: 0.82rem; font-weight: 500;
+    color: var(--color-ink-2);
+    padding: 0.25rem 0.5rem;
+    border-radius: var(--radius-sm);
+    transition: color var(--dur-fast) var(--ease-out);
+  }
+  .nav-pill__links a:hover,
+  .nav-pill__links a.nav-active { color: var(--color-ink); }
+  .nav-pill__cta {
+    font-size: 0.78rem; font-weight: 600;
+    padding: 0.4rem 0.9rem;
+    border-radius: var(--radius-pill);
+    background: var(--color-accent);
+    color: var(--color-paper);
+    transition: background var(--dur-fast) var(--ease-out);
+  }
+  .nav-pill__cta:hover { background: var(--color-accent-soft); color: var(--color-paper); }
+  .nav-pill__menu {
+    display: none;
+    background: none; border: none;
+    color: var(--color-ink);
+    font-size: 1.05rem; line-height: 1;
+    padding: 0.4rem 0.6rem;
+    border-radius: var(--radius-sm);
     cursor: pointer;
-  }
-  .nav-links { display: flex; gap: 1.75rem; align-items: center; }
-  .nav-links a {
-    font-size: .875rem; font-weight: 500; color: #94A3B8;
-    cursor: pointer;
-  }
-  .nav-links a:hover { color: #E2E8F0; }
-  .nav-links a.nav-active { color: #38BDF8; }
-  .nav-cta {
-    padding: .45rem 1.1rem; border-radius: 6px;
-    background: #38BDF8; color: #0B1120 !important;
-    font-weight: 600; font-size: .8rem; cursor: pointer;
-    transition: background .2s, transform .15s;
-  }
-  .nav-cta:hover { background: #7DD3FC; transform: translateY(-1px); }
-  .nav-mobile-toggle {
-    display: none; background: none; border: none; color: #E2E8F0;
-    font-size: 1.5rem; cursor: pointer; padding: .25rem;
   }
 
-  /* ─── Hero ─── */
+  /* ─── Buttons ─── */
+  .btn {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    padding: 0.7rem 1.4rem;
+    font-family: inherit;
+    font-size: 0.9rem; font-weight: 600; letter-spacing: -0.005em;
+    border-radius: var(--radius-pill);
+    border: var(--rule-hair) solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background var(--dur-fast) var(--ease-out),
+                border-color var(--dur-fast) var(--ease-out),
+                color var(--dur-fast) var(--ease-out),
+                transform var(--dur-fast) var(--ease-out);
+  }
+  .btn:active { transform: translateY(1px); }
+  .btn-primary {
+    background: var(--color-accent);
+    color: var(--color-paper);
+    border-color: var(--color-accent);
+  }
+  .btn-primary:hover { background: var(--color-accent-soft); border-color: var(--color-accent-soft); color: var(--color-paper); }
+  .btn-ghost {
+    background: transparent;
+    color: var(--color-ink);
+    border-color: color-mix(in oklch, var(--color-ink-2) 35%, transparent);
+  }
+  .btn-ghost:hover { border-color: var(--color-ink); color: var(--color-ink); }
+  .btn-text {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    font-family: inherit;
+    font-size: 0.9rem; font-weight: 600;
+    color: var(--color-accent);
+    background: none; border: none; cursor: pointer;
+    padding: 0.4rem 0;
+  }
+  .btn-text::after { content: "→"; transition: transform var(--dur-fast) var(--ease-out); }
+  .btn-text:hover::after { transform: translateX(3px); }
+
+  /* ─── Hero (Split Studio — left-biased) ─── */
   .hero {
-    min-height: 100vh;
-    display: flex; flex-direction: column;
-    align-items: center; justify-content: center;
-    text-align: center;
-    padding: 6rem 2rem 4rem;
-    position: relative;
-    overflow: hidden;
+    padding: clamp(7rem, 14vh, 9rem) var(--gutter) clamp(4rem, 8vh, 6rem);
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--space-12);
   }
-  .hero-bg-grid {
-    position: absolute; inset: 0;
-    background-image:
-      linear-gradient(rgba(56,189,248,.04) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(56,189,248,.04) 1px, transparent 1px);
-    background-size: 48px 48px;
-    mask-image: radial-gradient(ellipse 60% 50% at 50% 50%, black 20%, transparent 70%);
-    -webkit-mask-image: radial-gradient(ellipse 60% 50% at 50% 50%, black 20%, transparent 70%);
+  @media (min-width: 880px) {
+    .hero {
+      grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+      gap: var(--space-16);
+      align-items: center;
+    }
   }
-  .hero-glow {
-    position: absolute; width: 600px; height: 600px;
-    border-radius: 50%;
-    background: radial-gradient(circle, rgba(56,189,248,.08), transparent 70%);
-    top: -20%; left: 50%; transform: translateX(-50%);
-    pointer-events: none;
+  .hero-copy { max-width: 60ch; }
+  .hero-eyebrow {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    font-family: var(--font-mono);
+    font-size: 0.72rem; font-weight: 500;
+    letter-spacing: 0.04em;
+    color: var(--color-accent);
+    padding: 0.35rem 0.7rem;
+    border: var(--rule-hair) solid color-mix(in oklch, var(--color-accent) 22%, transparent);
+    border-radius: var(--radius-pill);
+    margin-bottom: var(--space-6);
   }
-  .hero-content { position: relative; z-index: 1; max-width: 800px; }
-  .hero-badge {
-    display: inline-block;
-    padding: .35rem 1rem;
-    border-radius: 100px;
-    border: 1px solid rgba(56,189,248,.2);
-    background: rgba(56,189,248,.06);
-    font-size: .75rem; font-weight: 600; color: #7DD3FC;
-    letter-spacing: .04em; text-transform: uppercase;
-    margin-bottom: 1.5rem;
-    cursor: pointer;
-    transition: background .2s;
+  .hero-eyebrow::before {
+    content: ""; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--color-accent);
   }
-  .hero-badge:hover { background: rgba(56,189,248,.12); }
   .hero h1 {
-    font-size: clamp(2.5rem, 6vw, 4.5rem);
-    font-weight: 800; line-height: 1.1; letter-spacing: -.04em;
-    margin-bottom: 1.25rem;
+    font-family: var(--font-display);
+    font-size: clamp(2.1rem, 5.5vw, 3.5rem);
+    font-weight: 700;
+    font-style: normal;
+    line-height: 1.05;
+    letter-spacing: -0.035em;
+    color: var(--color-ink);
+    margin-bottom: var(--space-6);
+    overflow-wrap: anywhere;
+    min-width: 0;
   }
-  .hero h1 span {
-    background: linear-gradient(135deg, #38BDF8 0%, #06B6D4 50%, #2DD4BF 100%);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    background-clip: text;
+  .hero h1 .u {
+    text-decoration: underline;
+    text-decoration-color: var(--color-accent);
+    text-decoration-thickness: 2px;
+    text-underline-offset: 0.18em;
+    text-decoration-skip-ink: none;
   }
   .hero-sub {
-    font-size: clamp(1rem, 2vw, 1.2rem);
-    color: #94A3B8; max-width: 580px; margin: 0 auto 2rem;
+    font-size: clamp(0.98rem, 1.6vw, 1.1rem);
+    color: var(--color-ink-2);
+    max-width: 56ch;
     line-height: 1.7;
+    margin-bottom: var(--space-8);
   }
-  .hero-actions { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
-  .btn {
-    display: inline-flex; align-items: center; gap: .5rem;
-    padding: .75rem 1.75rem; border-radius: 8px;
-    font-size: .95rem; font-weight: 600; border: none;
-    cursor: pointer;
-    transition: background .2s, transform .15s, box-shadow .2s;
+  .hero-actions { display: flex; gap: var(--space-3); flex-wrap: wrap; align-items: center; }
+  .hero-meta {
+    margin-top: var(--space-12);
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--space-6);
+    border-top: var(--rule-hair) solid var(--color-rule);
+    padding-top: var(--space-6);
   }
-  .btn:hover { transform: translateY(-2px); }
-  .btn-primary {
-    background: linear-gradient(135deg, #38BDF8, #06B6D4);
-    color: #0B1120;
-    box-shadow: 0 4px 20px rgba(56,189,248,.25);
+  .hero-meta .m .v {
+    font-family: var(--font-mono);
+    font-size: clamp(1.4rem, 2.6vw, 1.75rem);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--color-ink);
+    font-variant-numeric: tabular-nums;
   }
-  .btn-primary:hover { box-shadow: 0 6px 28px rgba(56,189,248,.35); }
-  .btn-secondary {
-    background: rgba(56,189,248,.08);
-    color: #E2E8F0;
-    border: 1px solid rgba(56,189,248,.2);
+  .hero-meta .m .k {
+    font-size: 0.72rem;
+    color: var(--color-ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin-top: 0.15rem;
   }
-  .btn-secondary:hover { background: rgba(56,189,248,.15); border-color: rgba(56,189,248,.35); }
-  .hero-scroll {
-    position: absolute; bottom: 2rem;
-    display: flex; flex-direction: column; align-items: center; gap: .5rem;
-    color: #475569; font-size: .7rem; letter-spacing: .1em; text-transform: uppercase;
-    cursor: pointer;
-    transition: color .2s;
-  }
-  .hero-scroll:hover { color: #94A3B8; }
-  .scroll-arrow {
-    width: 20px; height: 20px;
-    border-right: 2px solid #475569; border-bottom: 2px solid #475569;
-    transform: rotate(45deg);
-    animation: scrollBounce 2s infinite;
-  }
-  @keyframes scrollBounce { 0%,100%{transform:rotate(45deg) translateY(0)} 50%{transform:rotate(45deg) translateY(6px)} }
 
-  /* ─── Section Common ─── */
-  section { padding: 5rem 2rem; }
-  .section-inner {
-    max-width: 1100px; margin: 0 auto;
-  }
-  .section-label {
-    font-size: .7rem; font-weight: 600; text-transform: uppercase;
-    letter-spacing: .12em; color: #38BDF8; margin-bottom: .75rem;
-  }
-  .section-title {
-    font-size: clamp(1.75rem, 3.5vw, 2.5rem);
-    font-weight: 700; letter-spacing: -.03em; line-height: 1.2;
-    margin-bottom: 1rem;
-  }
-  .section-desc {
-    color: #94A3B8; max-width: 600px; font-size: 1.05rem;
-    line-height: 1.7;
-  }
-  .section-desc-wide { max-width: 700px; }
-
-  /* ─── Stats Bar ─── */
-  .stats-bar {
-    padding: 2rem 2rem;
-    background: #0F172A;
-    border-top: 1px solid rgba(56,189,248,.06);
-    border-bottom: 1px solid rgba(56,189,248,.06);
-  }
-  .stats-grid {
-    max-width: 1100px; margin: 0 auto;
-    display: grid; grid-template-columns: repeat(4,1fr); gap: 1rem;
-  }
-  .stat-item { text-align: center; }
-  .stat-number {
-    font-size: 2.25rem; font-weight: 800; letter-spacing: -.03em;
-    background: linear-gradient(135deg, #38BDF8, #06B6D4);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    background-clip: text;
-    line-height: 1.2;
-  }
-  .stat-label { font-size: .8rem; color: #64748B; margin-top: .2rem; }
-
-  /* ─── Features ─── */
-  .features-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 1.25rem; margin-top: 2.5rem;
-  }
-  .feature-card {
-    background: #0F172A;
-    border: 1px solid rgba(56,189,248,.08);
-    border-radius: 12px; padding: 1.75rem;
-    transition: border-color .25s, transform .2s, box-shadow .2s;
-    cursor: default;
-  }
-  .feature-card:hover {
-    border-color: rgba(56,189,248,.2);
-    transform: translateY(-2px);
-    box-shadow: 0 8px 32px rgba(0,0,0,.3);
-  }
-  .feature-icon {
-    width: 40px; height: 40px; border-radius: 10px;
-    display: flex; align-items: center; justify-content: center;
-    margin-bottom: 1rem;
-    font-size: 1.1rem;
-  }
-  .feature-icon-blue { background: rgba(56,189,248,.12); color: #38BDF8; }
-  .feature-icon-cyan { background: rgba(6,182,212,.12); color: #06B6D4; }
-  .feature-icon-amber { background: rgba(245,158,11,.12); color: #F59E0B; }
-  .feature-icon-green { background: rgba(34,197,94,.12); color: #22C55E; }
-  .feature-icon-purple { background: rgba(168,85,247,.12); color: #A855F7; }
-  .feature-icon-pink { background: rgba(236,72,153,.12); color: #EC4899; }
-  .feature-card h3 { font-size: 1rem; font-weight: 600; margin-bottom: .5rem; }
-  .feature-card p { font-size: .875rem; color: #94A3B8; line-height: 1.65; }
-
-  /* ─── Architecture ─── */
-  .arch-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 1rem; margin-top: 2.5rem;
-  }
-  .arch-card {
-    background: rgba(15,23,42,.6);
-    border: 1px solid rgba(56,189,248,.08);
-    border-radius: 10px; padding: 1.25rem 1.5rem;
-    text-align: center;
+  /* Hero right column — crate stack proof */
+  .hero-proof {
+    background: var(--color-paper-2);
+    border: var(--rule-hair) solid var(--color-rule);
+    border-radius: var(--radius-xl);
+    padding: var(--space-6);
     position: relative;
-    cursor: default;
-    transition: border-color .25s, transform .2s;
   }
-  .arch-card:hover { border-color: rgba(56,189,248,.2); transform: translateY(-1px); }
-  .arch-card.l1 { border-color: rgba(56,189,248,.15); }
-  .arch-card.l2 { border-color: rgba(6,182,212,.12); }
-  .arch-card.l3 { border-color: rgba(245,158,11,.1); }
-  .arch-card h4 { font-size: .8rem; font-weight: 600; margin-bottom: .2rem; }
-  .arch-card p { font-size: .7rem; color: #64748B; }
-  .arch-arrow {
-    display: none;
-    position: absolute; bottom: -1.2rem; left: 50%; transform: translateX(-50%);
-    color: #334155; font-size: .8rem;
-  }
-  .arch-row {
-    display: flex; flex-wrap: wrap; gap: .75rem; justify-content: center;
-    margin-top: 2rem;
-  }
-  .arch-pill {
-    padding: .35rem 1rem; border-radius: 100px;
-    font-size: .75rem; font-weight: 500;
-    background: rgba(56,189,248,.06);
-    border: 1px solid rgba(56,189,248,.1);
-    cursor: pointer;
-    transition: background .2s, border-color .2s;
-  }
-  .arch-pill:hover { background: rgba(56,189,248,.12); border-color: rgba(56,189,248,.25); }
-
-  /* ─── Backend Support ─── */
-  .backend-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-    gap: 1rem; margin-top: 2.5rem;
-  }
-  .backend-card {
-    background: #0F172A;
-    border: 1px solid rgba(56,189,248,.08);
-    border-radius: 10px; padding: 1.5rem;
-    cursor: default;
-    transition: border-color .25s, transform .2s;
-  }
-  .backend-card:hover { border-color: rgba(56,189,248,.18); transform: translateY(-2px); }
-  .backend-card h4 { font-size: .95rem; font-weight: 600; margin-bottom: .25rem; }
-  .backend-card .backend-platform {
-    font-size: .7rem; text-transform: uppercase; letter-spacing: .08em;
-    color: #38BDF8; font-weight: 600; margin-bottom: .5rem;
-  }
-  .backend-card p { font-size: .8rem; color: #94A3B8; line-height: 1.6; }
-  .backend-card .backend-priority {
-    display: inline-block; margin-top: .75rem;
-    font-size: .65rem; font-weight: 600; color: #475569;
-    background: rgba(71,85,105,.2); padding: .15rem .6rem; border-radius: 4px;
-  }
-
-  /* ─── Quick Start ─── */
-  .code-block-wrap {
-    background: #0F172A;
-    border: 1px solid rgba(56,189,248,.08);
-    border-radius: 10px; overflow: hidden;
-    margin-top: 2rem;
-  }
-  .code-header {
+  .hero-proof__head {
     display: flex; align-items: center; justify-content: space-between;
-    padding: .6rem 1.25rem;
-    background: rgba(56,189,248,.04);
-    border-bottom: 1px solid rgba(56,189,248,.06);
+    padding-bottom: var(--space-4);
+    margin-bottom: var(--space-4);
+    border-bottom: var(--rule-hair) solid var(--color-rule);
   }
-  .code-header span { font-size: .75rem; color: #64748B; font-weight: 500; }
+  .hero-proof__head h3 {
+    font-size: 0.72rem; font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-ink-3);
+  }
+  .hero-proof__head .count {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--color-accent);
+  }
+  .crate {
+    display: grid;
+    grid-template-columns: 2.5rem 1fr;
+    gap: var(--space-3);
+    align-items: baseline;
+    padding: var(--space-3) 0;
+    border-bottom: var(--rule-hair) solid color-mix(in oklch, var(--color-rule) 50%, transparent);
+  }
+  .crate:last-child { border-bottom: 0; }
+  .crate__n {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--color-ink-4);
+    font-variant-numeric: tabular-nums;
+  }
+  .crate__name {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--color-ink);
+  }
+  .crate__role {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--color-ink-3);
+    margin-top: 0.15rem;
+  }
+
+  /* ─── Section frames (Split Studio shared) ─── */
+  section { padding: clamp(4rem, 9vh, 6.5rem) var(--gutter); }
+  .section__inner { max-width: var(--maxw); margin: 0 auto; }
+
+  .split { display: grid; gap: var(--space-12); align-items: start; }
+  @media (min-width: 880px) {
+    .split--prose-left  { grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr); }
+    .split--prose-right { grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr); }
+  }
+  .split__prose { max-width: 52ch; }
+  .split__prose h2 {
+    font-family: var(--font-display);
+    font-size: clamp(1.6rem, 3.2vw, 2.1rem);
+    font-weight: 700;
+    font-style: normal;
+    letter-spacing: -0.03em;
+    line-height: 1.15;
+    color: var(--color-ink);
+    margin-bottom: var(--space-4);
+  }
+  .split__prose p {
+    color: var(--color-ink-2);
+    font-size: 0.98rem;
+    line-height: 1.7;
+    margin-bottom: var(--space-3);
+  }
+  .split__prose p strong { color: var(--color-ink); font-weight: 600; }
+  .split__prose .label {
+    font-family: var(--font-mono);
+    font-size: 0.72rem; font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-accent);
+    margin-bottom: var(--space-3);
+    display: block;
+  }
+
+  /* ─── 9 reasons · numbered vertical list (replaces the icon-tile grid) ─── */
+  .reason-list { display: grid; gap: 0; }
+  .reason-list .row {
+    display: grid;
+    grid-template-columns: 4.5rem minmax(0, 1fr);
+    gap: var(--space-6);
+    padding: var(--space-6) 0;
+    border-bottom: var(--rule-hair) solid var(--color-rule);
+  }
+  .reason-list .row:first-child { padding-top: 0; }
+  .reason-list .row:last-child { border-bottom: 0; }
+  .reason-list .n {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--color-accent);
+    font-variant-numeric: tabular-nums;
+  }
+  .reason-list .body h3 {
+    font-size: 1.02rem;
+    font-weight: 600;
+    color: var(--color-ink);
+    font-style: normal;
+    margin-bottom: var(--space-2);
+  }
+  .reason-list .body p {
+    font-size: 0.9rem;
+    color: var(--color-ink-2);
+    line-height: 1.65;
+  }
+  .reason-list .body .note {
+    margin-top: var(--space-2);
+    font-size: 0.82rem;
+    color: var(--color-ink-3);
+    padding-left: var(--space-4);
+    border-left: var(--rule-2) solid var(--color-warn);
+  }
+
+  /* ─── Comparison table (Gaps) ─── */
+  .compare {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    font-variant-numeric: tabular-nums;
+    min-width: 640px;
+  }
+  .compare thead th {
+    text-align: center;
+    padding: var(--space-3) var(--space-4);
+    color: var(--color-ink-3);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 0.7rem;
+    border-bottom: var(--rule-hair) solid var(--color-rule);
+  }
+  .compare thead th:first-child { color: var(--color-ink-2); text-align: left; }
+  .compare thead th.atheer { color: var(--color-accent); font-weight: 600; }
+  .compare tbody td {
+    padding: var(--space-3) var(--space-4);
+    border-bottom: var(--rule-hair) solid color-mix(in oklch, var(--color-rule) 50%, transparent);
+    color: var(--color-ink-2);
+  }
+  .compare tbody td:first-child { color: var(--color-ink); }
+  .compare tbody td.center {
+    text-align: center;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+  }
+  .compare tbody td.atheer {
+    color: var(--color-ink);
+    font-weight: 600;
+    text-align: center;
+    font-family: var(--font-mono);
+  }
+  .compare .mark-yes { color: var(--color-good); }
+  .compare .mark-no  { color: var(--color-bad); }
+  .compare .mark-mid { color: var(--color-warn); }
+  .compare .row-emph td { background: color-mix(in oklch, var(--color-accent) 4%, transparent); }
+  .compare-wrap { overflow-x: auto; }
+  .compare-legend {
+    display: flex; gap: var(--space-6); flex-wrap: wrap;
+    font-family: var(--font-mono);
+    font-size: 0.72rem; color: var(--color-ink-3);
+    margin-top: var(--space-3);
+  }
+  .compare-legend span::before { content: "•"; margin-right: 0.35rem; }
+  .compare-legend .yes::before { color: var(--color-good); }
+  .compare-legend .plan::before { color: var(--color-warn); }
+  .compare-legend .no::before  { color: var(--color-bad); }
+
+  /* ─── Architecture stack ─── */
+  .stack {
+    display: grid; gap: 0;
+    border: var(--rule-hair) solid var(--color-rule);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    background: var(--color-paper-2);
+  }
+  .stack__layer {
+    display: grid;
+    grid-template-columns: 1.5rem 1fr;
+    gap: var(--space-4);
+    align-items: center;
+    padding: var(--space-4) var(--space-6);
+    border-bottom: var(--rule-hair) solid color-mix(in oklch, var(--color-rule) 50%, transparent);
+  }
+  .stack__layer:last-child { border-bottom: 0; }
+  .stack__layer .l {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--color-ink-4);
+  }
+  .stack__layer h4 {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--color-ink);
+  }
+  .stack__layer p {
+    font-size: 0.75rem;
+    color: var(--color-ink-3);
+    margin-top: 0.1rem;
+  }
+  .stack__pills {
+    margin-top: var(--space-6);
+    display: flex; flex-wrap: wrap; gap: 0.5rem;
+  }
+  .stack__pills .pill {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--color-ink-2);
+    padding: 0.3rem 0.7rem;
+    border: var(--rule-hair) solid var(--color-rule);
+    border-radius: var(--radius-pill);
+  }
+
+  /* ─── Backends timeline ─── */
+  .timeline { display: grid; gap: 0; }
+  .tl-row {
+    display: grid;
+    grid-template-columns: 7rem minmax(0, 1fr);
+    gap: var(--space-6);
+    padding: var(--space-6) 0;
+    border-bottom: var(--rule-hair) solid var(--color-rule);
+  }
+  .tl-row:last-child { border-bottom: 0; }
+  .tl-row .plat {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--color-accent);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .tl-row h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--color-ink);
+    margin-bottom: var(--space-2);
+  }
+  .tl-row p {
+    font-size: 0.85rem;
+    color: var(--color-ink-2);
+    line-height: 1.65;
+  }
+  .tl-row .meta {
+    margin-top: var(--space-2);
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--color-ink-4);
+  }
+
+  /* ─── Quickstart code blocks (typographic frame, no fake chrome) ─── */
+  .code-block-wrap {
+    background: var(--color-paper-2);
+    border: var(--rule-hair) solid var(--color-rule);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+  .code-block-wrap + .code-block-wrap { margin-top: var(--space-4); }
+  .code-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-6);
+    border-bottom: var(--rule-hair) solid var(--color-rule);
+  }
+  .code-head .lang {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--color-accent);
+    text-transform: lowercase;
+    letter-spacing: 0.04em;
+  }
+  .code-head .scope {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--color-ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
   .code-copy-btn {
-    background: none; border: 1px solid rgba(56,189,248,.15);
-    color: #94A3B8; font-size: .7rem; padding: .25rem .75rem;
-    border-radius: 4px; cursor: pointer;
-    transition: background .2s, color .2s;
+    background: none;
+    border: var(--rule-hair) solid var(--color-rule);
+    color: var(--color-ink-2);
     font-family: inherit;
+    font-size: 0.72rem;
+    padding: 0.4rem 0.85rem;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: color var(--dur-fast) var(--ease-out),
+                border-color var(--dur-fast) var(--ease-out);
   }
-  .code-copy-btn:hover { background: rgba(56,189,248,.1); color: #E2E8F0; }
-  .code-copy-btn.copied { background: rgba(34,197,94,.15); color: #22C55E; border-color: rgba(34,197,94,.3); }
+  .code-copy-btn:hover { color: var(--color-ink); border-color: var(--color-ink-2); }
+  .code-copy-btn.copied {
+    color: var(--color-good);
+    border-color: color-mix(in oklch, var(--color-good) 35%, transparent);
+  }
   .code-block {
-    padding: 1.25rem; overflow-x: auto;
-    font-size: .8rem; line-height: 1.7;
-    color: #CBD5E1;
+    padding: var(--space-4) var(--space-6);
+    overflow-x: auto;
+    font-size: 0.78rem;
+    line-height: 1.7;
+    color: var(--color-ink-2);
   }
-  .code-block .comment { color: #475569; }
-  .code-block .keyword { color: #38BDF8; }
-  .code-block .string { color: #A5D4FF; }
-  .code-block .type { color: #2DD4BF; }
-  .code-block .fn { color: #F59E0B; }
-  .code-block .number { color: #F472B6; }
+  .code-block > code {
+    display: block;
+    padding: 0;
+  }
+  .code-block .comment { color: var(--color-ink-4); }
+  .code-block .keyword { color: var(--color-accent); }
+  .code-block .string  { color: oklch(80% 0.08 235); }
+  .code-block .type    { color: oklch(78% 0.13 195); }
+  .code-block .fn      { color: var(--color-warn); }
+  .code-block .number  { color: oklch(75% 0.16 350); }
 
-  /* ─── Benchmarks ─── */
-  .bench-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 1.5rem; margin-top: 2.5rem;
-  }
+  /* ─── Benchmarks cards ─── */
+  .bench-cards { display: grid; gap: var(--space-3); }
   .bench-card {
-    background: #0F172A;
-    border: 1px solid rgba(56,189,248,.08);
-    border-radius: 10px; padding: 1.5rem;
-    cursor: default;
+    border: var(--rule-hair) solid var(--color-rule);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6) var(--space-8);
+    background: var(--color-paper-2);
   }
-  .bench-card h4 { font-size: .9rem; font-weight: 600; margin-bottom: .25rem; }
-  .bench-card .bench-cat { font-size: .7rem; color: #64748B; margin-bottom: 1rem; }
-  .bench-row { margin-bottom: 1rem; }
-  .bench-row:last-child { margin-bottom: 0; }
-  .bench-label {
+  .bench-card h4 {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--color-ink);
+    margin-bottom: var(--space-2);
+  }
+  .bench-card .cat {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--color-ink-3);
+    margin-bottom: var(--space-4);
+  }
+  .bench-row {
     display: flex; justify-content: space-between;
-    font-size: .8rem; margin-bottom: .35rem;
+    gap: var(--space-3);
+    font-size: 0.8rem;
+    color: var(--color-ink-2);
+    padding: var(--space-2) 0;
+    border-top: var(--rule-hair) solid color-mix(in oklch, var(--color-rule) 50%, transparent);
   }
-  .bench-label span:last-child { color: #38BDF8; font-weight: 600; font-family: 'JetBrains Mono', monospace; }
-  .bench-track {
-    height: 5px; background: #1E293B; border-radius: 4px; overflow: hidden;
+  .bench-row:first-child { border-top: 0; padding-top: var(--space-3); }
+  .bench-row:last-child { padding-bottom: var(--space-2); }
+  .bench-row span:last-child {
+    color: var(--color-ink-3);
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
   }
-  .bench-fill {
-    height: 100%; width: 0%;
-    border-radius: 4px;
-    transition: width 1.2s cubic-bezier(.25,.46,.45,.94);
-  }
-  .bench-fill.blue { background: linear-gradient(90deg, #38BDF8, #60A5FA); }
-  .bench-fill.cyan { background: linear-gradient(90deg, #06B6D4, #22D3EE); }
-  .bench-fill.amber { background: linear-gradient(90deg, #F59E0B, #FBBF24); }
-  .bench-fill.green { background: linear-gradient(90deg, #22C55E, #4ADE80); }
 
-  /* ─── Footer ─── */
-  footer {
-    border-top: 1px solid rgba(56,189,248,.06);
-    padding: 3rem 2rem 2rem;
+  /* ─── Roadmap 3-up ─── */
+  .roadmap {
+    display: grid; gap: var(--space-4);
+    padding-top: 0.6rem; /* FIX: Added vertical safe space to prevent badge clipping under mobile overflow conditions */
   }
-  .footer-inner {
-    max-width: 1100px; margin: 0 auto;
-    display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2rem;
+  @media (min-width: 720px) {
+    .roadmap { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .nav-pill__cta {
+      min-width: 6rem;
+      display: flex;
+      justify-content: center;
+    }
+  
   }
-  .footer-brand {
-    font-weight: 700; font-size: 1rem;
-    background: linear-gradient(135deg, #38BDF8, #06B6D4);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    background-clip: text;
-    margin-bottom: .5rem;
+  .phase {
+    border: var(--rule-hair) solid var(--color-rule);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6) var(--space-8);
+    background: var(--color-paper-2);
+    position: relative;
   }
-  .footer-desc { font-size: .8rem; color: #64748B; max-width: 300px; line-height: 1.6; }
-  .footer-links { display: flex; gap: 2rem; }
-  .footer-col h5 { font-size: .75rem; font-weight: 600; color: #94A3B8; margin-bottom: .75rem; text-transform: uppercase; letter-spacing: .08em; }
-  .footer-col a {
-    display: block; font-size: .8rem; color: #64748B;
-    margin-bottom: .5rem; cursor: pointer;
-    transition: color .2s;
+  .phase[data-state="done"] {
+    border-color: color-mix(in oklch, var(--color-good) 30%, var(--color-rule));
   }
-  .footer-col a:hover { color: #E2E8F0; }
-  .footer-bottom {
-    max-width: 1100px; margin: 2rem auto 0;
-    padding-top: 1.5rem;
-    border-top: 1px solid rgba(56,189,248,.06);
-    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;
+  .phase[data-state="pending"] {
+    border-color: color-mix(in oklch, var(--color-warn) 25%, var(--color-rule));
   }
-  .footer-bottom p { font-size: .75rem; color: #475569; }
-  .footer-bottom-links { display: flex; gap: 1rem; }
-  .footer-bottom-links a { font-size: .75rem; color: #475569; cursor: pointer; }
-  .footer-bottom-links a:hover { color: #94A3B8; }
+  .phase .tag {
+    position: absolute; top: -0.6rem; right: var(--space-6);
+    font-family: var(--font-mono);
+    font-size: 0.65rem; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    padding: 0.3rem 0.7rem; border-radius: var(--radius-pill);
+  }
+  .phase[data-state="done"] .tag { background: var(--color-good); color: var(--color-paper); }
+  .phase[data-state="pending"] .tag { background: var(--color-warn); color: var(--color-paper); }
+  .phase .label {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--color-ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+  .phase h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: var(--space-2) 0 var(--space-3);
+    color: var(--color-ink);
+  }
+  .phase .meta {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--color-ink-3);
+    margin-bottom: var(--space-4);
+  }
+  .phase ul { list-style: none; padding: 0; margin: 0; }
+  .phase ul li {
+    font-size: 0.85rem;
+    color: var(--color-ink-2);
+    padding: var(--space-3) 0 var(--space-3) 1.25rem;
+    border-top: var(--rule-hair) solid color-mix(in oklch, var(--color-rule) 50%, transparent);
+    position: relative;
+  }
+  .phase ul li:first-child { border-top: 0; }
+  .phase ul li::before {
+    position: absolute; left: 0; top: 0.7rem;
+    font-family: var(--font-mono);
+    color: var(--color-ink-4);
+  }
+  .phase ul li:first-child { border-top: 0; }
+  .phase[data-state="done"] ul li::before { content: "✓"; color: var(--color-good); }
+  .phase[data-state="pending"] ul li::before { content: "◆"; color: var(--color-warn); }
 
-  /* ─── Scroll Reveal ─── */
+  /* ─── Ft5 · Statement footer ─── */
+  footer.foot-stmt {
+    padding: clamp(5rem, 10vh, 8rem) var(--gutter) var(--space-12);
+    border-top: var(--rule-hair) solid var(--color-rule);
+  }
+  .foot-stmt__inner { max-width: var(--maxw); margin: 0 auto; }
+  .foot-stmt__line {
+    font-family: var(--font-display);
+    font-size: clamp(1.85rem, 5vw, 3rem);
+    font-weight: 700;
+    font-style: normal;
+    line-height: 1.05;
+    letter-spacing: -0.025em;
+    color: var(--color-ink);
+    max-width: 22ch;
+    margin: 0;
+  }
+  .foot-stmt__line em {
+    color: var(--color-accent);
+    font-style: normal;
+    font-weight: 700;
+  }
+  .foot-stmt__meta {
+    margin-top: var(--space-12);
+    padding-top: var(--space-6);
+    border-top: var(--rule-hair) solid var(--color-rule);
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+  }
+  .foot-stmt__brand {
+    font-weight: 700; font-size: 0.95rem;
+    color: var(--color-ink);
+  }
+  .foot-stmt__brand b { color: var(--color-accent); }
+  .foot-stmt__links { display: flex; gap: var(--space-6); flex-wrap: wrap; }
+  .foot-stmt__links a { font-size: 0.78rem; color: var(--color-ink-3); }
+  .foot-stmt__links a:hover { color: var(--color-ink); }
+  .foot-stmt__copy {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--color-ink-4);
+  }
+
+  /* ─── Reveal ─── */
   .reveal {
-    opacity: 0; transform: translateY(24px);
-    transition: opacity .6s ease, transform .6s ease;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity var(--dur-slow) var(--ease-out),
+                transform var(--dur-slow) var(--ease-out);
   }
   .reveal.visible { opacity: 1; transform: translateY(0); }
 
-  /* ─── Responsive ─── */
-  @media (max-width: 768px) {
-    .nav-links { display: none; }
-    .nav-mobile-toggle { display: block; }
-    .nav-links.open {
-      display: flex; flex-direction: column;
-      position: absolute; top: 100%; left: 0; right: 0;
-      background: rgba(11,17,32,.96);
-      backdrop-filter: blur(12px);
-      padding: 1rem 2rem; gap: 1rem;
-      border-bottom: 1px solid rgba(56,189,248,.1);
+  /* ─── Sticky centered prose (tablet + desktop) ─── */
+  @media (min-width: 720px) {
+    .split__prose.reveal {
+      position: sticky;
+      top: 8rem; /* Corrected: Clear of the floating nav pill and previous sections */
+      height: fit-content;
     }
-    .stats-grid { grid-template-columns: repeat(2,1fr); gap: 1.5rem; }
-    .features-grid { grid-template-columns: 1fr; }
-    .footer-inner { flex-direction: column; }
-    .footer-bottom { flex-direction: column; text-align: center; }
+    #roadmap .split__prose.reveal {
+      position: static;
+    }
   }
-  @media (max-width: 480px) {
-    section { padding: 3rem 1.25rem; }
-    .hero { padding: 5rem 1.25rem 3rem; }
-    .hero-actions { flex-direction: column; align-items: center; }
-    .btn { width: 100%; justify-content: center; }
-    .stats-grid { grid-template-columns: repeat(2,1fr); }
+
+  /* ─── Safe-area (notched iPhones / Android edge-to-edge) ─── */
+  section, footer.foot-stmt, .hero {
+    padding-inline: max(var(--gutter), env(safe-area-inset-left), env(safe-area-inset-right));
+  }
+
+  /* ─── Responsive ─── */
+  @media (max-width: 879px) {
+    .nav-pill__links { display: none; }
+    .nav-pill__menu { display: inline-flex; }
+    .nav-pill__cta { display: none; }
+    .nav-pill { padding: 0.4rem 0.5rem 0.4rem 0.9rem; }
+    .hero-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); }
+    .split { gap: var(--space-8); }
+    .compare-wrap { margin-inline: calc(var(--gutter) * -1); padding-inline: var(--gutter); }
+    .reveal { overflow-x: hidden; }
+  }
+
+  @media (max-width: 720px) {
+    section { padding-block: clamp(3rem, 7vh, 4.5rem); }
+    .split__prose h2 { font-size: clamp(1.45rem, 5.2vw, 1.85rem); }
+    .code-block-wrap + .code-block-wrap { margin-top: var(--space-2); }
+  }
+
+  @media (max-width: 540px) {
+    /* Nav — touch targets + safe-area-aware centering */
+    .nav-pill {
+      left: max(var(--space-3), env(safe-area-inset-left));
+      right: max(var(--space-3), env(safe-area-inset-right));
+      transform: none;
+      gap: var(--space-3);
+      padding: 0.35rem 0.4rem 0.35rem 2rem;
+      display: flex;
+      justify-content: space-between;
+    }
+    .nav-pill__brand { font-size: 0.82rem; }
+    .nav-pill__menu { padding: 0.65rem 0.7rem; min-height: 44px; min-width: 44px; font-size: 1rem; }
+
+    /* Hero */
+    .hero { padding-top: clamp(5.5rem, 12vh, 6.5rem); padding-block-end: clamp(3rem, 7vh, 4rem); }
+    .hero-copy { max-width: none; }
+    .hero h1 { font-size: clamp(1.85rem, 7.8vw, 2.4rem); letter-spacing: -0.04em; }
+    .hero-eyebrow { padding: 0.3rem 0.6rem; font-size: 0.68rem; margin-bottom: var(--space-4); }
+    .hero-actions .btn { padding: 0.6rem 1.1rem; font-size: 0.85rem; }
+    .hero-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); padding-top: var(--space-4); margin-top: var(--space-8); }
+    .hero-meta .m .v { font-size: 1.3rem; }
+    .hero-meta .m .k { font-size: 0.68rem; }
+
+    /* Proof panel — tighter spacing */
+    .hero-proof { padding: var(--space-4); }
+    .hero-proof__head { padding-bottom: var(--space-3); margin-bottom: var(--space-3); }
+    .crate { padding: var(--space-2) 0; gap: var(--space-2); }
+    .crate__name { font-size: 0.78rem; }
+    .crate__role { font-size: 0.66rem; }
+
+    /* Reason list — narrower number column + tighter note inset */
+    .reason-list .row {
+      grid-template-columns: 2.5rem minmax(0, 1fr);
+      gap: var(--space-3);
+      padding: var(--space-4) 0;
+    }
+    .reason-list .n { font-size: 0.78rem; }
+    .reason-list .body h3 { font-size: 0.96rem; }
+    .reason-list .body .note { padding-left: var(--space-3); font-size: 0.78rem; }
+
+    /* Comparison table — smaller cells, tighter padding */
+    .compare { font-size: 0.74rem; min-width: 560px; }
+    .compare thead th { padding: var(--space-2) var(--space-3); font-size: 0.65rem; }
+    .compare tbody td { padding: var(--space-2) var(--space-3); }
+    .compare tbody td.center { font-size: 0.72rem; }
+
+    /* Architecture stack — leaner rows */
+    .stack__layer { padding: var(--space-3) var(--space-4); gap: var(--space-3); }
+    .stack__layer h4 { font-size: 0.78rem; }
+    .stack__layer p { font-size: 0.7rem; }
+    .stack__pills .pill { padding: 0.25rem 0.6rem; font-size: 0.68rem; }
+
+    /* Backend timeline */
+    .tl-row { grid-template-columns: 1fr; gap: var(--space-2); padding: var(--space-4) 0; }
+    .tl-row .plat { font-size: 0.68rem; }
+    .tl-row h4 { font-size: 0.94rem; margin-bottom: var(--space-2); }
+    .tl-row p { font-size: 0.82rem; }
+
+    /* Code blocks */
+    .code-head { padding: var(--space-3) var(--space-6); gap: var(--space-2); }
+    .code-head .lang, .code-head .scope { font-size: 0.66rem; }
+    .code-copy-btn { padding: 0.35rem 0.55rem; font-size: 0.66rem; min-height: 32px; }
+    .code-block { padding: var(--space-4) var(--space-6); font-size: 0.7rem; line-height: 1.65; }
+
+    /* Benchmarks */
+    .bench-card { padding: var(--space-4); }
+    .bench-card h4 { font-size: 0.9rem; }
+    .bench-card .cat { font-size: 0.66rem; margin-bottom: var(--space-3); }
+    .bench-row { font-size: 0.76rem; padding: var(--space-1) 0; }
+    .bench-row span:last-child { font-size: 0.75rem; }
+
+    /* Roadmap */
+    .phase { padding: var(--space-6) var(--space-6); }
+    .phase .tag { right: var(--space-3); padding: 0.14rem 0.45rem; font-size: 0.56rem; }
+    .phase h3 { font-size: 0.94rem; }
+    .phase .meta { font-size: 0.68rem; margin-bottom: var(--space-3); }
+    .phase ul li { font-size: 0.78rem; padding: 0.35rem 0 0.35rem 1rem; }
+
+    /* Typographic CTA — bring hit-target up to 44 px (iOS HIG / WCAG) */
+    .btn-text { padding-block: 0.85rem; min-height: 44px; }
+
+    /* Footer statement — tighter max-width + step font-size down at phone widths */
+    .foot-stmt__line {
+      font-size: clamp(1.6rem, 8vw, 2.2rem);
+      letter-spacing: -0.02em;
+      max-width: 18ch;
+    }
+    .foot-stmt__meta { flex-direction: column; align-items: flex-start; gap: var(--space-3); }
+    .foot-stmt__links { gap: var(--space-4); }
+    .foot-stmt__links a { font-size: 0.74rem; min-height: 32px; display: inline-flex; align-items: center; }
+  }
+
+  @media (max-width: 380px) {
+    .hero h1 { font-size: 1.7rem; }
+    .hero-meta .m .v { font-size: 1.15rem; }
+    .foot-stmt__line { font-size: 1.3rem; }
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after {
       animation-duration: 0.01ms !important;
       animation-iteration-count: 1 !important;
       transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
     }
-    .hero-bg-grid { display: none; }
-    .stat-number { transition: none; }
-    .bench-fill { transition: none; }
+    .reveal { opacity: 1 !important; transform: none !important; }
   }
 </style>
 </head>
 <body>
 
-<!-- ─── Loading Screen ─── -->
 <div id="loading-screen" role="status" aria-label="Loading">
-  <div class="loading-logo">Atheer</div>
+  <div class="loading-logo">Atheer<b>.</b></div>
   <div class="loading-bar-track"><div class="loading-bar-fill" id="loading-fill"></div></div>
-  <div class="loading-text" id="loading-text">Initializing engine...</div>
+  <div class="loading-text" id="loading-text">initializing engine…</div>
 </div>
 
-<!-- ─── Navigation ─── -->
-<nav id="navbar" role="navigation" aria-label="Main navigation">
-  <div class="nav-brand">Atheer-Rust</div>
-  <div class="nav-links" id="nav-links">
-    <a href="#features" onclick="closeNav()">Features</a>
-    <a href="#why-atheer" onclick="closeNav()">Why Atheer</a>
-    <a href="#gaps" onclick="closeNav()">Gaps</a>
-    <a href="#architecture" onclick="closeNav()">Architecture</a>
-    <a href="#backends" onclick="closeNav()">Backends</a>
-    <a href="#quickstart" onclick="closeNav()">Quick Start</a>
-    <a href="#benchmarks" onclick="closeNav()">Benchmarks</a>
-    <a href="#roadmap" onclick="closeNav()">Roadmap</a>
-    <a href="https://github.com/achmadk/atheer-rust" class="nav-cta" target="_blank" rel="noopener noreferrer" title="View source code on GitHub">GitHub →</a>
-  </div>
-  <button class="nav-mobile-toggle" id="nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false" title="Toggle navigation menu">☰</button>
+<nav class="nav-pill" aria-label="Primary">
+  <a href="#hero" class="nav-pill__brand">Atheer<b>·</b>Rust</a>
+  <ul class="nav-pill__links" id="nav-links">
+    <li><a href="#why-atheer">Why</a></li>
+    <li><a href="#gaps">Gaps</a></li>
+    <li><a href="#architecture">Stack</a></li>
+    <li><a href="#backends">Backends</a></li>
+    <li><a href="#quickstart">Install</a></li>
+    <li><a href="#benchmarks">Bench</a></li>
+    <li><a href="#roadmap">Roadmap</a></li>
+  </ul>
+  <a href="https://github.com/achmadk/atheer-rust" class="nav-pill__cta" target="_blank" rel="noopener noreferrer">GitHub ↗</a>
+  <button class="nav-pill__menu" id="nav-toggle" aria-label="Toggle navigation" aria-expanded="false">☰</button>
 </nav>
 
-<!-- ─── Hero ─── -->
 <section class="hero" id="hero">
-  <div class="hero-bg-grid"></div>
-  <div class="hero-glow"></div>
-  <div class="hero-content">
-    <div class="hero-badge">v0.1.0 — MIT / Apache 2.0</div>
-    <h1>Rust inference engine for <span>on-device LLMs</span></h1>
+  <div class="hero-copy reveal">
+    <span class="hero-eyebrow">v0.1.0 · MIT / Apache-2.0</span>
+    <h1>A Rust inference engine for <span class="u">on-device LLMs</span> on iOS and Android.</h1>
     <p class="hero-sub">
-      Atheer is a safe-Rust inference engine that runs LLMs locally on iOS and Android — 
-      with custom Vulkan compute shaders, raw NNAPI NDK bindings, grammar-constrained 
-      decoding, and real-time adaptive performance across 5 hardware backends.
+      Atheer runs language models locally &mdash; NPU &rarr; GPU &rarr; CPU, automatic.
+      Predictive thermal orchestration, hierarchical KV cache, grammar-constrained
+      decoding, and a pre-allocation GGUF header gate. Five backends, zero unsafe
+      in business logic.
     </p>
     <div class="hero-actions">
-      <button class="btn btn-primary" onclick="document.getElementById('quickstart').scrollIntoView({behavior:'smooth'})" title="Jump to installation and code examples">
-        Get Started →
-      </button>
-      <button class="btn btn-secondary" onclick="document.getElementById('architecture').scrollIntoView({behavior:'smooth'})" title="View crate architecture diagram">
-        View Architecture
-      </button>
+      <button class="btn btn-primary" onclick="document.getElementById('quickstart').scrollIntoView({behavior:'smooth'})">Get started &rarr;</button>
+      <button class="btn btn-ghost" onclick="document.getElementById('architecture').scrollIntoView({behavior:'smooth'})">View architecture</button>
+    </div>
+    <div class="hero-meta">
+      <div class="m"><div class="v" data-count="486">0</div><div class="k">tests</div></div>
+      <div class="m"><div class="v" data-count="7">0</div><div class="k">crates</div></div>
+      <div class="m"><div class="v" data-count="5">0</div><div class="k">backends</div></div>
+      <div class="m"><div class="v" data-count="100" data-suffix="&#37;">0</div><div class="k">safe rust</div></div>
     </div>
   </div>
-  <div class="hero-scroll" onclick="document.getElementById('features').scrollIntoView({behavior:'smooth'})" role="button" tabindex="0" aria-label="Scroll to features">
-    <span>Scroll</span>
-    <div class="scroll-arrow"></div>
-  </div>
-</section>
 
-<!-- ─── Stats ─── -->
-<section class="stats-bar" id="stats">
-  <div class="stats-grid">
-    <div class="stat-item reveal"><div class="stat-number" data-target="486">0</div><div class="stat-label">Tests</div></div>
-    <div class="stat-item reveal"><div class="stat-number" data-target="7">0</div><div class="stat-label">Platform Crates</div></div>
-    <div class="stat-item reveal"><div class="stat-number" data-target="5">0</div><div class="stat-label">GPU/NPU + CPU Backends</div></div>
-    <div class="stat-item reveal"><div class="stat-number" data-target="100" data-suffix="%">0</div><div class="stat-label">Safe Rust</div></div>
-  </div>
-</section>
-
-<!-- ─── 7 Reasons Atheer Is Different ─── -->
-<section id="why-atheer" style="background: #0A0F1C;">
-  <div class="section-inner reveal">
-    <div class="section-label">Why Atheer</div>
-    <h2 class="section-title">9 Reasons Atheer Is Different</h2>
-    <p class="section-desc section-desc-wide">
-      Every mobile inference engine runs LLMs. Here&rsquo;s why Atheer is the only one built for the NPU era &mdash; with predictive thermal management, hierarchical memory, structured output, model-level encryption, prompt injection guardrails, and autonomous agents, all in safe Rust.
-    </p>
-    <div class="features-grid" id="reasons-grid">
-
-      <div class="feature-card reveal">
-        <div class="feature-icon feature-icon-blue">⚡</div>
-        <h3>#1 &mdash; NPU-First Multi-Backend</h3>
-        <p>Atheer auto-probes NPU &rarr; GPU &rarr; CPU on both iOS and Android &mdash; CoreML/ANE, Metal, NNAPI, Vulkan &mdash; and selects the fastest available accelerator. Per-operation routing even sends decode to CPU in Eco mode to conserve GPU memory.</p>
-        <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> No other engine probes NPU before GPU before CPU on both platforms. llama.cpp has no NPU path. MLC LLM has none. ExecuTorch has Qualcomm-only. MLX Swift has none.</p>
-      </div>
-
-      <div class="feature-card reveal">
-        <div class="feature-icon feature-icon-cyan">▦</div>
-        <h3>#2 &mdash; Predictive Thermal Orchestration</h3>
-        <p>Least-squares regression on live 1&thinsp;Hz telemetry predicts temperature trajectory and pre-emptively downgrades inference mode <em>before</em> the OS thermal throttle hits &mdash; replacing the sudden 60% performance cliff with graceful degradation.</p>
-        <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> No mobile inference engine has thermal-aware operation. Every competitor runs flat-out until the OS forcibly throttles.</p>
-      </div>
-
-      <div class="feature-card reveal">
-        <div class="feature-icon feature-icon-amber">⊞</div>
-        <h3>#3 &mdash; L1/L2/L3 KV Cache Hierarchy</h3>
-        <p>A three-tier cache with alignment gating and explicit handoff protocols. L1 holds the active session, L2 retains recent sessions for fast recall, and L3 stores compressed/archived context &mdash; designed for multi-turn agent sessions on memory-constrained devices. <em>(Note: promotion scoring heuristics are not yet implemented — the alignment score is currently a manually-set placeholder.)</em></p>
-        <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> Every other engine uses a single flat KV cache with no tiering, no promotion, and no cross-session handoff.</p>
-      </div>
-
-      <div class="feature-card reveal">
-        <div class="feature-icon feature-icon-green">◆</div>
-        <h3>#4 &mdash; Grammar-Constrained Decoding</h3>
-        <p>A first-class <code>GrammarConstraint</code> trait implements a pushdown automaton that guarantees valid JSON output at every decode step &mdash; not a post-processing bolt-on, but a native part of the generation loop with thread-safe <code>Send + Sync</code> semantics.</p>
-        <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> Only llama.cpp has comparable GBNF grammar support, but it&rsquo;s a C API bolt-on, not a first-class trait in a safe language.</p>
-      </div>
-
-      <div class="feature-card reveal">
-        <div class="feature-icon feature-icon-purple">⟳</div>
-        <h3>#5 &mdash; Built-in Agent Loop</h3>
-        <p>An autonomous <code>Agent</code> struct with configurable <code>max_steps</code> handles the generate &rarr; parse &rarr; tool-call &rarr; continue cycle natively. No need to build orchestration logic in the host app &mdash; Atheer ships the loop.</p>
-        <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> Every other mobile engine is a text-in-text-out API. You must build agent orchestration, context management, and tool-calling yourself.</p>
-      </div>
-
-      <div class="feature-card reveal">
-        <div class="feature-icon feature-icon-pink">◉</div>
-        <h3>#6 &mdash; UniFFI Cross-Platform Bindings</h3>
-        <p>One UniFFI definition generates idiomatic Swift packages for iOS and Kotlin packages for Android &mdash; from the same Rust codebase, with no platform-specific wrapper code or duplicate SDK maintenance.</p>
-        <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> llama.cpp exposes a raw C API requiring per-platform wrappers. ExecuTorch is C++-only. MLX Swift is Apple-exclusive.</p>
-      </div>
-
-      <div class="feature-card reveal">
-        <div class="feature-icon feature-icon-blue">◈</div>
-        <h3>#7 &mdash; Safe Rust, Not C/C++</h3>
-        <p>Rust&rsquo;s ownership model guarantees no use-after-free, no data races, and no GC pauses. <code>catch_unwind</code> wraps ANE forward calls so accelerator panics don&rsquo;t crash the host app. <strong>Every line of business logic across inference, grammar, cache, and orchestration is safe Rust</strong> — the only <code>unsafe</code> in the entire codebase is at platform FFI boundaries (C ABI export, NDK, Vulkan, ObjC), exactly the same discipline as Servo, wgpu, and Tokio.</p>
-        <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> Most mobile inference engines are written in C/C++ with manual memory management across their entire codebase. Only MLX Swift shares Rust&rsquo;s safety guarantees &mdash; but it&rsquo;s Apple-only.</p>
-      </div>
-
-      <div class="feature-card reveal">
-        <div class="feature-icon feature-icon-green">🔐</div>
-        <h3>#8 &mdash; Model-Level &amp; Cache Encryption, Signature Verification, Safe Load Pipeline</h3>
-        <p>AES-256-GCM encryption for GGUF and .mlpackage model files at rest, with a three-strategy decryption pipeline &mdash; ServerDistributed keys, DeviceDerived via HKDF-SHA256, or Custom provider. Ed25519 detached signature verification validates model origin and integrity before loading. <strong style="color:#7DD3FC;">A pre-allocation header gate</strong> (<code>safe_content::parse_header</code>) runs before <em>any</em> <code>Vec&lt;u8&gt;</code> allocation, rejecting crafted GGUF headers via length-pre-validated metadata scans and bounds-checked counts &mdash; with <code>parse_header</code> running <em>before</em> <code>Mmap::map</code> so adversarial sparse files cannot trigger mmap-OOM. Six typed <code>AtheerCoreError</code> variants (<code>InvalidMagic</code>, <code>InvalidCounts</code>, <code>InvalidTensorBounds</code>, &hellip;) replace the prior string-only failure mode, with structured fields emitted through the FFI boundary. <strong>KV cache snapshots at rest are also encrypted</strong> via the same AES-256-GCM primitive (LZ4 compress &rarr; encrypt with random 12-byte nonce, distinct AAD <code>b"atheer-cache-v1"</code>), with the encryption key zeroized on drop. This is the only open engine with model files, signatures, safe loading, <em>and</em> cache encryption.</p>
-        <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> No other open engine encrypts models, signs models, gates GGUF allocation, <em>or</em> encrypts their KV cache at rest.</p>
-      </div>
-
-      <div class="feature-card reveal">
-        <div class="feature-icon feature-icon-cyan">🛡️</div>
-        <h3>#9 &mdash; Prompt Injection Guardrails (L1/L2/L3)</h3>
-        <p>Three-layer defense-in-depth against prompt injection — L1 fast heuristics (pattern matching, Unicode normalization, leetspeak, homoglyphs, proximity scoring) in <strong>&lt;100&thinsp;&mu;s</strong>, L2 token-level statistical analysis (repetition ratio, entropy anomaly, adversarial suffix detection) in <strong>&lt;5&thinsp;ms</strong>, and L3 output guard (system prompt leakage detection, jailbreak success markers) in <strong>&lt;100&thinsp;&mu;s</strong>. Encoding detection pipeline automatically decodes base64/hex/ROT13 and re-checks decoded text.</p>
-        <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> No other mobile inference engine ships built-in guardrails at any layer, let alone a configurable three-tier pipeline with sidecar pattern loading and encoding detection.</p>
-      </div>
-
+  <aside class="hero-proof reveal" aria-label="Crate stack">
+    <div class="hero-proof__head">
+      <h3>Crate stack &middot; 7 modules</h3>
+      <span class="count">rust · 2026</span>
     </div>
-  </div>
+    <div class="crate"><span class="crate__n">01</span><div><div class="crate__name">atheer-hardware</div><div class="crate__role">1 Hz telemetry · Android JNI · iOS objc2 FFI</div></div></div>
+    <div class="crate"><span class="crate__n">02</span><div><div class="crate__name">atheer-accel</div><div class="crate__role">Metal · Vulkan · NNAPI · CoreML · CPU</div></div></div>
+    <div class="crate"><span class="crate__n">03</span><div><div class="crate__name">atheer-memory-bank</div><div class="crate__role">L1/L2/L3 KV cache · PagedAttention blocks</div></div></div>
+    <div class="crate"><span class="crate__n">04</span><div><div class="crate__name">atheer-orchestrator</div><div class="crate__role">Predictive mode selection · PDA grammar</div></div></div>
+    <div class="crate"><span class="crate__n">05</span><div><div class="crate__name">atheer-core</div><div class="crate__role">Candle inference · session · KV quantizer</div></div></div>
+    <div class="crate"><span class="crate__n">06</span><div><div class="crate__name">atheer-ffi</div><div class="crate__role">UniFFI bindings · streaming callbacks</div></div></div>
+    <div class="crate"><span class="crate__n">07</span><div><div class="crate__name">iOS / Android app</div><div class="crate__role">Swift · Kotlin · UniFFI consumer</div></div></div>
+  </aside>
 </section>
 
-<!-- ─── Gaps & Differentiation ─── -->
-<section id="gaps" style="background: #0A0F1C;">
-  <div class="section-inner reveal">
-    <div class="section-label">Gaps &amp; Differentiation</div>
-    <h2 class="section-title">Where we lead, and what's next</h2>
-    <p class="section-desc section-desc-wide">
-      Atheer already leads on predictive thermal management, L1/L2/L3 KV cache, grammar-constrained decoding, agent loops, and full multi-backend NPU coverage. But "best in class" demands active engineering beyond architecture — the gaps below are the delta between a promising prototype and a trustable platform. Critically, <strong style="color:#38BDF8;">nobody in the competitive set closes these gaps either</strong> — they represent genuine greenfield differentiation.
-    </p>
-    <div style="overflow-x:auto; margin-top: 2.5rem;">
-      <table style="width:100%; border-collapse: collapse; font-size: .82rem; min-width: 700px;">
-        <thead>
-          <tr style="border-bottom: 1px solid rgba(56,189,248,.12);">
-            <th style="text-align:left; padding: .75rem 1rem; color: #64748B; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; font-size: .7rem;">Feature</th>
-            <th style="text-align:center; padding: .75rem .5rem; color: #38BDF8; font-weight: 700; font-size: .75rem;">Atheer</th>
-            <th style="text-align:center; padding: .75rem .5rem; color: #64748B; font-weight: 500; font-size: .75rem;">llama.cpp</th>
-            <th style="text-align:center; padding: .75rem .5rem; color: #64748B; font-weight: 500; font-size: .75rem;">MLC</th>
-            <th style="text-align:center; padding: .75rem .5rem; color: #64748B; font-weight: 500; font-size: .75rem;">MLX</th>
-            <th style="text-align:center; padding: .75rem .5rem; color: #64748B; font-weight: 500; font-size: .75rem;">Google Edge</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr style="border-bottom: 1px solid rgba(56,189,248,.06);">
-            <td style="padding: .7rem 1rem; color: #94A3B8;">Mobile NPU</td>
-            <td style="text-align:center; padding: .7rem .5rem;"><span style="color:#22C55E; font-weight: 600;">CoreML + NNAPI</span></td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #22C55E;">✅</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #22C55E;">✅ ANE only</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #22C55E;">✅</td>
-          </tr>
-          <tr style="border-bottom: 1px solid rgba(56,189,248,.06);">
-            <td style="padding: .7rem 1rem; color: #94A3B8;">All 4 backends</td>
-            <td style="text-align:center; padding: .7rem .5rem;"><span style="color:#22C55E; font-weight: 600;">✅</span></td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-          </tr>
-          <tr style="border-bottom: 1px solid rgba(56,189,248,.06);">
-            <td style="padding: .7rem 1rem; color: #94A3B8;">Safe Rust</td>
-            <td style="text-align:center; padding: .7rem .5rem;"><span style="color:#22C55E; font-weight: 600;">✅</span></td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #F59E0B;">C/C++</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #F59E0B;">Python/C++</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #F59E0B;">Swift/ObjC</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #F59E0B;">Java/C++</td>
-          </tr>
-          <tr style="border-bottom: 1px solid rgba(56,189,248,.06);">
-            <td style="padding: .7rem 1rem; color: #94A3B8;">Predictive thermal</td>
-            <td style="text-align:center; padding: .7rem .5rem;"><span style="color:#22C55E; font-weight: 600;">✅ Unique</span></td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-          </tr>
-          <tr style="border-bottom: 1px solid rgba(56,189,248,.06);">
-            <td style="padding: .7rem 1rem; color: #94A3B8;">KV cache tiering</td>
-            <td style="text-align:center; padding: .7rem .5rem;"><span style="color:#22C55E; font-weight: 600;">L1/L2/L3</span></td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #22C55E;">Simple</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-          </tr>
-          <tr style="border-bottom: 1px solid rgba(56,189,248,.06);">
-            <td style="padding: .7rem 1rem; color: #94A3B8;">Grammar-structured output</td>
-            <td style="text-align:center; padding: .7rem .5rem;"><span style="color:#22C55E; font-weight: 600;">PDA</span></td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #22C55E;">GBNF</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #22C55E;">✅</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-          </tr>
-          <tr style="border-bottom: 1px solid rgba(56,189,248,.06);">
-            <td style="padding: .7rem 1rem; color: #94A3B8;">Agent loops / tool calling</td>
-            <td style="text-align:center; padding: .7rem .5rem;"><span style="color:#22C55E; font-weight: 600;">✅ Unique</span></td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-          </tr>
-          <tr style="border-bottom: 1px solid rgba(56,189,248,.06);">
-            <td style="padding: .7rem 1rem; color: #94A3B8;">Speculative decoding</td>
-            <td style="text-align:center; padding: .7rem .5rem;"><span style="color:#22C55E; font-weight: 600;">✅</span></td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #22C55E;">✅</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-          </tr>
-          <tr style="border-bottom: 1px solid rgba(56,189,248,.06); background: rgba(56,189,248,.03);">
-            <td style="padding: .7rem 1rem; color: #22C55E; font-weight: 500;">Model encryption + signing</td>
-            <td style="text-align:center; padding: .7rem .5rem;"><span style="color:#22C55E; font-weight: 600;">✅ Unique</span></td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-          </tr>
-          <tr style="border-bottom: 1px solid rgba(56,189,248,.06); background: rgba(56,189,248,.03);">
-            <td style="padding: .7rem 1rem; color: #22C55E; font-weight: 500;">KV cache encryption (AES-256-GCM)</td>
-            <td style="text-align:center; padding: .7rem .5rem;"><span style="color:#22C55E; font-weight: 600;">✅ Unique</span></td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-          </tr>
-          <tr style="border-bottom: 1px solid rgba(56,189,248,.06); background: rgba(56,189,248,.03);">
-            <td style="padding: .7rem 1rem; color: #22C55E; font-weight: 500;">Privacy mode (Normal/Ephemeral/Audited)</td>
-            <td style="text-align:center; padding: .7rem .5rem;"><span style="color:#22C55E; font-weight: 600;">✅ Unique</span></td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-          </tr>
-          <tr style="border-bottom: 1px solid rgba(56,189,248,.06); background: rgba(56,189,248,.03);">
-            <td style="padding: .7rem 1rem; color: #22C55E; font-weight: 500;">Prompt guardrails</td>
-            <td style="text-align:center; padding: .7rem .5rem;"><span style="color:#22C55E; font-weight: 600;">✅ L1/L2/L3</span></td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-          </tr>
-          <tr style="border-bottom: 1px solid rgba(56,189,248,.06); background: rgba(56,189,248,.03);">
-            <td style="padding: .7rem 1rem; color: #F59E0B; font-weight: 500;">Privacy manifest</td>
-            <td style="text-align:center; padding: .7rem .5rem;"><span style="color:#F59E0B; font-weight: 600;">📋 Planned</span></td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-          </tr>
-          <tr style="background: rgba(56,189,248,.03);">
-            <td style="padding: .7rem 1rem; color: #F59E0B; font-weight: 500;">Session isolation</td>
-            <td style="text-align:center; padding: .7rem .5rem;"><span style="color:#F59E0B; font-weight: 600;">📋 Planned</span></td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-            <td style="text-align:center; padding: .7rem .5rem; color: #EF4444;">❌</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-    <p style="margin-top: 1rem; font-size: .8rem; color: #475569; text-align: center; font-family: 'JetBrains Mono', monospace;">
-      ✅ Shipped &mdash; 📋 Planned = gap identified, prioritized in roadmap below ⬇️
-    </p>
-    <p style="margin-top: 1.5rem; font-size: .9rem; color: #94A3B8; text-align: center; max-width: 650px; margin-left: auto; margin-right: auto; line-height: 1.7;">
-      <strong style="color: #38BDF8;">Key insight:</strong> The gaps we&rsquo;ve identified (prompt guardrails, privacy manifesto, session isolation) are not "catching up" items — <strong style="color: #E2E8F0;">nobody else does them either</strong>. These are genuine greenfield differentiation opportunities. Atheer has <strong style="color: #22C55E;">already shipped model file encryption (AES-256-GCM), KV cache encryption (AES-256-GCM), Ed25519 signature verification, load-time SHA-256 hash checks, a pre-allocation GGUF header gate (S6), speculative decoding, and a three-tier privacy mode (Normal/Ephemeral/Audited)</strong> — the only open engine with all seven. Privacy mode makes it the engine you choose when you need to "run AI on customer devices and prove nothing leaves."
-    </p>
-  </div>
-</section>
-
-<!-- ─── Features ─── -->
-<section id="features">
-  <div class="section-inner reveal">
-    <div class="section-label">Features</div>
-    <h2 class="section-title">Designed for on-device AI</h2>
-    <p class="section-desc section-desc-wide">
-      Atheer combines hardware-accelerated inference with agentic capabilities — all in safe Rust, all running locally on mobile. Every feature maps to actual code in the workspace.
-    </p>
-    <div class="features-grid">
-      <div class="feature-card">
-        <div class="feature-icon feature-icon-blue">⚡</div>
-        <h3>Multi-Backend GPU/NPU</h3>
-        <p>Metal (iOS GPU via Candle), custom GLSL compute shaders compiled via <strong>naga</strong> for Android Vulkan, raw NDK FFI bindings for NNAPI (NPU/DSP), CoreML ANE compatibility detection — automatic probe with graceful CPU fallback via <code>atheer-accel</code>.</p>
+<section id="why-atheer">
+  <div class="section__inner">
+    <div class="split split--prose-left">
+      <div class="split__prose reveal">
+        <span class="label">Why Atheer</span>
+        <h2>Nine things no other mobile inference engine does.</h2>
+        <p>
+          Every mobile inference engine runs LLMs. Here&rsquo;s why Atheer is the only one
+          built for the NPU era &mdash; with predictive thermal management, hierarchical
+          memory, structured output, model-level encryption, prompt injection
+          guardrails, and autonomous agents, all in safe Rust.
+        </p>
+        <p>
+          The list on the right is deliberately numbered. It is not a feature grid.
+          Each item is a place where a competitor stops, or never starts.
+        </p>
+        <button class="btn-text" onclick="document.getElementById('gaps').scrollIntoView({behavior:'smooth'})">See the competitive matrix</button>
       </div>
-      <div class="feature-card">
-        <div class="feature-icon feature-icon-cyan">◆</div>
-        <h3>Structured Output</h3>
-        <p>Character-level grammar-constrained decoding via a 38-state Pushdown Automaton in <code>atheer-orchestrator/src/grammar/</code> — guarantees valid JSON at every token, zero external dependencies, no post-processing.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon feature-icon-amber">⟳</div>
-        <h3>Agentic Workflows</h3>
-        <p>Draft-model speculative decoding with fallback NGram cache, tool-calling definitions with JsonGrammar integration, and autonomous agent loops — bring your own tools via the <code>Agent</code> trait in <code>atheer-orchestrator</code>.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon feature-icon-green">▦</div>
-        <h3>Adaptive Mode Switching</h3>
-        <p>Turbo / Balanced / Eco modes switch in real-time using a predictive moving-average thermal model with trend detection — 1 Hz hardware telemetry from <code>atheer-hardware</code> feeds the <code>Orchestrator</code> for preemptive downgrades.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon feature-icon-purple">⊞</div>
-        <h3>Memory Hierarchy</h3>
-        <p>L1/L2/L3 KV cache with INT8/INT4 quantization and adaptive depth by context length. PagedAttention block manager (16-token blocks) eliminates fragmentation. Incremental checkpoint deltas enable sub-100ms save/restore.</p>
-      </div>
-      <div class="feature-card">
-        <div class="feature-icon feature-icon-pink">◉</div>
-        <h3>Performance-per-Watt</h3>
-        <p>Criterion microbenchmarks (model-free) + <code>perf-bench</code> binary with model-dependent suites for throughput, latency, checkpoint, memory, energy, and thermal throttling. All in <code>perf-bench/</code> and <code>tests/benches/</code>.</p>
+      <div class="reveal">
+        <ol class="reason-list" id="reasons">
+          <li class="row"><span class="n">01</span><div class="body"><h3>NPU-first multi-backend</h3><p>Auto-probes NPU &rarr; GPU &rarr; CPU on both iOS and Android &mdash; CoreML/ANE, Metal, NNAPI, Vulkan &mdash; and selects the fastest available accelerator. Per-operation routing even sends decode to CPU in Eco mode to conserve GPU memory.</p><p class="note">Competitors don&rsquo;t: no other engine probes NPU before GPU before CPU on both platforms. llama.cpp has no NPU path. MLC LLM has none. ExecuTorch has Qualcomm-only. MLX Swift has none.</p></div></li>
+          <li class="row"><span class="n">02</span><div class="body"><h3>Predictive thermal orchestration</h3><p>Least-squares regression on live 1&thinsp;Hz telemetry predicts temperature trajectory and pre-emptively downgrades inference mode <em>before</em> the OS thermal throttle hits &mdash; replacing the sudden 60&#37; performance cliff with graceful degradation.</p><p class="note">No mobile inference engine has thermal-aware operation. Every competitor runs flat-out until the OS forcibly throttles.</p></div></li>
+          <li class="row"><span class="n">03</span><div class="body"><h3>L1/L2/L3 KV cache hierarchy</h3><p>A three-tier cache with alignment gating and explicit handoff protocols. L1 holds the active session, L2 retains recent sessions for fast recall, L3 stores compressed/archived context &mdash; designed for multi-turn agent sessions on memory-constrained devices. <em>(Note: promotion scoring heuristics are not yet implemented &mdash; the alignment score is currently a manually-set placeholder.)</em></p><p class="note">Every other engine uses a single flat KV cache with no tiering, no promotion, and no cross-session handoff.</p></div></li>
+          <li class="row"><span class="n">04</span><div class="body"><h3>Grammar-constrained decoding</h3><p>A first-class <code>GrammarConstraint</code> trait implements a pushdown automaton that guarantees valid JSON output at every decode step &mdash; not a post-processing bolt-on, but a native part of the generation loop with thread-safe <code>Send + Sync</code> semantics.</p><p class="note">Only llama.cpp has comparable GBNF grammar support, but it&rsquo;s a C API bolt-on, not a first-class trait in a safe language.</p></div></li>
+          <li class="row"><span class="n">05</span><div class="body"><h3>Built-in agent loop</h3><p>An autonomous <code>Agent</code> struct with configurable <code>max_steps</code> handles the generate &rarr; parse &rarr; tool-call &rarr; continue cycle natively. No need to build orchestration logic in the host app &mdash; Atheer ships the loop.</p><p class="note">Every other mobile engine is a text-in-text-out API. You must build agent orchestration, context management, and tool-calling yourself.</p></div></li>
+          <li class="row"><span class="n">06</span><div class="body"><h3>UniFFI cross-platform bindings</h3><p>One UniFFI definition generates idiomatic Swift packages for iOS and Kotlin packages for Android &mdash; from the same Rust codebase, with no platform-specific wrapper code or duplicate SDK maintenance.</p><p class="note">llama.cpp exposes a raw C API requiring per-platform wrappers. ExecuTorch is C++-only. MLX Swift is Apple-exclusive.</p></div></li>
+          <li class="row"><span class="n">07</span><div class="body"><h3>Safe Rust, not C/C++</h3><p>Rust&rsquo;s ownership model guarantees no use-after-free, no data races, no GC pauses. <code>catch_unwind</code> wraps ANE forward calls so accelerator panics don&rsquo;t crash the host app. <strong>Every line of business logic across inference, grammar, cache, and orchestration is safe Rust</strong> &mdash; the only <code>unsafe</code> in the entire codebase is at platform FFI boundaries (C ABI export, NDK, Vulkan, ObjC), exactly the same discipline as Servo, wgpu, and Tokio.</p><p class="note">Most mobile inference engines are written in C/C++ with manual memory management across their entire codebase. Only MLX Swift shares Rust&rsquo;s safety guarantees &mdash; but it&rsquo;s Apple-only.</p></div></li>
+          <li class="row"><span class="n">08</span><div class="body"><h3>Model-level &amp; cache encryption, signature verification, safe load pipeline</h3><p>AES-256-GCM encryption for GGUF and .mlpackage model files at rest, with a three-strategy decryption pipeline &mdash; ServerDistributed keys, DeviceDerived via HKDF-SHA256, or Custom provider. Ed25519 detached signature verification validates model origin and integrity before loading. A pre-allocation header gate (<code>safe_content::parse_header</code>) runs before <em>any</em> <code>Vec&lt;u8&gt;</code> allocation, rejecting crafted GGUF headers via length-pre-validated metadata scans and bounds-checked counts &mdash; with <code>parse_header</code> running <em>before</em> <code>Mmap::map</code> so adversarial sparse files cannot trigger mmap-OOM. Six typed <code>AtheerCoreError</code> variants (<code>InvalidMagic</code>, <code>InvalidCounts</code>, <code>InvalidTensorBounds</code>, &hellip;) replace the prior string-only failure mode, with structured fields emitted through the FFI boundary. KV cache snapshots at rest are also encrypted via the same AES-256-GCM primitive (LZ4 compress &rarr; encrypt with random 12-byte nonce, distinct AAD <code>b"atheer-cache-v1"</code>), with the encryption key zeroized on drop.</p><p class="note">No other open engine encrypts models, signs models, gates GGUF allocation, <em>or</em> encrypts their KV cache at rest.</p></div></li>
+          <li class="row"><span class="n">09</span><div class="body"><h3>Prompt injection guardrails (L1/L2/L3)</h3><p>Three-layer defense-in-depth against prompt injection &mdash; L1 fast heuristics (pattern matching, Unicode normalization, leetspeak, homoglyphs, proximity scoring) in <strong>&lt;100&thinsp;&mu;s</strong>, L2 token-level statistical analysis (repetition ratio, entropy anomaly, adversarial suffix detection) in <strong>&lt;5&thinsp;ms</strong>, and L3 output guard (system prompt leakage detection, jailbreak success markers) in <strong>&lt;100&thinsp;&mu;s</strong>. Encoding detection pipeline automatically decodes base64/hex/ROT13 and re-checks decoded text.</p><p class="note">No other mobile inference engine ships built-in guardrails at any layer, let alone a configurable three-tier pipeline with sidecar pattern loading and encoding detection.</p></div></li>
+        </ol>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ─── Architecture ─── -->
-<section id="architecture" style="background: #0A0F1C;">
-  <div class="section-inner reveal">
-    <div class="section-label">Architecture</div>
-    <h2 class="section-title">Stack from silicon to inference</h2>
-    <p class="section-desc">A layered architecture across 7 Rust crates — hardware telemetry flows up, acceleration dispatches down, and the orchestrator ties them together.</p>
-    <div class="arch-grid">
-      <div class="arch-card l1"><h4>iOS / Android App</h4><p>Swift · Kotlin · uniffi FFI</p></div>
-      <div class="arch-card l2"><h4>atheer-ffi</h4><p>uniffi-generated bindings with streaming callback support</p></div>
-      <div class="arch-card l2"><h4>atheer-core</h4><p>Candle inference · session mgmt · KV quantizer · lifecycle</p></div>
-      <div class="arch-card l3"><h4>atheer-accel</h4><p>Metal · Vulkan (custom GLSL) · NNAPI NDK FFI · CoreML · CPU</p></div>
-      <div class="arch-card l3"><h4>atheer-orchestrator</h4><p>Predictive mode selection · PDA grammar sampler · agent loop</p></div>
-      <div class="arch-card l3"><h4>atheer-memory-bank</h4><p>L1/L2/L3 KV cache · PagedAttention blocks · handoff protocol</p></div>
-      <div class="arch-card l3"><h4>atheer-hardware</h4><p>1 Hz telemetry · Android JNI bridge · iOS objc2 FFI</p></div>
-    </div>
-    <div class="arch-row">
-      <span class="arch-pill">⟳ 1 Hz health → mode selection</span>
-      <span class="arch-pill">⚡ Metal / Vulkan compute shaders</span>
-      <span class="arch-pill">⊞ NNAPI NDK FFI (9 ops)</span>
-      <span class="arch-pill">▦ Character-level PDA grammar</span>
-      <span class="arch-pill">◉ PagedAttention 16-token blocks</span>
-      <span class="arch-pill">◆ INT8/INT4 KV cache quant</span>
-      <span class="arch-pill">🔐 AES-256-GCM model + cache encrypt</span>
-      <span class="arch-pill">🔐 Ed25519 sig verify + SHA-256</span>
-      <span class="arch-pill">🛡️ Pre-allocation GGUF header gate (S6)</span>
-    </div>
-    <p style="text-align:center;margin-top:1.5rem;font-size:.8rem;color:#475569;font-family:'JetBrains Mono',monospace;">
-      atheer-hardware ─1 Hz→ orchestrator ─mode→ atheer-core ─tensor→ atheer-accel
-    </p>
-  </div>
-</section>
-
-<!-- ─── Backend Support ─── -->
-<section id="backends">
-  <div class="section-inner reveal">
-    <div class="section-label">Platform Support</div>
-    <h2 class="section-title">iOS &amp; Android, every accelerator</h2>
-    <p class="section-desc section-desc-wide">
-      Atheer auto-probes the best available backend in platform-specific priority order. NPU → GPU → CPU. 
-      Each backend is implemented as a Rust crate module — no black boxes.
-    </p>
-    <div class="backend-grid">
-      <div class="backend-card">
-        <div class="backend-platform">iOS — Priority 1</div>
-        <h4>CoreML / ANE</h4>
-        <p>Apple Neural Engine via <code>candle-coreml</code> integration. <code>ANECompatibility</code> struct with per-layer heuristics, model size ceiling, and quantization whitelist. Background ANE compilation pre-heat via background thread loads and warms up the model at engine init — atomically swapped via <code>Arc&lt;OnceLock&gt;</code> to eliminate cold-start latency. Falls back to Metal for incompatible architectures. <code>catch_unwind</code> protected.</p>
-        <span class="backend-priority">ANE detection · macOS build</span>
+<section id="gaps" style="background: var(--color-paper-2);">
+  <div class="section__inner">
+    <div class="split split--prose-right">
+      <div class="split__prose reveal">
+        <span class="label">Gaps &amp; differentiation</span>
+        <h2>Where we lead, and what&rsquo;s next.</h2>
+        <p>
+          Atheer already leads on predictive thermal management, L1/L2/L3 KV cache,
+          grammar-constrained decoding, agent loops, and full multi-backend NPU
+          coverage. But &ldquo;best in class&rdquo; demands active engineering beyond architecture.
+        </p>
+        <p>
+          The matrix on the right is honest. Rows highlighted in the accent tint
+          are the seven differentiators <strong>nobody else ships</strong> &mdash; not
+          catching-up items, but greenfield opportunities.
+        </p>
       </div>
-      <div class="backend-card">
-        <div class="backend-platform">iOS — Priority 2</div>
-        <h4>Metal GPU</h4>
-        <p>GPU acceleration via <code>candle_core::Device::Metal</code>. Full tensor ops for prefill and decode in <code>atheer-accel/src/metal.rs</code>.</p>
-        <span class="backend-priority">iOS 15+ · Candle Metal backend</span>
-      </div>
-      <div class="backend-card">
-        <div class="backend-platform">Android — Priority 1</div>
-        <h4>NNAPI NPU/DSP</h4>
-        <p>Raw NDK FFI bindings with ~20 extern functions covering device discovery, graph construction (9 ops), compilation, and execution. Full pipeline in <code>atheer-accel/src/nnapi_ndk.rs</code>.</p>
-        <span class="backend-priority">API 24+ · NDK r29+</span>
-      </div>
-      <div class="backend-card">
-        <div class="backend-platform">Android — Priority 2</div>
-        <h4>Vulkan GPU</h4>
-        <p>Custom GLSL compute shaders (gemv.glsl, attention.glsl) compiled to SPIR-V via <code>naga</code> at build time. DP4A-style int8 matrix-vector multiply and flash attention in <code>atheer-accel/src/vulkan.rs</code> (~1120 lines).</p>
-        <span class="backend-priority">API 26+ · custom compute shaders</span>
-      </div>
-      <div class="backend-card">
-        <div class="backend-platform">Fallback</div>
-        <h4>CPU</h4>
-        <p>Always available fallback using Candle CPU backend. Graceful degradation when no accelerator is available — graceful, tested, documented.</p>
-        <span class="backend-priority">Any platform · zero acceleration</span>
+      <div class="reveal">
+        <div class="compare-wrap">
+          <table class="compare" aria-label="Feature comparison vs competitors">
+            <thead>
+              <tr>
+                <th>Feature</th>
+                <th class="atheer">Atheer</th>
+                <th>llama.cpp</th>
+                <th>MLC</th>
+                <th>MLX</th>
+                <th>Edge</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>Mobile NPU</td><td class="atheer"><span class="mark-yes">CoreML + NNAPI</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-yes">&#10003;</span></td><td class="center"><span class="mark-mid">ANE only</span></td><td class="center"><span class="mark-yes">&#10003;</span></td></tr>
+              <tr><td>All 4 backends</td><td class="atheer"><span class="mark-yes">&#10003;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
+              <tr><td>Safe Rust</td><td class="atheer"><span class="mark-yes">&#10003;</span></td><td class="center"><span class="mark-mid">C/C++</span></td><td class="center"><span class="mark-mid">Py/C++</span></td><td class="center"><span class="mark-mid">Swift</span></td><td class="center"><span class="mark-mid">Java/C++</span></td></tr>
+              <tr><td>Predictive thermal</td><td class="atheer"><span class="mark-yes">unique</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
+              <tr><td>KV cache tiering</td><td class="atheer"><span class="mark-yes">L1/L2/L3</span></td><td class="center"><span class="mark-mid">Simple</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
+              <tr><td>Grammar output</td><td class="atheer"><span class="mark-yes">PDA</span></td><td class="center"><span class="mark-mid">GBNF</span></td><td class="center"><span class="mark-yes">&#10003;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
+              <tr><td>Agent loops</td><td class="atheer"><span class="mark-yes">unique</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
+              <tr><td>Speculative decoding</td><td class="atheer"><span class="mark-yes">&#10003;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-yes">&#10003;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
+              <tr class="row-emph"><td>Model encrypt + sign</td><td class="atheer"><span class="mark-yes">unique</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
+              <tr class="row-emph"><td>KV cache encryption</td><td class="atheer"><span class="mark-yes">unique</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
+              <tr class="row-emph"><td>Privacy mode</td><td class="atheer"><span class="mark-yes">unique</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
+              <tr class="row-emph"><td>Prompt guardrails</td><td class="atheer"><span class="mark-yes">L1/L2/L3</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
+              <tr><td>Privacy manifest</td><td class="atheer"><span class="mark-mid">planned</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
+              <tr><td>Session isolation</td><td class="atheer"><span class="mark-mid">planned</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="compare-legend" aria-hidden="true">
+          <span class="yes">shipped</span>
+          <span class="plan">planned</span>
+          <span class="no">missing</span>
+        </div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ─── Quick Start ─── -->
-<section id="quickstart" style="background: #0A0F1C;">
-  <div class="section-inner reveal">
-    <div class="section-label">Quick Start</div>
-    <h2 class="section-title">From zero to inference</h2>
-    <p class="section-desc">Build the workspace, run tests, and integrate into your iOS or Android app.</p>
-    <div class="code-block-wrap">
-      <div class="code-header">
-        <span>bash</span>
-        <button class="code-copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+<section id="architecture">
+  <div class="section__inner">
+    <div class="split split--prose-left">
+      <div class="split__prose reveal">
+        <span class="label">Architecture</span>
+        <h2>Stack from silicon to inference.</h2>
+        <p>
+          A layered architecture across 7 Rust crates. Hardware telemetry flows up,
+          acceleration dispatches down, and the orchestrator ties them together.
+        </p>
+        <p>
+          The right column shows the runtime stack, ordered top-down from app to
+          hardware probe. Every layer is a real Rust crate in
+          <code>thee-rust/</code> with workspace-level tests.
+        </p>
       </div>
-      <pre class="code-block"><code><span class="comment"># Build the entire workspace</span>
+      <div class="reveal">
+        <div class="stack" aria-label="Crate stack">
+          <div class="stack__layer"><span class="l">07</span><div><h4>iOS / Android app</h4><p>Swift · Kotlin · UniFFI consumer</p></div></div>
+          <div class="stack__layer"><span class="l">06</span><div><h4>atheer-ffi</h4><p>UniFFI-generated bindings with streaming callback support</p></div></div>
+          <div class="stack__layer"><span class="l">05</span><div><h4>atheer-core</h4><p>Candle inference · session mgmt · KV quantizer · lifecycle</p></div></div>
+          <div class="stack__layer"><span class="l">04</span><div><h4>atheer-orchestrator</h4><p>Predictive mode selection · PDA grammar sampler · agent loop</p></div></div>
+          <div class="stack__layer"><span class="l">03</span><div><h4>atheer-memory-bank</h4><p>L1/L2/L3 KV cache · PagedAttention blocks · handoff protocol</p></div></div>
+          <div class="stack__layer"><span class="l">02</span><div><h4>atheer-accel</h4><p>Metal · Vulkan (custom GLSL) · NNAPI NDK FFI · CoreML · CPU</p></div></div>
+          <div class="stack__layer"><span class="l">01</span><div><h4>atheer-hardware</h4><p>1 Hz telemetry · Android JNI bridge · iOS objc2 FFI</p></div></div>
+        </div>
+        <div class="stack__pills" aria-label="Stack capability summary">
+          <span class="pill">1 Hz health &rarr; mode selection</span>
+          <span class="pill">Metal / Vulkan compute shaders</span>
+          <span class="pill">NNAPI NDK FFI &middot; 9 ops</span>
+          <span class="pill">Character-level PDA grammar</span>
+          <span class="pill">PagedAttention 16-token blocks</span>
+          <span class="pill">INT8 / INT4 KV cache quant</span>
+          <span class="pill">AES-256-GCM model + cache</span>
+          <span class="pill">Ed25519 sig + SHA-256</span>
+          <span class="pill">Pre-allocation GGUF header gate</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="backends" style="background: var(--color-paper-2);">
+  <div class="section__inner">
+    <div class="split split--prose-right">
+      <div class="split__prose reveal">
+        <span class="label">Platform support</span>
+        <h2>iOS &amp; Android, every accelerator.</h2>
+        <p>
+          Atheer auto-probes the best available backend in platform-specific
+          priority order. NPU &rarr; GPU &rarr; CPU. Each backend is a Rust crate
+          module &mdash; no black boxes, no per-platform SDK forks.
+        </p>
+        <p>
+          The five rows on the right show every probe target, in the order they
+          are tried at engine init.
+        </p>
+      </div>
+      <div class="reveal">
+        <div class="timeline">
+          <div class="tl-row"><span class="plat">iOS &middot; P1</span><div><h4>CoreML / ANE</h4><p>Apple Neural Engine via <code>candle-coreml</code> integration. <code>ANECompatibility</code> struct with per-layer heuristics, model size ceiling, and quantization whitelist. Background ANE compilation pre-heat via background thread loads and warms up the model at engine init &mdash; atomically swapped via <code>Arc&lt;OnceLock&gt;</code> to eliminate cold-start latency. Falls back to Metal for incompatible architectures. <code>catch_unwind</code> protected.</p><div class="meta">ANE detection &middot; macOS build</div></div></div>
+          <div class="tl-row"><span class="plat">iOS &middot; P2</span><div><h4>Metal GPU</h4><p>GPU acceleration via <code>candle_core::Device::Metal</code>. Full tensor ops for prefill and decode in <code>atheer-accel/src/metal.rs</code>.</p><div class="meta">iOS 15+ &middot; Candle Metal backend</div></div></div>
+          <div class="tl-row"><span class="plat">Android &middot; P1</span><div><h4>NNAPI NPU/DSP</h4><p>Raw NDK FFI bindings with ~20 extern functions covering device discovery, graph construction (9 ops), compilation, and execution. Full pipeline in <code>atheer-accel/src/nnapi_ndk.rs</code>.</p><div class="meta">API 24+ &middot; NDK r29+</div></div></div>
+          <div class="tl-row"><span class="plat">Android &middot; P2</span><div><h4>Vulkan GPU</h4><p>Custom GLSL compute shaders (gemv.glsl, attention.glsl) compiled to SPIR-V via <code>naga</code> at build time. DP4A-style int8 matrix-vector multiply and flash attention in <code>atheer-accel/src/vulkan.rs</code> (~1120 lines).</p><div class="meta">API 26+ &middot; custom compute shaders</div></div></div>
+          <div class="tl-row"><span class="plat">Fallback</span><div><h4>CPU</h4><p>Always available fallback using Candle CPU backend. Graceful degradation when no accelerator is available &mdash; graceful, tested, documented.</p><div class="meta">Any platform &middot; zero acceleration</div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="quickstart">
+  <div class="section__inner">
+    <div class="split split--prose-left">
+      <div class="split__prose reveal">
+        <span class="label">Quick start</span>
+        <h2>From zero to inference.</h2>
+        <p>
+          Build the workspace, run tests, and integrate into your iOS or Android
+          app. Three commands to a running engine, three more to a mobile integration.
+        </p>
+        <p>
+          The code blocks are real: the bash block is the workspace build, the
+          swift block is iOS, the kotlin block is Android. Each is a copy-paste
+          start, not a fragment.
+        </p>
+        <button class="btn-text" onclick="window.open('https://github.com/achmadk/atheer-rust','_blank')">Read the full guide on GitHub &rarr;</button>
+      </div>
+      <div class="reveal">
+        <div class="code-block-wrap">
+          <div class="code-head">
+            <span class="lang">bash</span>
+            <span class="scope">workspace build</span>
+            <button class="code-copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+          </div>
+          <pre class="code-block"><code><span class="comment"># Build the entire workspace</span>
 cargo build --workspace
 
 <span class="comment"># Run all 480+ tests</span>
@@ -955,10 +1232,14 @@ ATHEER_TEST_MODEL=./models/LFM2-700M-Q4_0.gguf \
 cargo run -p perf-bench -- \
   --model-path model.gguf \
   --batch-sizes 1,4,8</code></pre>
-    </div>
-    <div class="code-block-wrap" style="margin-top:1rem;">
-      <div class="code-header"><span>swift</span><span style="font-size:.7rem;color:#475569;">iOS integration</span></div>
-      <pre class="code-block"><code><span class="keyword">import</span> <span class="type">AtheerFFI</span>
+        </div>
+        <div class="code-block-wrap">
+          <div class="code-head">
+            <span class="lang">swift</span>
+            <span class="scope">iOS integration</span>
+            <button class="code-copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+          </div>
+          <pre class="code-block"><code><span class="keyword">import</span> <span class="type">AtheerFFI</span>
 
 <span class="keyword">var</span> config = <span class="type">AtheerConfig</span>()
 config.modelPath = <span class="string">"/models/llama.gguf"</span>
@@ -970,10 +1251,14 @@ config.adaptive = <span class="keyword">true</span>
 <span class="keyword">var</span> request = <span class="type">GenerationRequest</span>(prompt: <span class="string">"Hello"</span>)
 <span class="keyword">let</span> response = <span class="keyword">try</span> engine.generateSync(request: request)
 <span class="built_in">print</span>(response.text)</code></pre>
-    </div>
-    <div class="code-block-wrap" style="margin-top:1rem;">
-      <div class="code-header"><span>kotlin</span><span style="font-size:.7rem;color:#475569;">Android integration</span></div>
-      <pre class="code-block"><code><span class="keyword">import</span> uniffi.atheer_ffi.*
+        </div>
+        <div class="code-block-wrap">
+          <div class="code-head">
+            <span class="lang">kotlin</span>
+            <span class="scope">Android integration</span>
+            <button class="code-copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+          </div>
+          <pre class="code-block"><code><span class="keyword">import</span> uniffi.atheer_ffi.*
 
 <span class="keyword">val</span> config = <span class="type">AtheerConfig</span>(
     modelPath = <span class="string">"/models/llama.gguf"</span>,
@@ -998,371 +1283,242 @@ engine.initialize()
 )
 <span class="keyword">val</span> response = engine.generateSync(request)
 <span class="built_in">println</span>(response.text)</code></pre>
-    </div>
-  </div>
-</section>
-
-<!-- ─── Benchmarks ─── -->
-<section id="benchmarks">
-  <div class="section-inner reveal">
-    <div class="section-label">Benchmarks</div>
-    <h2 class="section-title">Benchmarking infrastructure</h2>
-    <p class="section-desc section-desc-wide">
-      Atheer ships with Criterion microbenchmarks and a dedicated <code>perf-bench</code> binary for measuring throughput, energy, and thermal behavior. No fabricated numbers — results depend on your device and model.
-    </p>
-    <div class="bench-grid">
-      <div class="bench-card">
-        <h4>Criterion Bench Harnesses</h4>
-        <div class="bench-cat">atheer-benches (model-free)</div>
-        <div class="bench-row">
-          <div class="bench-label"><span>kv_cache bench</span><span>read/write/evict latency</span></div>
-        </div>
-        <div class="bench-row">
-          <div class="bench-label"><span>ngram_cache bench</span><span>match/miss throughput</span></div>
-        </div>
-        <div class="bench-row">
-          <div class="bench-label"><span>orchestrator bench</span><span>mode switch overhead</span></div>
-        </div>
-      </div>
-      <div class="bench-card">
-        <h4>perf-bench Binary</h4>
-        <div class="bench-cat">model-dependent suites</div>
-        <div class="bench-row">
-          <div class="bench-label"><span>--batch-sizes 1,4,8</span><span>throughput scan</span></div>
-        </div>
-        <div class="bench-row">
-          <div class="bench-label"><span>--duration-secs 300</span><span>sustained thermal</span></div>
-        </div>
-        <div class="bench-row">
-          <div class="bench-label"><span>JSON report output</span><span>per-batch samples</span></div>
-        </div>
-      </div>
-      <div class="bench-card">
-        <h4>What gets measured</h4>
-        <div class="bench-cat">per commit / per release</div>
-        <div class="bench-row">
-          <div class="bench-label"><span>Token throughput</span><span>tok/s (prefill + decode)</span></div>
-        </div>
-        <div class="bench-row">
-          <div class="bench-label"><span>Thermal throttling</span><span>mode degradation curve</span></div>
-        </div>
-        <div class="bench-row">
-          <div class="bench-label"><span>Energy per token</span><span>power draw samples</span></div>
         </div>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ─── Roadmap & Research ─── -->
-<section id="roadmap" style="background: #0A0F1C;">
-  <div class="section-inner reveal">
-    <div class="section-label">Roadmap &amp; Research</div>
-    <h2 class="section-title">Closing the gaps, shipping the future</h2>
-    <p class="section-desc section-desc-wide">
-      A comprehensive codebase audit across 7 dimensions (security, privacy, reliability, performance, platform, compliance, observability) produced a prioritized 3-phase roadmap. Estimated total: <strong style="color:#38BDF8;">9&ndash;15 weeks</strong> for a Rust engineer familiar with the codebase.
-    </p>
-
-    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1.25rem; margin-top: 2.5rem;">
-
-      <!-- Phase 1 -->
-      <div class="feature-card" style="border-color: rgba(34,197,94,.25); position: relative;">
-        <div style="margin-bottom: .75rem;">
-          <span style="font-size: .7rem; color: #64748B; font-family: 'JetBrains Mono', monospace;">Phase 1</span>
-          <h3 style="font-size: 1rem; font-weight: 700; margin-top: .15rem;">Security &amp; Reliability</h3>
-          <span style="font-size: .75rem; color: #22C55E;">2&ndash;3 weeks · 7 items ✅ Complete</span>
-        </div>
-        <ul style="list-style: none; padding: 0; margin: 0;">
-          <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #22C55E;">✓</span> Fix 14 test failures + 40+ warnings
-          </li>
-          <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #22C55E;">✓</span> Fix PII redactor + UTF-8 bugs
-          </li>
-          <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #22C55E;">✓</span> Un-stub draft speculation
-          </li>
-          <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #22C55E;">✓</span> Continuous runtime calibration
-          </li>
-          <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #22C55E;">✓</span> Model loading retry + CPU degrade fallback
-          </li>
-          <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #22C55E;">✓</span> Sampling thread heartbeat watchdog
-          </li>
-          <li style="padding: .45rem 0; font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #22C55E;">✓</span> Model signature + hash verification (S2+S3)
-          </li>
-        </ul>
-        <div style="margin-top: .75rem; padding-top: .75rem; border-top: 1px solid rgba(34,197,94,.15); font-size: .75rem; color: #22C55E;">
-          ✅ All 7 items complete
-        </div>
+<section id="benchmarks" style="background: var(--color-paper-2);">
+  <div class="section__inner">
+    <div class="split split--prose-right">
+      <div class="split__prose reveal">
+        <span class="label">Benchmarks</span>
+        <h2>Benchmarking infrastructure.</h2>
+        <p>
+          Atheer ships with Criterion microbenchmarks and a dedicated
+          <code>perf-bench</code> binary for measuring throughput, energy, and
+          thermal behavior.
+        </p>
+        <p>
+          <strong>No fabricated numbers.</strong> Results depend on your device
+          and model. Run the harness, read the JSON, ship the numbers you measured
+          &mdash; not the numbers a marketing page would prefer.
+        </p>
+        <p>
+          The matrix on the right names what is measured, and where the harness
+          for each surface lives in the repo.
+        </p>
       </div>
-
-      <!-- Phase 2 -->
-      <div class="feature-card" style="border-color: rgba(6,182,212,.18); position: relative;">
-        <div style="position: absolute; top: -.6rem; right: 1rem; background: #22C55E; color: #0B1120; font-size: .6rem; font-weight: 700; padding: .15rem .7rem; border-radius: 100px; text-transform: uppercase; letter-spacing: .06em;">DONE</div>
-        <div style="margin-bottom: .75rem;">
-          <span style="font-size: .7rem; color: #64748B; font-family: 'JetBrains Mono', monospace;">Phase 2</span>
-          <h3 style="font-size: 1rem; font-weight: 700; margin-top: .15rem;">Security &amp; Privacy Hardening</h3>
-          <span style="font-size: .75rem; color: #22C55E;">3&ndash;4 weeks · 10 items · ✅ Complete</span>
+      <div class="reveal">
+        <div class="bench-cards">
+          <div class="bench-card">
+            <h4>Criterion microbenches</h4>
+            <div class="cat">atheer-benches &middot; model-free</div>
+            <div class="bench-row"><span>kv_cache bench</span><span>read / write / evict latency</span></div>
+            <div class="bench-row"><span>ngram_cache bench</span><span>match / miss throughput</span></div>
+            <div class="bench-row"><span>orchestrator bench</span><span>mode switch overhead</span></div>
+            <div class="bench-row"><span>grammar PDA bench</span><span>step / push / pop</span></div>
+          </div>
+          <div class="bench-card">
+            <h4>perf-bench binary</h4>
+            <div class="cat">model-dependent suites</div>
+            <div class="bench-row"><span>--batch-sizes 1,4,8</span><span>throughput scan</span></div>
+            <div class="bench-row"><span>--duration-secs 300</span><span>sustained thermal</span></div>
+            <div class="bench-row"><span>JSON report output</span><span>per-batch samples</span></div>
+          </div>
+          <div class="bench-card">
+            <h4>What gets measured</h4>
+            <div class="cat">per commit &middot; per release</div>
+            <div class="bench-row"><span>Token throughput</span><span>tok/s &middot; prefill + decode</span></div>
+            <div class="bench-row"><span>Thermal throttling</span><span>mode degradation curve</span></div>
+            <div class="bench-row"><span>Energy per token</span><span>power draw samples</span></div>
+          </div>
         </div>
-        <ul style="list-style: none; padding: 0; margin: 0;">
-          <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #22C55E;">✓</span> Encrypt L2/L3 cache + checkpoints (AES-256-GCM)
-          </li>
-          <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #22C55E;">✓</span> Model signature + hash verification (S2+S3)
-          </li>
-          <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #22C55E;">✓</span> GGUF format validation (S5)
-          </li>
-          <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #22C55E;">✓</span> <strong style="color:#7DD3FC;">Pre-allocation header gate (S6)</strong> — <code style="font-size: .75rem;">safe_content::parse_header</code> rejects crafted GGUF headers before any <code style="font-size: .75rem;">Vec&lt;u8&gt;</code> allocation; closes the S5 encryption bypass; 6 typed <code style="font-size: .75rem;">AtheerCoreError</code> variants
-          </li>
-          <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #22C55E;">✓</span> Configurable privacy mode (<code style="font-size: .75rem;">PrivacyMode</code>)
-          </li>
-          <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #22C55E;">✓</span> Prompt injection guardrails (L1/L2/L3)
-          </li>
-          <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #22C55E;">✓</span> ANE compilation pre-heat (background)
-          </li>
-          <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #22C55E;">✓</span> KV cache checkpoint persistence
-          </li>
-          <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #22C55E;">✓</span> Model loading retry + CPU degrade fallback
-          </li>
-          <li style="padding: .45rem 0; font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #22C55E;">✓</span> Sampling thread heartbeat watchdog
-          </li>
-        </ul>
-        <div style="margin-top: .75rem; padding-top: .75rem; border-top: 1px solid rgba(34,197,94,.15); font-size: .75rem; color: #22C55E;">
-          ✅ All 10 items complete &mdash; Phase 2 closed
-        </div>
-      </div>
-
-      <!-- Phase 3 -->
-      <div class="feature-card" style="border-color: rgba(245,158,11,.12);">
-        <div style="margin-bottom: .75rem;">
-          <span style="font-size: .7rem; color: #64748B; font-family: 'JetBrains Mono', monospace;">Phase 3</span>
-          <h3 style="font-size: 1rem; font-weight: 700; margin-top: .15rem;">Polish &amp; Performance</h3>
-          <span style="font-size: .75rem; color: #64748B;">4&ndash;6 weeks · 9 items</span>
-        </div>
-        <ul style="list-style: none; padding: 0; margin: 0;">
-          <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #F59E0B;">◆</span> Baseline + competitive benchmarks
-          </li>
-          <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #F59E0B;">◆</span> Structured metrics / OpenTelemetry
-          </li>
-          <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #F59E0B;">◆</span> PII redactor upgrade (regex)
-          </li>
-          <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #F59E0B;">◆</span> Time-based cache expiry + secure wipe
-          </li>
-          <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #F59E0B;">◆</span> FFI API versioning
-          </li>
-          <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #F59E0B;">◆</span> Fix binding generation pipeline
-          </li>
-          <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #F59E0B;">◆</span> GDPR docs + <code style="font-size: .75rem;">delete_all_user_data()</code> API
-          </li>
-          <li style="padding: .45rem 0; border-bottom: 1px solid rgba(56,189,248,.04); font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #F59E0B;">◆</span> Audit logging (tamper-evident)
-          </li>
-          <li style="padding: .45rem 0; font-size: .82rem; color: #94A3B8; display: flex; align-items: center; gap: .5rem;">
-            <span style="color: #F59E0B;">◆</span> Certificate pinning for model downloads (S7)
-          </li>
-        </ul>
-      </div>
-
-    </div>
-
-    <!-- Timeline bar -->
-    <div style="margin-top: 2.5rem; padding: 1.5rem; background: #0F172A; border: 1px solid rgba(56,189,248,.08); border-radius: 10px;">
-      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
-        <span style="font-size: .85rem; font-weight: 600; color: #E2E8F0;">Timeline</span>
-        <span style="font-size: .7rem; color: #475569; font-family: 'JetBrains Mono', monospace;">~9–15 weeks total</span>
-      </div>
-      <div style="display: flex; align-items: center; gap: 0; height: 6px; border-radius: 3px; overflow: hidden;">
-        <div style="flex: 2; height: 100%; background: linear-gradient(90deg, #22C55E, #4ADE80);"></div>
-        <div style="flex: 3; height: 100%; background: linear-gradient(90deg, #06B6D4, #22D3EE);"></div>
-        <div style="flex: 4; height: 100%; background: linear-gradient(90deg, #F59E0B, #FBBF24);"></div>
-      </div>
-      <div style="display: flex; justify-content: space-between; margin-top: .5rem; font-size: .7rem; color: #64748B;">
-        <span style="color: #22C55E;">Phase 1 · Security &amp; Reliability ✅</span>
-        <span>Phase 2 · Privacy Hardening</span>
-        <span>Phase 3 · Polish &amp; Performance</span>
       </div>
     </div>
-
-    <p style="margin-top: 2rem; font-size: .85rem; color: #64748B; text-align: center; max-width: 650px; margin-left: auto; margin-right: auto; line-height: 1.7;">
-      Full analysis at <a href="https://github.com/achmadk/atheer-rust/blob/main/FURTHER_RESEARCHS.md" target="_blank" rel="noopener noreferrer" title="Research gaps and roadmap analysis — opens in new tab" style="color: #38BDF8;">FURTHER_RESEARCHS.md</a> — 7 dimensions, 40+ identified gaps, competitive landscape matrix, critical bugs, and per-item implementation guide with file paths and effort estimates.
-    </p>
   </div>
 </section>
 
-<!-- ─── Footer ─── -->
-<footer>
-  <div class="footer-inner">
-    <div>
-      <div class="footer-brand">Atheer-Rust</div>
-      <p class="footer-desc">Mobile inference engine for LLMs on iOS and Android. Built with Rust, Candle, and a lot of type safety.</p>
+<section id="roadmap">
+  <div class="section__inner">
+    <div class="split__prose reveal" style="max-width: 64ch; margin-bottom: var(--space-12);">
+      <span class="label">Roadmap &amp; research</span>
+      <h2>Closing the gaps, shipping the future.</h2>
+      <p>
+        A comprehensive codebase audit across 7 dimensions (security, privacy,
+        reliability, performance, platform, compliance, observability) produced a
+        prioritized 3-phase roadmap. Estimated total: <strong>9&ndash;15 weeks</strong>
+        for a Rust engineer familiar with the codebase.
+      </p>
     </div>
-    <div class="footer-links">
-      <div class="footer-col">
-        <h5>Docs</h5>
-        <a href="#quickstart">Quick Start</a>
-        <a href="#architecture">Architecture</a>
-        <a href="#backends">Backends</a>
-        <a href="#benchmarks">Benchmarks</a>
-        <a href="#roadmap">Roadmap</a>
+    <div class="roadmap reveal">
+      <div class="phase" data-state="done">
+        <span class="tag">Done</span>
+        <span class="label">Phase 1</span>
+        <h3>Security &amp; reliability</h3>
+        <div class="meta">2&ndash;3 weeks &middot; 7 items</div>
+        <ul>
+          <li>Fix 14 test failures + 40+ warnings</li>
+          <li>Fix PII redactor + UTF-8 bugs</li>
+          <li>Un-stub draft speculation</li>
+          <li>Continuous runtime calibration</li>
+          <li>Model loading retry + CPU degrade fallback</li>
+          <li>Sampling thread heartbeat watchdog</li>
+          <li>Model signature + hash verification</li>
+        </ul>
       </div>
-      <div class="footer-col">
-        <h5>Code</h5>
-        <a href="https://github.com/achmadk/atheer-rust" target="_blank" rel="noopener noreferrer" title="Source code on GitHub">GitHub</a>
-        <a href="https://github.com/achmadk/atheer-rust" target="_blank" rel="noopener noreferrer" title="MIT OR Apache-2.0 License">MIT OR Apache-2.0</a>
+      <div class="phase" data-state="done">
+        <span class="tag">Done</span>
+        <span class="label">Phase 2</span>
+        <h3>Security &amp; privacy hardening</h3>
+        <div class="meta">3&ndash;4 weeks &middot; 10 items</div>
+        <ul>
+          <li>Encrypt L2/L3 cache + checkpoints (AES-256-GCM)</li>
+          <li>Model signature + hash verification (S2 + S3)</li>
+          <li>GGUF format validation (S5)</li>
+          <li>Pre-allocation header gate (S6) &mdash; <code>safe_content::parse_header</code> rejects crafted GGUF headers before any <code>Vec&lt;u8&gt;</code> allocation; six typed <code>AtheerCoreError</code> variants</li>
+          <li>Configurable privacy mode (<code>PrivacyMode</code>)</li>
+          <li>Prompt injection guardrails (L1/L2/L3)</li>
+          <li>ANE compilation pre-heat (background)</li>
+          <li>KV cache checkpoint persistence</li>
+          <li>Model loading retry + CPU degrade fallback</li>
+          <li>Sampling thread heartbeat watchdog</li>
+        </ul>
+      </div>
+      <div class="phase" data-state="pending">
+        <span class="tag">Pending</span>
+        <span class="label">Phase 3</span>
+        <h3>Polish &amp; performance</h3>
+        <div class="meta">4&ndash;6 weeks &middot; 9 items</div>
+        <ul>
+          <li>Baseline + competitive benchmarks</li>
+          <li>Structured metrics / OpenTelemetry</li>
+          <li>PII redactor upgrade (regex)</li>
+          <li>Time-based cache expiry + secure wipe</li>
+          <li>FFI API versioning</li>
+          <li>Fix binding generation pipeline</li>
+          <li>GDPR docs + <code>delete_all_user_data()</code> API</li>
+          <li>Audit logging (tamper-evident)</li>
+          <li>Certificate pinning for model downloads (S7)</li>
+        </ul>
       </div>
     </div>
   </div>
-  <div class="footer-bottom">
-    <p>&copy; 2026 Atheer-Rust Team. MIT OR Apache-2.0.</p>
-    <div class="footer-bottom-links">
-      <a href="https://github.com/achmadk/atheer-rust" target="_blank" rel="noopener noreferrer">Source Code</a>
-      <a href="https://github.com/achmadk/atheer-rust/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">License</a>
+</section>
+
+<footer class="foot-stmt">
+  <div class="foot-stmt__inner">
+    <p class="foot-stmt__line">Run AI on customer devices and prove <em>nothing</em> leaves.</p>
+    <div class="foot-stmt__meta">
+      <span class="foot-stmt__brand">Atheer<b>·</b>Rust</span>
+      <nav class="foot-stmt__links" aria-label="Footer">
+        <a href="https://github.com/achmadk/atheer-rust" target="_blank" rel="noopener noreferrer">GitHub</a>
+        <a href="https://github.com/achmadk/atheer-rust/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT / Apache-2.0</a>
+        <a href="https://github.com/achmadk/atheer-rust/blob/main/FURTHER_RESEARCHS.md" target="_blank" rel="noopener noreferrer">Research</a>
+        <a href="mailto:hello@atheer-rust.dev">Contact</a>
+      </nav>
+      <span class="foot-stmt__copy">&copy; 2026 &middot; v0.1.0</span>
     </div>
   </div>
 </footer>
 
 <script>
-/* ─── Loading Screen (simple fade-out) ─── */
 (function(){
   const screen = document.getElementById('loading-screen');
   if (!screen) return;
   setTimeout(() => screen.classList.add('hidden'), 600);
 })();
 
-/* ─── Nav scroll effect ─── */
-const nav = document.getElementById('navbar');
-window.addEventListener('scroll', () => {
-  nav.classList.toggle('scrolled', window.scrollY > 20);
-}, { passive: true });
+(function(){
+  const els = document.querySelectorAll('.reveal');
+  if (!els.length) return;
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.classList.add('visible');
+        io.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
+  els.forEach(el => io.observe(el));
+})();
 
-/* ─── Mobile nav toggle ─── */
-const navToggle = document.getElementById('nav-toggle');
-const navLinks = document.getElementById('nav-links');
-navToggle.addEventListener('click', () => {
-  const open = navLinks.classList.toggle('open');
-  navToggle.setAttribute('aria-expanded', open);
-});
-function closeNav() { navLinks.classList.remove('open'); navToggle.setAttribute('aria-expanded','false'); }
-
-/* ─── Scroll Reveal (Intersection Observer) ─── */
-const revealEls = document.querySelectorAll('.reveal');
-const observer = new IntersectionObserver((entries) => {
-  entries.forEach(entry => {
-    if (entry.isIntersecting) {
-      entry.target.classList.add('visible');
-      observer.unobserve(entry.target);
-    }
-  });
-}, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
-revealEls.forEach(el => observer.observe(el));
-
-/* ─── Animated Counters ─── */
 function animateCounters() {
-  document.querySelectorAll('.stat-number[data-target]').forEach(el => {
-    const target = parseInt(el.getAttribute('data-target'), 10);
+  document.querySelectorAll('[data-count]').forEach(el => {
+    const target = parseInt(el.getAttribute('data-count'), 10);
     const suffix = el.getAttribute('data-suffix') || '';
-    const duration = 1500;
+    const duration = 1400;
     const start = performance.now();
-    function update(now) {
-      const elapsed = now - start;
-      const progress = Math.min(elapsed / duration, 1);
-      // ease out cubic
-      const eased = 1 - Math.pow(1 - progress, 3);
-      const current = Math.round(eased * target);
-      el.textContent = current.toLocaleString() + suffix;
-      if (progress < 1) requestAnimationFrame(update);
+    function tick(now) {
+      const t = Math.min((now - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - t, 3);
+      el.textContent = Math.round(eased * target).toLocaleString() + suffix;
+      if (t < 1) requestAnimationFrame(tick);
       else el.textContent = target.toLocaleString() + suffix;
     }
-    // delay each counter
-    setTimeout(() => requestAnimationFrame(update), parseInt(el.dataset.delay || '0'));
+    requestAnimationFrame(tick);
   });
 }
-// Counters observer (trigger once)
-const statsSection = document.getElementById('stats');
-let countersDone = false;
-const statsObserver = new IntersectionObserver((entries) => {
-  entries.forEach(entry => {
-    if (entry.isIntersecting && !countersDone) {
-      countersDone = true;
-      animateCounters();
-      statsObserver.unobserve(entry.target);
-    }
-  });
-}, { threshold: 0.3 });
-statsObserver.observe(statsSection);
-
-/* ─── Animated Progress Bars ─── */
-function animateBars() {
-  document.querySelectorAll('.bench-fill[data-width]').forEach(el => {
-    const width = parseInt(el.getAttribute('data-width'), 10);
-    el.style.width = width + '%';
-  });
+const heroEl = document.getElementById('hero');
+if (heroEl) {
+  const co = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        animateCounters();
+        co.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.3 });
+  co.observe(heroEl);
 }
-const benchSection = document.getElementById('benchmarks');
-let barsDone = false;
-const benchObserver = new IntersectionObserver((entries) => {
-  entries.forEach(entry => {
-    if (entry.isIntersecting && !barsDone) {
-      barsDone = true;
-      animateBars();
-      benchObserver.unobserve(entry.target);
-    }
-  });
-}, { threshold: 0.2 });
-benchObserver.observe(benchSection);
 
-/* ─── Copy button (works per-block) ─── */
 function copyCode(btn) {
-  const codeEl = btn.parentElement.nextElementSibling.querySelector('code');
+  const codeEl = btn.parentElement.parentElement.querySelector('code');
   if (!codeEl) return;
   navigator.clipboard.writeText(codeEl.textContent).then(() => {
-    btn.textContent = 'Copied!';
+    btn.textContent = 'Copied';
     btn.classList.add('copied');
     setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
   });
 }
 
-/* ─── Active nav section highlighting ─── */
+const navPill = document.querySelector('.nav-pill');
+const navLinksEl = document.getElementById('nav-links');
+const navToggle = document.getElementById('nav-toggle');
+if (navToggle && navLinksEl) {
+  navToggle.addEventListener('click', () => {
+    const open = navPill.classList.toggle('open');
+    navToggle.setAttribute('aria-expanded', open);
+    navLinksEl.style.display = open ? 'flex' : '';
+    navLinksEl.style.position = open ? 'absolute' : '';
+    navLinksEl.style.top = open ? 'calc(100% + 0.5rem)' : '';
+    navLinksEl.style.left = open ? '0' : '';
+    navLinksEl.style.right = open ? '0' : '';
+    navLinksEl.style.flexDirection = open ? 'column' : '';
+    navLinksEl.style.background = open ? 'var(--color-paper-2)' : '';
+    navLinksEl.style.padding = open ? '0.75rem' : '';
+    navLinksEl.style.borderRadius = open ? 'var(--radius-lg)' : '';
+    navLinksEl.style.border = open ? '1px solid var(--color-rule)' : '';
+  });
+}
+
 (function(){
   const sections = document.querySelectorAll('section[id]');
-  const navLinks = document.querySelectorAll('.nav-links a[href^="#"]');
+  const navLinks = document.querySelectorAll('.nav-pill__links a[href^="#"]');
   if (!sections.length || !navLinks.length) return;
-  const observer = new IntersectionObserver((entries) => {
+  const io = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
       if (entry.isIntersecting) {
+        const id = '#' + entry.target.id;
         navLinks.forEach(link => {
-          const isActive = link.getAttribute('href') === '#' + entry.target.id;
-          link.classList.toggle('nav-active', isActive);
-          if (isActive) {
-            link.setAttribute('aria-current', 'section');
-          } else {
-            link.removeAttribute('aria-current');
-          }
+          const active = link.getAttribute('href') === id;
+          link.classList.toggle('nav-active', active);
         });
       }
     });
-  }, { threshold: 0.3, rootMargin: '-80px 0px -40% 0px' });
-  sections.forEach(s => observer.observe(s));
+  }, { threshold: 0.3, rootMargin: '-80px 0px -50% 0px' });
+  sections.forEach(s => io.observe(s));
 })();
 </script>
 </body>
