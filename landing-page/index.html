@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Atheer-Rust: On-Device LLM Inference Engine for iOS &amp; Android | Safe Rust NPU GPU</title>
-<meta name="description" content="Atheer is a safe-Rust inference engine that runs large language models locally on iOS and Android. Custom Vulkan compute shaders, raw NNAPI NDK bindings, grammar-constrained decoding, predictive thermal management, AES-256-GCM cache encryption, Ed25519 model signatures, and a pre-allocation GGUF header gate — 100% safe Rust business logic, zero unsafe in production code.">
+<meta name="description" content="Atheer is a safe-Rust inference engine that runs large language models locally on iOS and Android. Custom Vulkan compute shaders, raw NNAPI NDK bindings, grammar-constrained decoding, predictive thermal management, AES-256-GCM cache encryption, Ed25519 model signatures, TLS certificate pinning for MITM-resistant downloads, and a pre-allocation GGUF header gate — 100% safe Rust business logic, zero unsafe in production code.">
 <meta name="keywords" content="LLM inference, on-device AI, mobile inference, Rust inference engine, iOS LLM, Android LLM, CoreML, NNAPI, Vulkan compute, Metal GPU, grammar-constrained decoding, KV cache encryption, on-device LLM, NPU inference">
 <meta name="robots" content="index, follow">
 <meta name="author" content="Atheer-Rust Team">
@@ -15,7 +15,7 @@
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://atheer.achmadk.com/">
 <meta property="og:title" content="Atheer-Rust: On-Device LLM Inference Engine for iOS &amp; Android">
-<meta property="og:description" content="Safe-Rust inference engine for running LLMs locally on iOS and Android. 5 hardware backends, predictive thermal orchestration, L1/L2/L3 KV cache, AES-256-GCM encryption, grammar-constrained decoding — zero unsafe in business logic.">
+<meta property="og:description" content="Safe-Rust inference engine for running LLMs locally on iOS and Android. 5 hardware backends, predictive thermal orchestration, L1/L2/L3 KV cache, AES-256-GCM encryption, TLS certificate pinning, grammar-constrained decoding — zero unsafe in business logic.">
 <meta property="og:image" content="https://atheer.achmadk.com/og-image.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -24,7 +24,7 @@
 
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Atheer-Rust: On-Device LLM Inference Engine for iOS &amp; Android">
-<meta name="twitter:description" content="Safe-Rust inference engine for running LLMs locally. 5 hardware backends, predictive thermal management, AES-256-GCM encryption, Ed25519 model signatures, pre-allocation GGUF header gate.">
+<meta name="twitter:description" content="Safe-Rust inference engine for running LLMs locally. 5 hardware backends, predictive thermal management, AES-256-GCM encryption, Ed25519 model signatures, TLS certificate pinning, pre-allocation GGUF header gate.">
 <meta name="twitter:image" content="https://atheer.achmadk.com/og-image.png">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -38,7 +38,7 @@
   "name": "Atheer-Rust",
   "applicationCategory": "DeveloperApplication",
   "operatingSystem": "iOS 15+, Android API 26+",
-  "description": "Safe-Rust inference engine that runs large language models locally on iOS and Android. Custom Vulkan compute shaders, raw NNAPI NDK bindings, grammar-constrained decoding, predictive thermal management, AES-256-GCM cache encryption, Ed25519 signature verification, pre-allocation GGUF header gate, and autonomous agent loops.",
+  "description": "Safe-Rust inference engine that runs large language models locally on iOS and Android. Custom Vulkan compute shaders, raw NNAPI NDK bindings, grammar-constrained decoding, predictive thermal management, AES-256-GCM cache encryption, Ed25519 signature verification, TLS certificate pinning, pre-allocation GGUF header gate, and autonomous agent loops.",
   "url": "https://atheer.achmadk.com/",
   "sameAs": "https://github.com/achmadk/atheer-rust",
   "license": "https://opensource.org/licenses/MIT OR https://opensource.org/licenses/Apache-2.0",
@@ -47,7 +47,7 @@
   "softwareVersion": "0.1.0",
   "releaseNotes": "https://github.com/achmadk/atheer-rust/releases",
   "keywords": "LLM inference, on-device AI, Rust inference engine, mobile LLM, CoreML, NNAPI, Vulkan compute, grammar-constrained decoding",
-  "featureList": "Multi-backend GPU/NPU acceleration, Predictive thermal orchestration, L1/L2/L3 hierarchical KV cache, Grammar-constrained decoding, AES-256-GCM cache encryption, Ed25519 model signature verification, Pre-allocation GGUF header gate, Built-in agent loops, UniFFI Swift/Kotlin cross-platform bindings"
+  "featureList": "Multi-backend GPU/NPU acceleration, Predictive thermal orchestration, L1/L2/L3 hierarchical KV cache, Grammar-constrained decoding, AES-256-GCM cache encryption, Ed25519 model signature verification, TLS certificate pinning for MITM-resistant downloads, Pre-allocation GGUF header gate, Built-in agent loops, UniFFI Swift/Kotlin cross-platform bindings"
 }
 </script>
 <style>
@@ -997,8 +997,8 @@
     <p class="hero-sub">
       Atheer runs language models locally &mdash; NPU &rarr; GPU &rarr; CPU, automatic.
       Predictive thermal orchestration, hierarchical KV cache, grammar-constrained
-      decoding, and a pre-allocation GGUF header gate. Five backends, zero unsafe
-      in business logic.
+      decoding, TLS certificate pinning for MITM-resistant model downloads, and a
+      pre-allocation GGUF header gate. Five backends, zero unsafe in business logic.
     </p>
     <div class="hero-actions">
       <button class="btn btn-primary" onclick="document.getElementById('quickstart').scrollIntoView({behavior:'smooth'})">Get started &rarr;</button>
@@ -1054,7 +1054,7 @@
           <li class="row"><span class="n">05</span><div class="body"><h3>Built-in agent loop</h3><p>An autonomous <code>Agent</code> struct with configurable <code>max_steps</code> handles the generate &rarr; parse &rarr; tool-call &rarr; continue cycle natively. No need to build orchestration logic in the host app &mdash; Atheer ships the loop.</p><p class="note">Every other mobile engine is a text-in-text-out API. You must build agent orchestration, context management, and tool-calling yourself.</p></div></li>
           <li class="row"><span class="n">06</span><div class="body"><h3>UniFFI cross-platform bindings</h3><p>One UniFFI definition generates idiomatic Swift packages for iOS and Kotlin packages for Android &mdash; from the same Rust codebase, with no platform-specific wrapper code or duplicate SDK maintenance.</p><p class="note">llama.cpp exposes a raw C API requiring per-platform wrappers. ExecuTorch is C++-only. MLX Swift is Apple-exclusive.</p></div></li>
           <li class="row"><span class="n">07</span><div class="body"><h3>Safe Rust, not C/C++</h3><p>Rust&rsquo;s ownership model guarantees no use-after-free, no data races, no GC pauses. <code>catch_unwind</code> wraps ANE forward calls so accelerator panics don&rsquo;t crash the host app. <strong>Every line of business logic across inference, grammar, cache, and orchestration is safe Rust</strong> &mdash; the only <code>unsafe</code> in the entire codebase is at platform FFI boundaries (C ABI export, NDK, Vulkan, ObjC), exactly the same discipline as Servo, wgpu, and Tokio.</p><p class="note">Most mobile inference engines are written in C/C++ with manual memory management across their entire codebase. Only MLX Swift shares Rust&rsquo;s safety guarantees &mdash; but it&rsquo;s Apple-only.</p></div></li>
-          <li class="row"><span class="n">08</span><div class="body"><h3>Model-level &amp; cache encryption, signature verification, safe load pipeline</h3><p>AES-256-GCM encryption for GGUF and .mlpackage model files at rest, with a three-strategy decryption pipeline &mdash; ServerDistributed keys, DeviceDerived via HKDF-SHA256, or Custom provider. Ed25519 detached signature verification validates model origin and integrity before loading. A pre-allocation header gate (<code>safe_content::parse_header</code>) runs before <em>any</em> <code>Vec&lt;u8&gt;</code> allocation, rejecting crafted GGUF headers via length-pre-validated metadata scans and bounds-checked counts &mdash; with <code>parse_header</code> running <em>before</em> <code>Mmap::map</code> so adversarial sparse files cannot trigger mmap-OOM. Six typed <code>AtheerCoreError</code> variants (<code>InvalidMagic</code>, <code>InvalidCounts</code>, <code>InvalidTensorBounds</code>, &hellip;) replace the prior string-only failure mode, with structured fields emitted through the FFI boundary. KV cache snapshots at rest are also encrypted via the same AES-256-GCM primitive (LZ4 compress &rarr; encrypt with random 12-byte nonce, distinct AAD <code>b"atheer-cache-v1"</code>), with the encryption key zeroized on drop.</p><p class="note">No other open engine encrypts models, signs models, gates GGUF allocation, <em>or</em> encrypts their KV cache at rest.</p></div></li>
+          <li class="row"><span class="n">08</span><div class="body"><h3>Model-level &amp; cache encryption, signature verification, TLS cert pinning, safe load pipeline</h3><p>AES-256-GCM encryption for GGUF and .mlpackage model files at rest, with a three-strategy decryption pipeline &mdash; ServerDistributed keys, DeviceDerived via HKDF-SHA256, or Custom provider. Ed25519 detached signature verification validates model origin and integrity before loading. <strong>TLS certificate pinning</strong> for model downloads: a custom <code>ServerCertVerifier</code> checks SHA-256 hashes of peer SubjectPublicKeyInfo against pinned values (Amazon RSA 2048 M04 intermediate CA + huggingface.co leaf), preventing MITM attacks on GGUF download traffic &mdash; dual-pin strategy covers both the leaf and intermediate CA for defense-in-depth. A pre-allocation header gate (<code>safe_content::parse_header</code>) runs before <em>any</em> <code>Vec&lt;u8&gt;</code> allocation, rejecting crafted GGUF headers via length-pre-validated metadata scans and bounds-checked counts &mdash; with <code>parse_header</code> running <em>before</em> <code>Mmap::map</code> so adversarial sparse files cannot trigger mmap-OOM. Six typed <code>AtheerCoreError</code> variants (<code>InvalidMagic</code>, <code>InvalidCounts</code>, <code>InvalidTensorBounds</code>, &hellip;) replace the prior string-only failure mode, with structured fields emitted through the FFI boundary. KV cache snapshots at rest are also encrypted via the same AES-256-GCM primitive (LZ4 compress &rarr; encrypt with random 12-byte nonce, distinct AAD <code>b"atheer-cache-v1"</code>), with the encryption key zeroized on drop.</p><p class="note">No other open engine encrypts models, signs models, pins TLS certificates for downloads, gates GGUF allocation, <em>or</em> encrypts their KV cache at rest.</p></div></li>
           <li class="row"><span class="n">09</span><div class="body"><h3>Prompt injection guardrails (L1/L2/L3)</h3><p>Three-layer defense-in-depth against prompt injection &mdash; L1 fast heuristics (pattern matching, Unicode normalization, leetspeak, homoglyphs, proximity scoring) in <strong>&lt;100&thinsp;&mu;s</strong>, L2 token-level statistical analysis (repetition ratio, entropy anomaly, adversarial suffix detection) in <strong>&lt;5&thinsp;ms</strong>, and L3 output guard (system prompt leakage detection, jailbreak success markers) in <strong>&lt;100&thinsp;&mu;s</strong>. Encoding detection pipeline automatically decodes base64/hex/ROT13 and re-checks decoded text.</p><p class="note">No other mobile inference engine ships built-in guardrails at any layer, let alone a configurable three-tier pipeline with sidecar pattern loading and encoding detection.</p></div></li>
         </ol>
       </div>
@@ -1103,6 +1103,7 @@
               <tr><td>Speculative decoding</td><td class="atheer"><span class="mark-yes">&#10003;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-yes">&#10003;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
               <tr class="row-emph"><td>Model encrypt + sign</td><td class="atheer"><span class="mark-yes">unique</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
               <tr class="row-emph"><td>KV cache encryption</td><td class="atheer"><span class="mark-yes">unique</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
+              <tr class="row-emph"><td>TLS cert pinning</td><td class="atheer"><span class="mark-yes">unique</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
               <tr class="row-emph"><td>Privacy mode</td><td class="atheer"><span class="mark-yes">unique</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
               <tr class="row-emph"><td>Prompt guardrails</td><td class="atheer"><span class="mark-yes">L1/L2/L3</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
               <tr><td>Privacy manifest</td><td class="atheer"><span class="mark-mid">planned</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
@@ -1155,6 +1156,7 @@
           <span class="pill">INT8 / INT4 KV cache quant</span>
           <span class="pill">AES-256-GCM model + cache</span>
           <span class="pill">Ed25519 sig + SHA-256</span>
+          <span class="pill">TLS certificate pinning</span>
           <span class="pill">Pre-allocation GGUF header gate</span>
         </div>
       </div>
@@ -1381,6 +1383,7 @@ engine.initialize()
           <li>Configurable privacy mode (<code>PrivacyMode</code>)</li>
           <li>Prompt injection guardrails (L1/L2/L3)</li>
           <li>ANE compilation pre-heat (background)</li>
+          <li>Certificate pinning for model downloads (S7)</li>
           <li>KV cache checkpoint persistence</li>
           <li>Model loading retry + CPU degrade fallback</li>
           <li>Sampling thread heartbeat watchdog</li>
@@ -1400,7 +1403,6 @@ engine.initialize()
           <li>Fix binding generation pipeline</li>
           <li>GDPR docs + <code>delete_all_user_data()</code> API</li>
           <li>Audit logging (tamper-evident)</li>
-          <li>Certificate pinning for model downloads (S7)</li>
         </ul>
       </div>
     </div>

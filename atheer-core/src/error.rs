@@ -47,6 +47,14 @@ pub enum AtheerCoreError {
     #[error("GGUF header magic mismatch: expected GGUF, got {actual:?}")]
     InvalidMagic { actual: [u8; 4] },
 
+    #[cfg(feature = "model-registry")]
+    #[error("TLS certificate pinning failed for {hostname}: peer key hash {peer_hash} does not match any pinned key [{pinned_hashes}]")]
+    TlsPinningFailed {
+        hostname: String,
+        peer_hash: String,
+        pinned_hashes: String,
+    },
+
     #[error("GGUF version {version} is not supported (expected 1, 2, or 3)")]
     InvalidVersion { version: u32 },
 

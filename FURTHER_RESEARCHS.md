@@ -20,6 +20,8 @@
 
 > **Status of S6 (Pre-Allocation Header Gate): ✅ Completed July 2026** — Two-tier validation in `atheer-core/src/safe_content.rs` (new module). `parse_header<R: Read + Seek>` runs unconditionally before any GGUF load path's allocation: validates magic, version, tensor/metadata-KV count ceilings, and `general.alignment` without allocating any `Vec<u8>` of file-derived size. Closes the S5 encryption bypass (G1: `Model::from_gguf_reader` was not invoking the validator) and prevents crafted headers from OOMing the loader (G2/G3/G14). Six typed `AtheerCoreError` variants (`InvalidMagic`, `InvalidVersion`, `InvalidCounts`, `InvalidAlignment`, `InvalidTensorBounds`, `DuplicateTensorName`) replace the prior `ModelLoadFailed(String)` for these failure classes; FFI layer maps them to `AtheerError::ModelLoadFailed { message }` with structured fields. `GgufValidator::validate` renamed to `validate_full(&content, file_size)` and adds three new deep-pass checks: `tensor_data_offset ≤ file_size`, duplicate tensor names, and required metadata presence for known architectures. Wired into all three load paths (`from_gguf`, `from_gguf_reader`, `MmapModel::from_gguf`). For `MmapModel`, `parse_header` runs against `&mut file` **before** `Mmap::map` so a sparse-file attack cannot induce an OOM via mmap. 18 unit tests in `safe_content.rs` + 15 in `gguf_validator.rs` (3 new) + 3 integration tests in `model.rs` (closing the G1 regression) + 2 proptest cases (random bytes never panic) + 1 fuzz target `fuzz_gguf_header`. See `openspec/changes/safe-gguf-load/`.
 >
+> **Status of S7 (TLS Certificate Pinning): ✅ Completed July 2026** — MITM-resistant model downloads via custom rustls `ServerCertVerifier` (`PinningVerifier` struct) checking SHA-256 hashes of peer SPKIs against pinned values. Dual-pin strategy (Amazon RSA 2048 M04 intermediate CA + huggingface.co leaf). `CertificatePinner` builder with `default_huggingface()` and `with_pinning()` on `ModelRegistry`. 309 LOC + 8 unit tests in `atheer-core/src/cert_pinner.rs`. See `openspec/changes/certificate-pinning/`.
+>
 > **Status of R1 (Draft Speculation): ✅ Completed July 2026** — `load_draft()`/`unload_draft()` reimplemented to load a real GGUF draft model, `standby_draft_path` consumed in `initialize()` for auto-loading, `generate_speculative()` on `InferenceEngine` implements the draft proposal + target verification loop with acceptance callback, `AtheerEngine::generate_sync()` dispatches to speculative decoding when a draft model is loaded and speculation is active. Orchestrator tracks results via `record_speculative_result()`. Tests for `extract_log_prob` utility pass.
 >
 > **Status of P2 (Continuous Runtime Calibration): ✅ Completed July 2026** — `PerfCalibrator` struct in `atheer-orchestrator/src/calibrator.rs` (new module) dynamically adjusts speculation depth, mode thresholds, NGram cache size, and temperature based on recent generation history, throughput trend slope, and hardware health snapshot. Calibration runs after each generation in `generate_sync()`, with tunable parameters per performance regime. Orchestrator tracks stats via `CalibrationReport`. Includes unit tests.
@@ -121,9 +123,10 @@
 
 The [security.rs](atheer-core/src/security.rs) module now covers path allowlisting, size checks, prompt truncation, **model signature verification** (Ed25519 via `ModelVerifier`), and **load-time SHA-256 hash verification**. The previously-dead `enable_signature_verify` field on `SecurityAudit` is now activated and wired through `AtheerConfig.model_signature_public_key`.
 
-> **S1 completed ✅** — Model file encryption (AES-256-GCM).  
-> **S2 + S3 completed ✅** — Ed25519 detached signature verification + streaming load-time SHA-256.  
+> **S1 completed ✅** — Model file encryption (AES-256-GCM).
+> **S2 + S3 completed ✅** — Ed25519 detached signature verification + streaming load-time SHA-256.
 > **S4 completed ✅** — Prompt injection guardrails (L1/L2/L3 defense-in-depth pipeline).
+> **S7 completed ✅** — TLS certificate pinning for MITM-resistant model downloads.
 
 > [!CAUTION]
 > Model integrity is the #1 attack surface for on-device AI. A malicious GGUF file can execute arbitrary computation through crafted weight values. With S1 (encryption), S2 (Ed25519 signing), S3 (load-time hash), and S5 (GGUF format validation) completed, the engine now cryptographically verifies model provenance and rejects malformed GGUF files before they can cause OOB reads via `mmap`.
@@ -138,13 +141,13 @@ The [security.rs](atheer-core/src/security.rs) module now covers path allowlisti
 | S4 | **Prompt injection guardrails** | ✅ Completed | Three-layer defense-in-depth: L1 fast heuristics (pattern matching, NFKC normalization, homoglyph/leetspeak decoding, zero-width char stripping, synonym-expanded proximity scoring) in <100μs with encoding detection pipeline (base64/hex/ROT13 → decode → re-check); L2 token-level statistical analysis (repetition ratio, entropy anomaly, adversarial suffix detection) in <5ms; L3 output guard (system prompt leakage detection, jailbreak success markers) in <100μs. Four-tier `GuardrailLevel` (None/Basic/Balanced/Strict), configurable score thresholds, sidecar JSON pattern loading with hot-reload. See `atheer-core/src/guardrails/` (8 files) + `atheer-ffi/src/guardrails.rs`. 42 tests, 59-case curated suite. |
 | S5 | **GGUF format validation** | ✅ Completed | `GgufValidator` in `gguf-validator` feature-gated module (`atheer-core/src/gguf_validator.rs`). Pre-flight ceilings on tensor_count (≤10,000) and metadata_kv_count (≤100,000). Post-parse validation: dimension count 1–16 with zero-dimension rejection, tensor offset overflow via `u64::checked_add`, bounds checks (offset + size ≤ file size), alignment power-of-2 and ≤4096 ceiling, metadata string length ≤10MB, tensor name length ≤1MB. Integrated into `Model::from_gguf_inner()` and `MmapModel::from_gguf()`. 11 unit tests. Default-enabled. |
 | S6 | **No memory-safe tensor bounds checking** | ✅ Completed | Two-tier validation: `safe_content::parse_header` (always-on, pre-allocation gate in `atheer-core/src/safe_content.rs`) plus renamed `GgufValidator::validate_full` (deep pass, `gguf-validator` feature). Wired into all three GGUF load paths including the encryption pipeline (`from_gguf_reader`), closing the S5 encryption bypass. Six typed `AtheerCoreError` variants replace the prior string-only failure mode. For `MmapModel`, the gate runs **before** `Mmap::map` so sparse-file attacks cannot induce mmap-OOM. 18 unit tests + 15 validator tests + 3 integration tests + 2 proptests + 1 fuzz target. See `openspec/changes/safe-gguf-load/`. |
-| S7 | **HTTP downloads over plain reqwest** | 🟡 Medium | Model downloads from HuggingFace happen without certificate pinning. On mobile networks, MITM is a real risk. Add TLS certificate pinning for model download endpoints. |
+| S7 | **HTTP downloads over plain reqwest** | ✅ Completed | TLS certificate pinning via custom rustls `ServerCertVerifier` (`PinningVerifier`). Dual-pin: Amazon RSA 2048 M04 intermediate CA + huggingface.co leaf. 8 unit tests. Wired into `ModelRegistry` via `with_pinning()` and `new()` `Option<&CertificatePinner>`. See `atheer-core/src/cert_pinner.rs`. |
 | S8 | **No sandboxing of model execution** | 🟡 Medium | The NNAPI and Vulkan backends execute compute on shared device resources. Consider seccomp/SELinux policy recommendations for Android deployments. |
 | S9 | **Secure key storage** | 🟡 Medium | Currently keys in process memory (`String`). Use Android Keystore / iOS Keychain for model decryption keys. |
 | S10 | **Prompt truncation not unicode-safe** | ✅ Completed | `sanitze_prompt()` at `security.rs:56-61` fixed in prior session — now uses `prompt.chars().take(max_len)` to avoid multi-byte UTF-8 panics. |
 | S11 | **Memory sanitization** | 🟢 Low | Tokens, keys, and output buffers remain in process memory after inference. Use `zeroize` crate for sensitive buffers. |
 
-### Recommended New Modules
+### Recommended New Modules (already implemented)
 
 ```
 atheer-core/src/
@@ -152,6 +155,7 @@ atheer-core/src/
 ├── model_verifier.rs      # ✅ Ed25519 signature verification at load time (implemented)
 ├── gguf_validator.rs      # ✅ GGUF header/metadata structural validation (implemented)
 ├── model_encryption/      # ✅ AES-256-GCM decrypt pipeline (implemented)
+├── cert_pinner.rs         # ✅ TLS certificate pinning for MITM-resistant downloads (implemented)
 ├── secure_memory.rs       # Zeroize wrappers for sensitive buffers
 └── audit_log.rs          # Append-only local audit trail
 ```
@@ -392,7 +396,7 @@ UniFFI bindings exist, the binding generation pipeline is broken, and pre-genera
 | **Predictive thermal** | ✅ **Unique** | ❌ | ❌ | ❌ | ❌ |
 | **Grammar-structured output** | ✅ Pushdown automaton | ✅ GBNF | ✅ | ❌ | ❌ |
 | **Tool calling / agent loops** | ✅ **Unique** | ❌ | ❌ | ❌ | ❌ |
-| **Model encryption + signing** | ✅ **Unique** | ❌ | ❌ | ❌ | ❌ |
+| **Model encryption + signing + cert pinning** | ✅ **Unique** | ❌ | ❌ | ❌ | ❌ |
 | **Privacy mode (Normal/Ephemeral/Audited)** | ✅ **Unique** | ❌ | ❌ | ❌ | ❌ |
 | **Prompt guardrails** | ✅ **Unique** | ❌ | ❌ | ❌ | ❌ |
 | **Privacy manifest** | ❌ Gap | ❌ | ❌ | ❌ | ❌ |
@@ -435,21 +439,22 @@ R1 (speculative decoding) and P2 (continuous calibration) close the performance 
 | 14 | P5: ANE compilation pre-heat | ✅ Completed | `coreml.rs` (for_preheat, preheat_ane), `traits.rs` (default no-op), `manager.rs`, `engine.rs` (preheat trigger) |
 | 15 | R5: Model hash verify at load time | ✅ Completed | `model.rs` (streaming SHA-256 in `from_gguf`) |
 | 16 | R4: KV cache checkpoint persistence | ✅ Completed | `lifecycle.rs`, `AtheerEngine` |
+| 17 | S7: TLS certificate pinning | ✅ Completed | `cert_pinner.rs`, `ModelRegistry` |
 
-**Phase 2: ~5-11 days** (V1, S2+S3, S4, P5, R5, R4 ✅ completed)
+**Phase 2: ~5-11 days** (V1, S2+S3, S4, P5, R5, R4, S7 ✅ completed)
 
 ### Phase 3: Polish & Performance (4-6 weeks)
 
 | # | Item | Est. Days | Integration |
 |---|-----|-----------|-------------|
-| 17 | P6+P7: Baseline + competitive benchmarks | 2-3 | `perf-bench`, `BENCHMARKS.md` |
-| 18 | D1: Structured metrics/telemetry | 3-5 | `MetricsCollector` trait |
-| 19 | V5: PII redactor upgrade (regex) | 1 | `safety.rs` |
-| 20 | V4: Time-based cache expiry + secure wipe | 2-3 | `memory-bank` |
-| 21 | D3: FFI API versioning | 1 | `uniffi` layer |
-| 22 | E1: Fix binding generation pipeline | 2-3 | CI |
-| 23 | C2: GDPR data flow docs + `delete_all_user_data()` | 2-3 | docs + API |
-| 24 | V6: Audit logging | 2-3 | New `audit_log.rs` |
+| 18 | P6+P7: Baseline + competitive benchmarks | 2-3 | `perf-bench`, `BENCHMARKS.md` |
+| 19 | D1: Structured metrics/telemetry | 3-5 | `MetricsCollector` trait |
+| 20 | V5: PII redactor upgrade (regex) | 1 | `safety.rs` |
+| 21 | V4: Time-based cache expiry + secure wipe | 2-3 | `memory-bank` |
+| 22 | D3: FFI API versioning | 1 | `uniffi` layer |
+| 23 | E1: Fix binding generation pipeline | 2-3 | CI |
+| 24 | C2: GDPR data flow docs + `delete_all_user_data()` | 2-3 | docs + API |
+| 25 | V6: Audit logging | 2-3 | New `audit_log.rs` |
 
 **Phase 3: ~13-21 days**
 
@@ -464,9 +469,9 @@ R2 ✓ ─────────── V2+V3 ✓ ─────────�
 R3 ✓ ─────────── S2+S3 ✓ ──────────── C2
 R5 ✓ ─────────── S4 ✓ ─────────────── E1
 R8              R4 ✓ ──────────────── D3
-R9              P5 ──────────────────
-R10              V4 ──────────────────
-R11 ──────────────────────────────────────────────
+R9              P5 ✓ ────────
+R10             S7 ✓ ────────
+R11             V4 ──────────────────
 P2 ──────────────────────────────────────────────
 S2+S3 ✓
 V1 ✓
@@ -478,8 +483,8 @@ S4 ✓
 | Effort | Range | Items |
 |--------|-------|------|
 | Low (≤1 day) | 0.5-1 day | R2 ✅, R3 ✅, R5 ✅, R7, R9 ✅, R10, R13, R14, R6, P5 ✅, S3 ✅, S4 ✅, S9 ✅ |
-| Medium (2-5 days) | 2-5 days | R1 ✅, R4, R8, R11, P1 ✅, P2 ✅, P9, P10 |
-| Med-High (5-10 days) | 5-10 days | S2 ✅, S5 ✅, S6, S7, S8, V1 ✅, V2 ✅, V3 ✅, V4, V5, E1, E2 |
+| Medium (2-5 days) | 2-5 days | R1 ✅, R4, R8, R11, P1 ✅, P2 ✅, P9, P10, S7 ✅ |
+| Med-High (5-10 days) | 5-10 days | S2 ✅, S5 ✅, S6, S8, V1 ✅, V2 ✅, V3 ✅, V4, V5, E1, E2 |
 | High (10+ days) | 10+ days | S5 (sandboxing), S7 (side-channel), V7 (DP analytics) |
 
 ---
@@ -507,6 +512,7 @@ S4 ✓
 | S4: Prompt injection guardrails (L1/L2/L3) | `atheer-core/src/guardrails/` (8 files), `atheer-ffi/src/guardrails.rs`, `test_data/s4_guardrails_test_suite.json` | ✅ |
 | S5: GGUF format validation | `gguf_validator.rs` (new), `model.rs`, `mmap_model.rs`, `Cargo.toml` (feature), `lib.rs` (module) | ✅ |
 | S6: Pre-allocation header gate | `safe_content.rs` (new), `gguf_validator.rs` (renamed `validate_full`), `error.rs` (6 typed variants), `model.rs`/`mmap_model.rs` (wired into all 3 load paths), `fuzz/src/lib.rs` (fuzz target) | ✅ |
+| S7: TLS certificate pinning | `cert_pinner.rs` (new, 309 LOC), `error.rs` (`TlsPinningFailed` variant), `model_registry.rs` (`with_pinning()`), `Cargo.toml` (rustls, webpki-roots, rustls-webpki) | ✅ |
 | R4 / P3: KV cache checkpoint persistence | `atheer-core/src/lifecycle.rs`, `AtheerEngine` lifecycle FFI, sidecar `latest_checkpoint.txt`, generational cleanup, LZ4 L3 snapshot/thaw | ✅ |
 | R8: Fix 14 test failures + 40+ warnings | Entire workspace — see `fix-test-failures-warnings-ci` change | ✅ |
 | R9: CI env var bug | `.github/workflows/ci.yml` — moved `env:` block above step references | ✅ |
@@ -530,6 +536,7 @@ S4 ✓
 | P5: ANE pre-heat | ✅ Completed — background thread loads .mlpackage and runs warm-up forward pass, atomically swapped via `Arc<OnceLock>`, triggered in engine init | `atheer-accel/src/coreml.rs`, `atheer-accel/src/traits.rs`, `atheer-accel/src/manager.rs`, `atheer-ffi/src/engine.rs` |
 | S2: Model attestation | ✅ Completed — Ed25519 detached sig verify via `ModelVerifier` | `atheer-core/src/model_verifier.rs` |
 | S4: Prompt injection guardrails | ✅ Completed — `GuardrailDetector` with L1/L2/L3 pipeline, sidecar pattern loading, hot-reload | `atheer-core/src/guardrails/` (8 files), `atheer-ffi/src/guardrails.rs` |
+| S7: TLS certificate pinning | ✅ Completed — `CertificatePinner` + `PinningVerifier` (custom rustls `ServerCertVerifier`), dual-pin strategy, `ModelRegistry::with_pinning()` | `atheer-core/src/cert_pinner.rs`, `atheer-core/src/model_registry.rs`, `atheer-core/src/error.rs` |
 | V1: Privacy mode | ✅ Completed — `PrivacyMode`, `CrashReporter`, `AtheerEngine` | `atheer-core/src/privacy.rs`, `atheer-core/src/crash.rs`, `atheer-ffi/src/privacy.rs`, `atheer-ffi/src/config.rs`, `atheer-ffi/src/engine.rs` |
 | V2: Cache encryption | L2/L3 persistence layers | `atheer-memory-bank/src/l2_warm.rs`, `l3_compressed.rs` |
 

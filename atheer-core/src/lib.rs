@@ -2,6 +2,8 @@ uniffi::setup_scaffolding!();
 
 pub mod accuracy;
 pub mod block_manager;
+#[cfg(feature = "model-registry")]
+pub mod cert_pinner;
 pub mod crash;
 pub mod error;
 #[cfg(feature = "gguf-validator")]

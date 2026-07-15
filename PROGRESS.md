@@ -1,8 +1,8 @@
 # Atheer-Rust Progress Report
 
-> Generated: 2026-07-14
-> Scope: Full workspace analysis — 15 crates/packages, ~19K Rust source lines, ~399 tests
-> Status: **97% complete across all subsystems** (+1% since last report: P5 ANE compilation pre-heat completed)
+> Generated: 2026-07-16
+> Scope: Full workspace analysis — 15 crates/packages, ~19K Rust source lines, ~474 tests
+> Status: **98% complete across all subsystems** (+1% since last report: S7 certificate pinning completed)
 
 ---
 
@@ -65,6 +65,7 @@
 | Weights | 97 | ✅ | ✅ Weight loading |
 | Latency budget | 245 | ✅ | ✅ Budget-based scheduling |
 | Model registry | 448 | ✅ | ✅ Model registry with reqwest |
+| Certificate pinning | 309 | 8 | ✅ TLS cert pinning for MITM-resistant downloads via rustls custom `ServerCertVerifier` |
 | `mmap` feature | 306 | — | ✅ Memory-mapped model loading |
 
 **Remaining:**
@@ -255,11 +256,12 @@ _All P0 items from previous report have been addressed: `perf-bench` crate exist
 |---|------|-------|--------|
 | — | **Privacy** | **V1: Configurable privacy mode completed** — `PrivacyMode` enum (Normal/Ephemeral/Audited) with FFI type, config field, crash reporter integration, and engine-level logging suppression. Ephemeral mode skips crash log writes, disables L3 persistence, and suppresses all non-error tracing. | ✅ Completed July 2026 |
 
-### P1b — Prompt Injection Guardrails (S4) ✅
+### P1b — Security Hardening (S4 + S7) ✅
 
 | # | Area | Issue | Impact |
 |---|------|-------|--------|
 | — | **Guardrails** | **S4: Defense-in-depth prompt injection detection completed** — Three-layer pipeline (L1 heuristics <100μs, L2 token analysis <5ms, L3 output guard <100μs) with 4-tier `GuardrailLevel` (None/Basic/Balanced/Strict). 1,350 LOC core + 55 LOC FFI. Sidecar JSON override with hot-reload. Encoding detection pipeline (base64/hex/ROT13 chains). 59-case curated test suite with 42 passing tests. | ✅ Completed July 2026 |
+| — | **Cert Pinning** | **S7: TLS certificate pinning for MITM-resistant model downloads completed** — Custom rustls `ServerCertVerifier` (`PinningVerifier` struct) checks SHA-256 hashes of peer SPKIs against pinned values. Dual-pin strategy (Amazon RSA 2048 M04 intermediate CA + huggingface.co leaf). `CertificatePinner` builder with `default_huggingface()` and `with_pinning()` on `ModelRegistry`. 309 LOC + 8 unit tests. | ✅ Completed July 2026 |
 
 ### P2 — Polish & Hygiene
 
@@ -276,6 +278,7 @@ _All P0 items from previous report have been addressed: `perf-bench` crate exist
 | 16 | **Testing** | **NNAPI never tested on real Android device** — graph builder verified only |
 | 17 | **iOS** | **`ios/atheer_ffi.swift` may be stale** — generated from earlier build, no regen verification |
 | 18 | **Config** | **No `.gitignore` entries** for generated bindings, model files, or bench outputs |
+| — | **Cert Pinning** | ~~S7: TLS certificate pinning for model downloads~~ — ✅ **Completed** (moved to P1b) |
 
 ---
 
@@ -284,7 +287,7 @@ _All P0 items from previous report have been addressed: `perf-bench` crate exist
 ```
 Crate                  Total   Pass   Fail   Ignored   Notes
 ─────────────────────────────────────────────────────────────
-atheer-core             209     206     0       3       42 guardrail tests (21 unit + 21 suite/integration), 3 ignored need GGUF model
+atheer-core             217     214     0       3       42 guardrail tests + 8 cert pinning tests, 3 ignored need GGUF model
 atheer-accel             55      51    14*     0       * 4 Metal panics + 10 platform-gated (NNAPI) + 4 CoreML cfg-gated preheat tests
 atheer-orchestrator      70      70     0       0
 atheer-memory-bank       40      40     0       0
@@ -293,7 +296,7 @@ atheer-ffi               35      35     0       0       +3 guardrail FFI + +3 pr
 tests/src (integ.)       36      36     0       0
 fuzz                      3       3     0       0       skeleton harness, 3 targets
 ─────────────────────────────────────────────────────────────
-Total                   ~466   ~463    14       3
+Total                   ~474   ~471    14       3
 
 * NNAPI tests (10) are `#[cfg(target_os = "android")]` — don't run on macOS
   4 Metal tests fail on this macOS machine (no Metal GPU)
@@ -314,7 +317,7 @@ Total                   ~466   ~463    14       3
 | atheer-core | `auto-backend` | `atheer-accel` dep | ✅ |
 | atheer-core | `memory-bank` | `atheer-memory-bank` dep | ✅ |
 | atheer-core | `mmap` | Memory-mapped IO | ✅ |
-| atheer-core | `model-registry` | `reqwest` for model downloads | ✅ |
+| atheer-core | `model-registry` | `reqwest` (with `rustls-tls`) + `rustls` + `webpki-roots` + `rustls-webpki` for model downloads + cert pinning | ✅ |
 | atheer-accel | `coreml` | `candle-coreml` git dep | ✅ |
 | (workspace) | — | `[patch.crates-io]` for candle-transformers | ✅ |
 

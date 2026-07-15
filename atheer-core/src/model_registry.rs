@@ -6,6 +6,8 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
+use crate::cert_pinner::CertificatePinner;
+
 /// Configuration describing a downloadable model from HuggingFace Hub.
 #[derive(Debug, Clone)]
 pub struct ModelConfig {
@@ -51,18 +53,58 @@ pub struct ModelRegistry {
 }
 
 impl ModelRegistry {
-    pub fn new(cache_dir: Option<PathBuf>, max_cache_size: Option<u64>) -> Self {
+    pub fn new(
+        cache_dir: Option<PathBuf>,
+        max_cache_size: Option<u64>,
+        pinner: Option<&CertificatePinner>,
+    ) -> Self {
         let cache_dir = cache_dir.unwrap_or_else(Self::default_cache_dir);
         let max_cache_size = max_cache_size.unwrap_or(10_737_418_240);
-        let client = reqwest::blocking::Client::builder()
-            .user_agent("atheer-rust/0.1.0")
-            .build()
-            .expect("reqwest Client should build");
+        let client = match pinner {
+            Some(pinner) => {
+                let tls_config = pinner
+                    .build_tls_config()
+                    .expect("CertificatePinner TLS config should build");
+                reqwest::blocking::Client::builder()
+                    .user_agent("atheer-rust/0.1.0")
+                    .use_preconfigured_tls(tls_config)
+                    .build()
+                    .expect("reqwest Client should build")
+            }
+            None => reqwest::blocking::Client::builder()
+                .user_agent("atheer-rust/0.1.0")
+                .build()
+                .expect("reqwest Client should build"),
+        };
         Self {
             cache_dir,
             max_cache_size,
             client,
         }
+    }
+
+    /// Creates a new `ModelRegistry` with HuggingFace certificate pinning enabled.
+    ///
+    /// Uses the default pinned public key hashes (Amazon RSA 2048 M04 intermediate
+    /// CA + huggingface.co leaf certificate) to prevent MITM attacks on model
+    /// downloads.
+    pub fn with_pinning(cache_dir: Option<PathBuf>, max_cache_size: Option<u64>) -> Result<Self> {
+        let cache_dir = cache_dir.unwrap_or_else(Self::default_cache_dir);
+        let max_cache_size = max_cache_size.unwrap_or(10_737_418_240);
+        let pinner = CertificatePinner::default_huggingface();
+        let tls_config = pinner
+            .build_tls_config()
+            .map_err(|e| AtheerCoreError::DownloadFailed(format!("build TLS config: {e}")))?;
+        let client = reqwest::blocking::Client::builder()
+            .user_agent("atheer-rust/0.1.0")
+            .use_preconfigured_tls(tls_config)
+            .build()
+            .expect("reqwest Client should build");
+        Ok(Self {
+            cache_dir,
+            max_cache_size,
+            client,
+        })
     }
 
     pub fn default_cache_dir() -> PathBuf {
@@ -377,7 +419,7 @@ mod tests {
 
     #[test]
     fn test_registry_new_with_defaults() {
-        let reg = ModelRegistry::new(None, None);
+        let reg = ModelRegistry::new(None, None, None);
         assert_eq!(reg.max_cache_size, 10_737_418_240);
         assert!(reg
             .cache_dir()
@@ -388,7 +430,7 @@ mod tests {
     #[test]
     fn test_cache_hit_miss() {
         let dir = tempdir().unwrap();
-        let reg = ModelRegistry::new(Some(dir.path().join("cache")), None);
+        let reg = ModelRegistry::new(Some(dir.path().join("cache")), None, None);
         assert!(reg.cache_hit("test/model").is_none());
 
         let model_dir = dir.path().join("cache").join("test_model");
@@ -401,7 +443,7 @@ mod tests {
     #[test]
     fn test_verify_sha256_mismatch() {
         let dir = tempdir().unwrap();
-        let reg = ModelRegistry::new(Some(dir.path().to_path_buf()), None);
+        let reg = ModelRegistry::new(Some(dir.path().to_path_buf()), None, None);
 
         let file_path = dir.path().join("test.bin");
         fs::write(&file_path, b"hello world").unwrap();
@@ -429,7 +471,7 @@ mod tests {
     #[test]
     fn test_verify_sha256_match() {
         let dir = tempdir().unwrap();
-        let reg = ModelRegistry::new(Some(dir.path().to_path_buf()), None);
+        let reg = ModelRegistry::new(Some(dir.path().to_path_buf()), None, None);
 
         let file_path = dir.path().join("test.bin");
         fs::write(&file_path, b"hello world").unwrap();
@@ -441,7 +483,7 @@ mod tests {
     #[test]
     fn test_empty_cache_size() {
         let dir = tempdir().unwrap();
-        let reg = ModelRegistry::new(Some(dir.path().to_path_buf()), None);
+        let reg = ModelRegistry::new(Some(dir.path().to_path_buf()), None, None);
         assert_eq!(reg.cache_size().unwrap(), 0);
     }
 }

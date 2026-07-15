@@ -13,6 +13,7 @@ Mobile inference engine for LLMs on iOS and Android.
 - **Dynamic mode switching**: Eco, Balanced, and Turbo modes based on live hardware telemetry (thermal, memory, battery) sampled at 1 Hz.
 - **Platform hardware telemetry**: Android JNI bridge for thermal headroom, available memory, and battery level; iOS/macOS telemetry via `objc2` FFI (`IosMonitor` with 1 Hz sampling thread).
 - **Performance-per-watt measurement**: Benchmarking infrastructure for throughput, energy, and thermal throttling curves (Criterion benches + perf-bench binary).
+- **TLS Certificate Pinning**: MITM-resistant model downloads via custom rustls `ServerCertVerifier`. SHA-256 hashes of peer SubjectPublicKeyInfo are checked against pinned values (dual-pin: Amazon RSA 2048 M04 intermediate CA + huggingface.co leaf). Enabled via `CertificatePinner` builder or `ModelRegistry::with_pinning()`.
 - **Prompt Injection Guardrails**: Three-layer defense-in-depth against prompt injection — L1 fast heuristics (pattern matching, Unicode normalization, leetspeak, homoglyphs, proximity scoring via synonym-expanded word pairs) in <100μs, L2 token-level statistical analysis (repetition ratio, entropy anomaly, adversarial suffix detection) in <5ms, L3 output guard (system prompt leakage detection, jailbreak success markers) in <100μs. Default level **Basic** (L1 only), configurable to **Balanced** (L1+L2) or **Strict** (L1+L2+L3). Sidecar JSON file allows overriding/replacing builtin patterns; custom patterns can be appended programmatically.
 - **Production-ready**: Memory safe (Rust), crash reporting with `atheer-core`, graceful degradation to CPU when accelerators are unavailable.
 
@@ -381,6 +382,19 @@ Defense-in-depth prompt injection detection pipeline, completed July 2026:
 5. **Encoding detection pipeline** — Automatically detects base64, hex, and ROT13 encodings (including chains like base64→ROT13), decodes each layer, and re-checks decoded text against L1 patterns. Any decoded injection content produces a Block verdict — encoded injection is inherently more suspicious.
 6. **UniFFI integration** — `AtheerGuardrailLevel` enum with bidirectional `From` conversions, `guardrail_level`/`guardrail_patterns_path`/`guardrail_custom_patterns` fields on `AtheerConfig`, `guardrail_warnings`/`guardrail_blocked` fields on `GenerationResponse`, and `AtheerEngine::reload_guardrail_patterns()` method.
 7. **8 source files** created — `atheer-core/src/guardrails/` (mod.rs, verdict.rs, normalizer.rs, patterns.rs, builtin_patterns.json, analyzer.rs, output_check.rs, detector.rs, test_suite.rs) + 3 FFI files (`atheer-ffi/src/guardrails.rs`, `atheer-ffi/src/config.rs` fields, `atheer-ffi/src/types.rs` fields, `atheer-ffi/src/engine.rs` methods).
+
+### TLS Certificate Pinning (S7) ✅
+
+MITM-resistant model downloads via rustls custom certificate verification, completed July 2026:
+
+1. **`CertificatePinner` struct** — holds SHA-256 hashes of trusted SubjectPublicKeyInfo values. Methods: `new()`, `default_huggingface()`, `build_tls_config()`. Default pins cover Amazon RSA 2048 M04 (intermediate CA) + huggingface.co leaf certificate.
+2. **`PinningVerifier`** — custom `ServerCertVerifier` implementation that delegates standard chain validation to `WebPkiServerVerifier`, then checks peer SPKI hashes against pinned values. If no match, returns `Error::General` with hostname and hash details.
+3. **`ModelRegistry` integration** — `new(cache_dir, max_cache_size, pinner)` accepts `Option<&CertificatePinner>` for optional pinning. Convenience `with_pinning()` constructor enables HuggingFace pins by default.
+4. **Dual-pin strategy** — intermediate CA pin covers CA rotation (new leaf signed by same CA), leaf pin covers direct compromise. Either match allows the connection.
+5. **`AtheerCoreError::TlsPinningFailed`** — structured error variant with hostname, peer hash, and pinned hashes fields.
+6. **8 unit tests** — default hash count, empty pins, TLS config building, hex literal decoding, invalid DER handling, error display. All 263 core tests pass.
+
+**Implementation details**: 309 lines in `atheer-core/src/cert_pinner.rs`. Depends on `rustls` 0.23, `webpki-roots` 0.26, `rustls-webpki` 0.103. Gated behind `model-registry` feature.
 
 ### Metal Backend Stability
 

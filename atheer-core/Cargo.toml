@@ -32,16 +32,19 @@ dirs = "5.0"
 filetime = "0.2"
 unicode-normalization = "0.1"
 base64 = "0.22"
-reqwest = { workspace = true, features = ["blocking"], optional = true }
+reqwest = { workspace = true, features = ["blocking", "rustls-tls"], optional = true }
 atheer-memory-bank = { path = "../atheer-memory-bank", optional = true }
 atheer-accel = { path = "../atheer-accel", optional = true }
+rustls = { version = "0.23", optional = true, default-features = false, features = ["ring"] }
+webpki-roots = { version = "0.26", optional = true }
+rustls-webpki = { version = "0.103", optional = true }
 
 [features]
 default = ["gguf-validator"]
 auto-backend = ["atheer-accel"]
 memory-bank = ["atheer-memory-bank"]
 mmap = []
-model-registry = ["dep:reqwest"]
+model-registry = ["dep:reqwest", "dep:rustls", "dep:webpki-roots", "dep:rustls-webpki"]
 gguf-validator = []
 
 [dev-dependencies]
