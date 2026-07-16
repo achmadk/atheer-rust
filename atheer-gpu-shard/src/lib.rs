@@ -19,6 +19,7 @@ use tracing::{error, info};
 struct GpuShardContext {
     backend_type: String,
     device_name: String,
+    #[allow(dead_code)]
     handle: u64,
     start_time: std::time::Instant,
 }
@@ -91,6 +92,7 @@ pub extern "system" fn Java_com_atheer_ffi_sandbox_GpuExecutionShardService_nati
 
 /// Run batched inference.
 #[no_mangle]
+#[allow(improper_ctypes_definitions)]
 pub extern "system" fn Java_com_atheer_ffi_sandbox_GpuExecutionShardService_nativeBatch(
     mut env: JNIEnv,
     _class: JClass,
@@ -99,13 +101,13 @@ pub extern "system" fn Java_com_atheer_ffi_sandbox_GpuExecutionShardService_nati
     positions: JLongArray,
 ) -> Vec<Vec<f32>> {
     let tokens: Vec<u32> = unsafe {
-        env.get_array_elements(&token_ids.into(), ReleaseMode::NoCopyBack)
+        env.get_array_elements(&token_ids, ReleaseMode::NoCopyBack)
             .map(|elements| elements.iter().map(|&v| v as u32).collect())
             .unwrap_or_default()
     };
 
     let pos: Vec<usize> = unsafe {
-        env.get_array_elements(&positions.into(), ReleaseMode::NoCopyBack)
+        env.get_array_elements(&positions, ReleaseMode::NoCopyBack)
             .map(|elements| elements.iter().map(|&v| v as usize).collect())
             .unwrap_or_default()
     };
@@ -238,11 +240,6 @@ fn run_batch(
         .collect();
 
     Ok(results)
-}
-
-/// Helper to convert JNI jboolean to bool.
-fn jbool_to_bool(v: u8) -> bool {
-    v != 0
 }
 
 #[no_mangle]

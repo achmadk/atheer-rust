@@ -49,6 +49,9 @@ macro_rules! trace_if_ok {
     };
 }
 
+/// Callback invoked when the sandbox permanently falls back to CPU.
+type SandboxFallbackCallback = Box<dyn Fn(String, u32) + Send>;
+
 #[allow(dead_code)]
 #[derive(uniffi::Object)]
 pub struct AtheerEngine {
@@ -81,7 +84,7 @@ pub struct AtheerEngine {
     /// Sandboxed GPU execution bridge for Android IsolatedService.
     sandbox_bridge: Mutex<Option<SandboxedGpuBridge>>,
     /// Callback invoked when sandbox permanently falls back to CPU.
-    on_sandbox_fallback: Mutex<Option<Box<dyn Fn(String, u32) + Send>>>,
+    on_sandbox_fallback: Mutex<Option<SandboxFallbackCallback>>,
 }
 
 #[uniffi::export]
@@ -1763,7 +1766,7 @@ impl AtheerEngine {
 
     /// Register a callback invoked when the sandbox bridge permanently falls
     /// back to CPU. The callback receives (reason, crash_count).
-    pub fn set_on_sandbox_fallback(&self, callback: Box<dyn Fn(String, u32) + Send + 'static>) {
+    pub fn set_on_sandbox_fallback(&self, callback: SandboxFallbackCallback) {
         if let Ok(mut guard) = self.on_sandbox_fallback.lock() {
             *guard = Some(callback);
         }
