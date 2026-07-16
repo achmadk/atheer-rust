@@ -424,7 +424,7 @@ impl NnapiExecutor {
     /// For the initial implementation, this builds a new model graph for
     /// each call. We use the input token to construct a one-hot-like
     /// input vector and simulate the weight matrix with a diagonal bias.
-    pub fn forward(&self, input_ids: &[u32], vocab_size: usize) -> Result<AccelResult> {
+    pub fn forward(&mut self, input_ids: &[u32], vocab_size: usize) -> Result<AccelResult> {
         let start = Instant::now();
 
         #[cfg(target_os = "android")]
@@ -620,7 +620,7 @@ impl AccelBackend for NnapiBackend {
             timed_out_clone.store(true, std::sync::atomic::Ordering::Release);
         });
 
-        let result = match &self.executor {
+        let result = match &mut self.executor {
             Some(executor) => {
                 let res = executor.forward(input_ids, vocab_size);
                 match res {

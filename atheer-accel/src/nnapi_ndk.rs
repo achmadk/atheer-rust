@@ -353,7 +353,7 @@ impl NnapiError {
             NnapiError::Unmappable => "UNMAPPABLE",
             NnapiError::OutputInsufficientSize => "OUTPUT_INSUFFICIENT_SIZE",
             NnapiError::UnavailableDevice => "UNAVAILABLE_DEVICE",
-            NnapiError::Unknown(c) => "UNKNOWN",
+            NnapiError::Unknown(_c) => "UNKNOWN",
         }
     }
 }

@@ -90,7 +90,7 @@ struct AttentionPushConstants {
 impl VulkanContext {
     fn new() -> Result<Self> {
         unsafe {
-            let entry = ash::Entry::linked();
+            let entry = ash::Entry::load()?;
             let extension_names = [
                 vk::KHR_SURFACE_NAME.as_ptr(),
                 vk::KHR_ANDROID_SURFACE_NAME.as_ptr(),
@@ -525,7 +525,7 @@ impl VulkanContext {
 
         unsafe {
             let input_size = (batch_size as u64) * size_of::<u32>() as u64;
-            let (input_buffer, mut input_allocation) =
+            let (input_buffer, input_allocation) =
                 self.allocate_buffer(input_size, vk::BufferUsageFlags::STORAGE_BUFFER)?;
 
             {
@@ -534,7 +534,7 @@ impl VulkanContext {
             }
 
             let output_size = (batch_size as u64) * (vocab_size as u64) * size_of::<f32>() as u64;
-            let (output_buffer, mut output_allocation) =
+            let (output_buffer, output_allocation) =
                 self.allocate_buffer(output_size, vk::BufferUsageFlags::STORAGE_BUFFER)?;
 
             let descriptor_sets = self
@@ -710,13 +710,13 @@ impl VulkanContext {
         unsafe {
             let buf_size = (total_elements as u64) * size_of::<f32>() as u64;
 
-            let (q_buffer, mut q_alloc) =
+            let (q_buffer, q_alloc) =
                 self.allocate_buffer(buf_size, vk::BufferUsageFlags::STORAGE_BUFFER)?;
-            let (k_buffer, mut k_alloc) =
+            let (k_buffer, k_alloc) =
                 self.allocate_buffer(buf_size, vk::BufferUsageFlags::STORAGE_BUFFER)?;
-            let (v_buffer, mut v_alloc) =
+            let (v_buffer, v_alloc) =
                 self.allocate_buffer(buf_size, vk::BufferUsageFlags::STORAGE_BUFFER)?;
-            let (output_buffer, mut output_alloc) =
+            let (output_buffer, output_alloc) =
                 self.allocate_buffer(buf_size, vk::BufferUsageFlags::STORAGE_BUFFER)?;
 
             std::ptr::copy_nonoverlapping(
