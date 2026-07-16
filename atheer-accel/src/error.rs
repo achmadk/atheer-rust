@@ -39,6 +39,13 @@ impl From<candle_core::Error> for AccelError {
     }
 }
 
+#[cfg(target_os = "android")]
+impl From<ash::LoadingError> for AccelError {
+    fn from(e: ash::LoadingError) -> Self {
+        AccelError::BackendUnavailable(format!("Vulkan load error: {e}"))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
