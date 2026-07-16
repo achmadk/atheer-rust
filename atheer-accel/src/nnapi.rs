@@ -396,9 +396,7 @@ impl NnapiExecutor {
         }
 
         // -- Step 11: Compute --
-        let mut result = Err(crate::AccelError::OperationFailed(
-            "NNAPI execution failed".to_string(),
-        ));
+        let result;
         unsafe {
             let rc = ANeuralNetworksExecution_compute(execution);
             if rc == ANEURALNETWORKS_NO_ERROR {
@@ -432,6 +430,8 @@ impl NnapiExecutor {
         #[cfg(target_os = "android")]
         {
             if !self.devices.is_empty() {
+                let batch_size = input_ids.len();
+                let num_units = vocab_size;
                 // Build one-hot input vectors and identity-like weight+bias
                 let mut total_output = vec![0.0f32; batch_size * num_units];
 
@@ -833,7 +833,7 @@ impl NnapiGraphBuilder {
         #[cfg(target_os = "android")]
         {
             let rc = unsafe {
-                ndk::ANeuralNetworksModel_addOperand(self.model, &operand_type as *const _)
+                ndk::ANeuralNetworksModel_addOperand(self.model, &_operand_type as *const _)
             };
             if rc != ndk::ANEURALNETWORKS_NO_ERROR {
                 return Err(crate::AccelError::OperationFailed(format!(
@@ -910,7 +910,7 @@ impl NnapiGraphBuilder {
                     v.push(*fused_activation as u32);
                     v
                 }
-                NnapiOperation::Softmax { beta, .. } => {
+                NnapiOperation::Softmax { beta: _, .. } => {
                     // Beta is passed as a float32 operand value, not an index
                     inputs.clone()
                 }
@@ -964,7 +964,8 @@ impl NnapiGraphBuilder {
     /// # Panics
     ///
     /// Panics if `finish()` has not been called first (caught in debug builds).
-    pub fn compile(self, preference: ExecutionPreference) -> Result<NnapiCompiledModel> {
+    #[allow(unused_mut)]
+    pub fn compile(mut self, preference: ExecutionPreference) -> Result<NnapiCompiledModel> {
         #[cfg(target_os = "android")]
         {
             let mut compilation: *mut ndk::ANeuralNetworksCompilation = std::ptr::null_mut();
@@ -1093,7 +1094,7 @@ impl NnapiCompiledModel {
             }
 
             // Set output buffers
-            for (i, output) in outputs.iter().enumerate() {
+            for (i, output) in outputs.iter_mut().enumerate() {
                 let rc = unsafe {
                     ndk::ANeuralNetworksExecution_setOutput(
                         execution,

@@ -6,12 +6,19 @@ use ash::vk;
 use gpu_allocator::vulkan::*;
 #[cfg(target_os = "android")]
 use gpu_allocator::*;
+#[cfg(target_os = "android")]
+use std::ffi::CString;
+#[cfg(target_os = "android")]
+use std::mem::ManuallyDrop;
+#[cfg(target_os = "android")]
+use std::sync::Mutex;
 
 #[cfg(not(target_os = "android"))]
 #[derive(Debug)]
 struct VulkanContext;
 
 #[cfg(not(target_os = "android"))]
+#[derive(Debug)]
 struct VulkanDevice {
     name: String,
     driver_version: String,
@@ -25,7 +32,6 @@ struct VulkanQueue {
 }
 
 #[cfg(target_os = "android")]
-#[derive(Debug)]
 struct VulkanContext {
     _entry: ash::Entry,
     instance: ash::Instance,
@@ -49,7 +55,19 @@ struct VulkanContext {
 }
 
 #[cfg(target_os = "android")]
+impl std::fmt::Debug for VulkanContext {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("VulkanContext")
+            .field("weight_hidden_size", &self.weight_hidden_size)
+            .field("weight_vocab_size", &self.weight_vocab_size)
+            .field("weight_buffer", &self.weight_buffer)
+            .finish_non_exhaustive()
+    }
+}
+
+#[cfg(target_os = "android")]
 #[repr(C)]
+#[derive(bytemuck::Zeroable, bytemuck::Pod, Clone, Copy)]
 struct GemvPushConstants {
     batch_size: u32,
     vocab_size: u32,
@@ -59,6 +77,7 @@ struct GemvPushConstants {
 
 #[cfg(target_os = "android")]
 #[repr(C)]
+#[derive(bytemuck::Zeroable, bytemuck::Pod, Clone, Copy)]
 struct AttentionPushConstants {
     batch_size: u32,
     seq_len: u32,
@@ -75,7 +94,7 @@ impl VulkanContext {
             let extension_names = [
                 vk::KHR_SURFACE_NAME.as_ptr(),
                 vk::KHR_ANDROID_SURFACE_NAME.as_ptr(),
-                vk::KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_NAME.as_ptr(),
+                vk::KHR_GET_PHYSICAL_DEVICE_PROPERTIES2_NAME.as_ptr(),
             ];
 
             let app_info = vk::ApplicationInfo::default()
@@ -433,6 +452,7 @@ impl VulkanContext {
                 requirements,
                 location: MemoryLocation::GpuToCpu,
                 linear: true,
+                allocation_scheme: AllocationScheme::GpuAllocatorManaged,
             })
             .map_err(|e| {
                 crate::AccelError::MemoryAllocationFailed(format!(

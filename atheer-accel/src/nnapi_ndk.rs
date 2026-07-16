@@ -12,7 +12,7 @@
 #![cfg(target_os = "android")]
 #![allow(non_camel_case_types, dead_code)]
 
-use std::os::raw::{c_char, c_int, c_uint, c_void};
+use std::os::raw::{c_char, c_void};
 
 // ---------------------------------------------------------------------------
 // Opaque handle types
