@@ -29,9 +29,11 @@ pub mod quantization_resolver;
 pub mod safe_content;
 pub mod safety;
 pub mod sampler;
+pub mod sandbox;
 pub mod security;
 pub mod session;
 pub mod streaming;
+pub mod tensor_validation;
 #[cfg(test)]
 pub mod test_model;
 pub mod tokenizer;

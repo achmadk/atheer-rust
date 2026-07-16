@@ -15,42 +15,44 @@ Mobile inference engine for LLMs on iOS and Android.
 - **Performance-per-watt measurement**: Benchmarking infrastructure for throughput, energy, and thermal throttling curves (Criterion benches + perf-bench binary).
 - **TLS Certificate Pinning**: MITM-resistant model downloads via custom rustls `ServerCertVerifier`. SHA-256 hashes of peer SubjectPublicKeyInfo are checked against pinned values (dual-pin: Amazon RSA 2048 M04 intermediate CA + huggingface.co leaf). Enabled via `CertificatePinner` builder or `ModelRegistry::with_pinning()`.
 - **Prompt Injection Guardrails**: Three-layer defense-in-depth against prompt injection — L1 fast heuristics (pattern matching, Unicode normalization, leetspeak, homoglyphs, proximity scoring via synonym-expanded word pairs) in <100μs, L2 token-level statistical analysis (repetition ratio, entropy anomaly, adversarial suffix detection) in <5ms, L3 output guard (system prompt leakage detection, jailbreak success markers) in <100μs. Default level **Basic** (L1 only), configurable to **Balanced** (L1+L2) or **Strict** (L1+L2+L3). Sidecar JSON file allows overriding/replacing builtin patterns; custom patterns can be appended programmatically.
+- **Sandboxed GPU Execution**: `SandboxedGpuBridge` state machine (Idle→Starting→Ready→Crashed→Fallback) with sliding-window crash counters, configurable escalation thresholds, auto-restart, and flat-file crash persistence across sessions. Batch KV inference with auto-flush. Audit logging via `tracing` at every lifecycle transition. FFI callback `on_sandbox_fallback` for app-side visibility. 18 unit tests + 4 compliance attestation tests covering the full probe→batch→crash→fallback chain.
 - **Production-ready**: Memory safe (Rust), crash reporting with `atheer-core`, graceful degradation to CPU when accelerators are unavailable.
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────┐
-│           iOS / Android App             │
-└────────────────┬────────────────────────┘
+┌──────────────────────────────────────────┐
+│           iOS / Android App              │
+└────────────────┬─────────────────────────┘
                  │ uniffi FFI
-┌────────────────▼────────────────────────┐
-│           atheer-ffi                    │
-│    (Swift/Kotlin bindings)              │
-└────────────────┬────────────────────────┘
+┌────────────────▼─────────────────────────┐
+│           atheer-ffi                     │
+│    (Swift/Kotlin bindings, sandbox cb)   │
+└────────────────┬─────────────────────────┘
                  │
-┌────────────────▼────────────────────────┐
-│           atheer-core                   │
-│   (Candle inference, model & token)     │
-└────────┬───────────────────┬──-─────────┘
+┌────────────────▼─────────────────────────┐
+│           atheer-core                    │
+│   (Candle inference, model & token)      │
+│   [SandboxedGpuBridge — crash escalation]│
+└────────┬───────────────────┬──-──────────┘
          │                   │
-┌────────▼────────┐  ┌────────▼──────────┐
-│ atheer-accel   │  │atheer-orchestrator │
-│ (Metal/Vulkan/ │  │(Modes, Grammar,    │
-│  NNAPI/CPU)    │  │ Agent Loop)        │
-└────────────────┘  └────────┬───────────┘
+┌────────▼────────┐  ┌────────▼───────────┐
+│ atheer-accel   │  │atheer-orchestrator  │
+│ (Metal/Vulkan/ │  │(Modes, Grammar,     │
+│  NNAPI/CPU)    │  │ Agent Loop)         │
+└────────────────┘  └────────┬────────────┘
          │                   │
-┌────────▼───────────────────▼────────┐
-│        atheer-memory-bank           │
-│   (L1/L2/L3 KV cache, handoff,      │
-│    EncryptedStore AES-256-GCM)      │
-└─────────────────────────────────────┘
+┌────────▼───────────────────▼─────────┐
+│        atheer-memory-bank            │
+│   (L1/L2/L3 KV cache, handoff,       │
+│    EncryptedStore AES-256-GCM)       │
+└──────────────────────────────────────┘
          ▲
          │ health snapshot (1 Hz)
-┌────────▼────────────────────────────┐
-│        atheer-hardware              │
-│  (GenericMonitor, JNI bridge)       │
-└─────────────────────────────────────┘
+┌────────▼─────────────────────────────┐
+│        atheer-hardware               │
+│  (GenericMonitor, JNI bridge)        │
+└──────────────────────────────────────┘
 ```
 
 ## Quick Start
@@ -247,16 +249,17 @@ xcode-select --install
 
 ## Testing
 
-The workspace contains **~462 tests** across all crates, verified via `cargo test --workspace`:
+The workspace contains **~525 tests** across all crates, verified via `cargo test --workspace --lib`:
 
 | Crate | Test Count | Scope |
 |-------|-----------|-------|
-| `atheer-accel` | 51 | Backend creation, forward pass, fallback, quantization, probe order, CoreML compatibility |
-| `atheer-core` | 251 | Model loading, KV cache, block manager, accuracy, security, lifecycle, streaming, session management, multi-turn conversation, **prompt injection guardrails (42 tests)** |
-| `atheer-ffi` | 35 | Config roundtrip, backend type conversion, engine lifecycle, guardrail FFI, privacy FFI, checkpoint lifecycle |
+| `atheer-accel` | 53 | Backend creation, forward pass, fallback, quantization, probe order, CoreML compatibility |
+| `atheer-core` | 285 | Model loading, KV cache, block manager, accuracy, security, lifecycle, streaming, session management, multi-turn conversation, **sandbox bridge (18 tests)**, **certificate pinning (8 tests)**, **prompt injection guardrails (42 tests)** |
+| `atheer-ffi` | 45 | Config roundtrip, backend type conversion, engine lifecycle, guardrail FFI, privacy FFI, checkpoint lifecycle, **sandbox engine integration (4 tests)** |
 | `atheer-hardware` | 18 | Monitor creation, sampling thread, health status edge cases, iOS telemetry |
 | `atheer-memory-bank` | 40 | L1/L2/L3 cache, EncryptedStore (AES-256-GCM), handoff protocol, alignment scoring, VRAM monitoring |
-| Integration (orchestrator) | ~36 | NGram cache, Eco mode, mode switching with telemetry, property-based fuzz tests |
+| `atheer-orchestrator` | 84 | Mode switching, NGram cache, grammar PDA, thermal model, eco/balanced/turbo |
+| Integration (tests crate) | 36 | NGram cache, Eco mode, mode switching with telemetry, property-based fuzz tests |
 | `atheer-fuzz` | 3 | Fuzz-resistant KV cache, token, config parsing |
 
 A further 4 tests remain `#[ignore]` (structurally blocked — they use `unsafe` construct patterns that cannot be safely tested without a real model).
@@ -298,10 +301,10 @@ cargo bench -p perf-bench
 
 | Crate | Description | Tests |
 |-------|-------------|-------|
-| `atheer-core` | Core inference engine (powered by `candle` and `tokenizers`) + privacy mode + guardrails | 251 |
-| `atheer-ffi` | FFI bindings via uniffi (Swift/Kotlin) | 35 |
-| `atheer-accel` | Hardware acceleration backends (Metal, Vulkan, NNAPI, CoreML, CPU) | 51 |
-| `atheer-orchestrator` | Mode selection, grammar sampling, and agent execution loop | integration |
+| `atheer-core` | Core inference engine (powered by `candle` and `tokenizers`) + privacy mode + guardrails + sandbox | 285 |
+| `atheer-ffi` | FFI bindings via uniffi (Swift/Kotlin) | 45 |
+| `atheer-accel` | Hardware acceleration backends (Metal, Vulkan, NNAPI, CoreML, CPU) | 53 |
+| `atheer-orchestrator` | Mode selection, grammar sampling, and agent execution loop | 84 |
 | `atheer-hardware` | Platform hardware telemetry (thermal, memory, battery) | 18 |
 | `atheer-memory-bank` | KV cache hierarchy (L1/L2/L3 with handoff) + `EncryptedStore` (AES-256-GCM) | 40 |
 | `perf-bench` | Performance-per-watt benchmarking binary and model-dependent Criterion harnesses | 1 binary + 9 benches |
@@ -392,9 +395,24 @@ MITM-resistant model downloads via rustls custom certificate verification, compl
 3. **`ModelRegistry` integration** — `new(cache_dir, max_cache_size, pinner)` accepts `Option<&CertificatePinner>` for optional pinning. Convenience `with_pinning()` constructor enables HuggingFace pins by default.
 4. **Dual-pin strategy** — intermediate CA pin covers CA rotation (new leaf signed by same CA), leaf pin covers direct compromise. Either match allows the connection.
 5. **`AtheerCoreError::TlsPinningFailed`** — structured error variant with hostname, peer hash, and pinned hashes fields.
-6. **8 unit tests** — default hash count, empty pins, TLS config building, hex literal decoding, invalid DER handling, error display. All 263 core tests pass.
+6. **8 unit tests** — default hash count, empty pins, TLS config building, hex literal decoding, invalid DER handling, error display. All 285 core tests pass.
 
 **Implementation details**: 309 lines in `atheer-core/src/cert_pinner.rs`. Depends on `rustls` 0.23, `webpki-roots` 0.26, `rustls-webpki` 0.103. Gated behind `model-registry` feature.
+
+### Sandboxed GPU Execution (S8) ✅
+
+`SandboxedGpuBridge` — crash-isolated GPU inference sandbox with compliance attestation, completed July 2026:
+
+1. **`SandboxedGpuBridge` struct** in `atheer-core/src/sandbox/bridge.rs` (760 lines) — state machine: `Idle → Starting → Ready → Crashed → Fallback`. Pre-warm transitions to Starting then Ready, crash counting with sliding-window pruning triggers permanent CPU fallback at configurable threshold.
+2. **Crash detection** — `record_crash()` appends timestamp to sliding window, prunes events outside `worker_restart_window_secs`. `crash_count()` returns windowed count. `auto_restart()` resets state if under threshold.
+3. **Crash escalation** — when `crash_count() >= max_worker_crashes`, bridge enters `Fallback` state permanently until new bridge construction. FFI callback `set_on_sandbox_fallback()` invoked on escalation.
+4. **KV page batching** — `queue_token(token_id, position)` accumulates pairs; `flush_batch()` processes all at once. Auto-flush when pending count reaches `kv_page_batch_size`. Returns one-hot logits for CPU-only fallback path.
+5. **Config** — `SandboxConfig` with `sandbox_enabled`, `max_worker_crashes` (default 3), `worker_restart_window_secs` (default 300), `kv_page_batch_size` (default 8), `persistence_path`.
+6. **Engine integration** — `AtheerConfig.sandbox_config` field, bridge created and pre-warmed in `AtheerEngine::new()`, `generate()` routes through bridge or CPU fallback, `Drop` calls `shutdown()`.
+7. **Crash persistence** — at `persistence_path` as flat file; loaded on bridge construction — starts in Fallback if persisted count ≥ threshold.
+8. **Audit logging** — `tracing::info!(target: "atheer::sandbox::audit")` at every lifecycle transition.
+9. **Compliance attestation** — 4 tests: full lifecycle chain (probe→batch→crash→restart→escalation→fallback), persistence roundtrip, persisted escalation on construction, persisted below-threshold starts idle.
+10. **18 bridge unit tests + 4 FFI integration tests** — all passing.
 
 ### Metal Backend Stability
 

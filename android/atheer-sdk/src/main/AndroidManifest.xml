@@ -16,6 +16,13 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- GPU execution shard running in an isolated process -->
+        <service
+            android:name="com.atheer.ffi.sandbox.GpuExecutionShardService"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":atheer-gpu" />
     </application>
 
 </manifest>

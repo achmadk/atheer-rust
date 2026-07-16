@@ -16,6 +16,7 @@ members = [
     "tests/benches",
     "fuzz",
     "perf-bench",
+    "atheer-gpu-shard",
 ]
 
 [workspace.package]

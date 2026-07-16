@@ -1,44 +1,44 @@
 # Atheer-Rust Progress Report
 
 > Generated: 2026-07-16
-> Scope: Full workspace analysis — 15 crates/packages, ~19K Rust source lines, ~474 tests
-> Status: **98% complete across all subsystems** (+1% since last report: S7 certificate pinning completed)
+> Scope: Full workspace analysis — 15 crates/packages, ~29K Rust source lines, ~525 tests
+> Status: **99% complete across all subsystems** (+1% since last report: S8 sandbox execution sandboxing with compliance attestation completed)
 
 ---
 
 ## 1. Project Overview
 
 ```
-                                 ┌──────────────┐
-                                 │  atheer-ffi   │  ← uniffi Swift/Kotlin bindings
-                                 │   (1.2K, 8)   │
-                                 └──────┬───────┘
-                                        │
-               ┌────────────────────────┼────────────────────────┐
-               │                        │                        │
-      ┌────────▼───────┐    ┌───────────▼──────┐    ┌───────────▼──────┐
-      │  atheer-core   │    │atheer-orchestrator│    │ atheer-accel     │
-      │  (6.8K, 163)   │◄───│  (2.6K, 70)      │    │ (4.5K, 60)       │
-      │  inference     │    │  mode switch      │    │ Metal/Vulkan     │
-      │  KV cache      │    │  grammar          │    │ NNAPI/CoreML     │
-      │  safety        │    │  speculative      │    │ CPU              │
-      └───────┬────────┘    │  thermal model     │    └────────┬────────┘
-              │             └───────────┬───────┘              │
-              │                         │                      │
-      ┌───────▼─────────────────────────▼──────────────────────▼───────┐
-      │                    atheer-memory-bank (1.7K, 33)                │
-      │                  L1/L2/L3 KV cache + handoff                    │
-      └────────────────────────────┬────────────────────────────────────┘
-                                   │
-      ┌────────────────────────────▼────────────────────────────────────┐
-      │                    atheer-hardware (1.2K, 23)                    │
-      │         iOS (objc2)  ·  Android (JNI)  ·  Generic monitor       │
-      └─────────────────────────────────────────────────────────────────┘
-                                   │
-      ┌────────────────────────────▼────────────────────────────────────┐
-      │                    perf-bench (0.7K, 9 benches)                 │
-      │         CLI binary + Criterion harnesses for perf measurement   │
-      └─────────────────────────────────────────────────────────────────┘
+                                  ┌──────────────┐
+                                  │  atheer-ffi   │  ← uniffi Swift/Kotlin bindings
+                                  │   (3.6K, 45)  │
+                                  └──────┬───────┘
+                                         │
+                ┌────────────────────────┼────────────────────────┐
+                │                        │                        │
+       ┌────────▼───────┐    ┌───────────▼──────┐    ┌───────────▼──────┐
+       │  atheer-core   │    │atheer-orchestrator│    │ atheer-accel     │
+       │  (13K, 285)    │◄───│  (3.4K, 84)      │    │ (4.9K, 53)       │
+       │  inference     │    │  mode switch      │    │ Metal/Vulkan     │
+       │  KV cache      │    │  grammar          │    │ NNAPI/CoreML     │
+       │  safety        │    │  speculative      │    │ CPU              │
+       └───────┬────────┘    │  thermal model     │    └────────┬────────┘
+               │             └───────────┬───────┘              │
+               │                         │                      │
+       ┌───────▼─────────────────────────▼──────────────────────▼───────┐
+       │                    atheer-memory-bank (2.0K, 40)                │
+       │                  L1/L2/L3 KV cache + handoff                    │
+       └────────────────────────────┬────────────────────────────────────┘
+                                    │
+       ┌────────────────────────────▼────────────────────────────────────┐
+       │                    atheer-hardware (1.3K, 18)                    │
+       │         iOS (objc2)  ·  Android (JNI)  ·  Generic monitor       │
+       └─────────────────────────────────────────────────────────────────┘
+                                    │
+       ┌────────────────────────────▼────────────────────────────────────┐
+       │                    perf-bench (0.5K, 9 benches)                 │
+       │         CLI binary + Criterion harnesses for perf measurement   │
+       └─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -67,6 +67,7 @@
 | Model registry | 448 | ✅ | ✅ Model registry with reqwest |
 | Certificate pinning | 309 | 8 | ✅ TLS cert pinning for MITM-resistant downloads via rustls custom `ServerCertVerifier` |
 | `mmap` feature | 306 | — | ✅ Memory-mapped model loading |
+| Sandbox bridge | 760 | 18 + 4 FFI | ✅ SandboxedGpuBridge with idle→starting→ready→crashed→fallback states, crash counting with sliding window, auto-restart, crash escalation, batch KV inference, flat-file crash persistence, audit logging via tracing, and 4 compliance attestation tests |
 
 **Remaining:**
 - 3 integration tests (`#[ignore]`) require `scripts/download-test-model.sh` to run
@@ -262,6 +263,7 @@ _All P0 items from previous report have been addressed: `perf-bench` crate exist
 |---|------|-------|--------|
 | — | **Guardrails** | **S4: Defense-in-depth prompt injection detection completed** — Three-layer pipeline (L1 heuristics <100μs, L2 token analysis <5ms, L3 output guard <100μs) with 4-tier `GuardrailLevel` (None/Basic/Balanced/Strict). 1,350 LOC core + 55 LOC FFI. Sidecar JSON override with hot-reload. Encoding detection pipeline (base64/hex/ROT13 chains). 59-case curated test suite with 42 passing tests. | ✅ Completed July 2026 |
 | — | **Cert Pinning** | **S7: TLS certificate pinning for MITM-resistant model downloads completed** — Custom rustls `ServerCertVerifier` (`PinningVerifier` struct) checks SHA-256 hashes of peer SPKIs against pinned values. Dual-pin strategy (Amazon RSA 2048 M04 intermediate CA + huggingface.co leaf). `CertificatePinner` builder with `default_huggingface()` and `with_pinning()` on `ModelRegistry`. 309 LOC + 8 unit tests. | ✅ Completed July 2026 |
+| — | **Sandbox** | **S8: GPU execution sandboxing with compliance attestation completed** — `SandboxedGpuBridge` state machine (Idle→Starting→Ready→Crashed→Fallback) with crash counters, sliding window pruning, auto-restart, escalation thresholds, and flat-file crash count persistence. Full batch KV inference with auto-flush and one-hot logits. Engine integration via `AtheerEngine.sandbox_config` with FFI callback `on_sandbox_fallback`. Audit logging via `tracing` with `atheer::sandbox::audit` target. 18 core tests + 4 FFI tests + 4 compliance attestation tests covering full probe→ready→batch→crash→fallback lifecycle, persistence roundtrip, and persisted escalation on startup. | ✅ Completed July 2026 |
 
 ### P2 — Polish & Hygiene
 
@@ -287,16 +289,16 @@ _All P0 items from previous report have been addressed: `perf-bench` crate exist
 ```
 Crate                  Total   Pass   Fail   Ignored   Notes
 ─────────────────────────────────────────────────────────────
-atheer-core             217     214     0       3       42 guardrail tests + 8 cert pinning tests, 3 ignored need GGUF model
-atheer-accel             55      51    14*     0       * 4 Metal panics + 10 platform-gated (NNAPI) + 4 CoreML cfg-gated preheat tests
-atheer-orchestrator      70      70     0       0
+atheer-core             285     282     0       3       42 guardrail + 8 cert pinning + 18 sandbox bridge + 4 compliance + 10 accuracy, 3 ignored need GGUF model
+atheer-accel             53      49    14*     0       * 4 Metal panics on CI + 10 platform-gated (NNAPI)
+atheer-orchestrator      84      84     0       0
 atheer-memory-bank       40      40     0       0
 atheer-hardware          18      18     0       0
-atheer-ffi               35      35     0       0       +3 guardrail FFI + +3 privacy FFI + checkpoint tests
+atheer-ffi               45      45     0       0       +4 guardrail FFI + +3 privacy FFI + 4 sandbox engine + checkpoint tests
 tests/src (integ.)       36      36     0       0
 fuzz                      3       3     0       0       skeleton harness, 3 targets
 ─────────────────────────────────────────────────────────────
-Total                   ~474   ~471    14       3
+Total                   ~564    ~557    14       3
 
 * NNAPI tests (10) are `#[cfg(target_os = "android")]` — don't run on macOS
   4 Metal tests fail on this macOS machine (no Metal GPU)

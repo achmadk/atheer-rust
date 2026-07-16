@@ -591,14 +591,39 @@ impl AccelBackend for NnapiBackend {
     }
 
     #[cfg(test)]
-    fn forward(&self, input_ids: &[u32], _positions: &[usize]) -> Result<AccelResult> {
+    fn forward(&self, input_ids: &[u32], positions: &[usize]) -> Result<AccelResult> {
+        // Validate input parameters before GPU/NPU dispatch (T1.2)
+        let batch_size = input_ids.len();
+        if batch_size == 0 {
+            return Err(crate::AccelError::TensorValidationFailed(
+                "input_ids must not be empty".to_string(),
+            ));
+        }
+        if !positions.is_empty() && positions.len() != batch_size {
+            return Err(crate::AccelError::TensorValidationFailed(format!(
+                "positions length {} does not match input_ids length {}",
+                positions.len(),
+                batch_size,
+            )));
+        }
+
         let start = Instant::now();
         let vocab_size = 50257;
 
-        match &self.executor {
+        // Wrap execution in timeout detection (T1.5)
+        let timed_out = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let timed_out_clone = timed_out.clone();
+        let timeout_ms: u64 = 30_000;
+
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(timeout_ms));
+            timed_out_clone.store(true, std::sync::atomic::Ordering::Release);
+        });
+
+        let result = match &self.executor {
             Some(executor) => {
-                let result = executor.forward(input_ids, vocab_size);
-                match result {
+                let res = executor.forward(input_ids, vocab_size);
+                match res {
                     Ok(r) => Ok(r),
                     Err(e) => {
                         tracing::warn!("NNAPI forward failed: {e}, using CPU fallback");
@@ -610,7 +635,13 @@ impl AccelBackend for NnapiBackend {
                 tracing::trace!("NNAPI not available, using CPU fallback");
                 fallback_forward(input_ids, vocab_size, start)
             }
+        };
+
+        if timed_out.load(std::sync::atomic::Ordering::Acquire) {
+            return Err(crate::AccelError::GpuTimeout(timeout_ms));
         }
+
+        result
     }
 
     #[cfg(not(test))]

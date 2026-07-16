@@ -14,6 +14,8 @@ android {
         versionCode = 1
         versionName = "0.1.0"
 
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
         ndk {
             abiFilters += listOf("arm64-v8a")
         }
@@ -33,6 +35,16 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
+    buildFeatures {
+        aidl = true
+    }
+
+    sourceSets {
+        getByName("main") {
+            aidl.srcDirs("../../aidl")
+        }
+    }
 }
 
 kotlin {
@@ -43,4 +55,9 @@ kotlin {
 
 dependencies {
     implementation(files("src/main/jniLibs/arm64-v8a/libatheer_ffi.so"))
+
+    // AndroidX Test (instrumentation tests)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    androidTestImplementation(libs.androidx.test.espresso.core)
 }

@@ -61,6 +61,19 @@ pub struct AtheerConfig {
     pub guardrail_patterns_path: Option<String>,
     /// Additional custom patterns appended to the guardrail pattern set.
     pub guardrail_custom_patterns: Vec<String>,
+    /// GPU fence timeout in milliseconds. When set, GPU dispatches that exceed
+    /// this duration are treated as hung and trigger a crash/fallback.
+    /// Default (None) means no timeout enforcement.
+    pub gpu_fence_timeout_ms: Option<u64>,
+    /// Enable GPU execution sandbox via Android IsolatedService.
+    /// Default true on Android, false on other platforms.
+    pub sandbox_enabled: bool,
+    /// Maximum worker process crashes before permanent CPU fallback (default: 3).
+    pub max_worker_crashes: u32,
+    /// Sliding window in seconds for crash counting (default: 300).
+    pub worker_restart_window_secs: u64,
+    /// Number of KV pages to accumulate before sending as a single batch (default: 8).
+    pub kv_page_batch_size: u32,
 }
 
 impl Default for AtheerConfig {
@@ -95,6 +108,11 @@ impl Default for AtheerConfig {
             guardrail_level: None,
             guardrail_patterns_path: None,
             guardrail_custom_patterns: Vec::new(),
+            gpu_fence_timeout_ms: None,
+            sandbox_enabled: cfg!(target_os = "android"),
+            max_worker_crashes: 3,
+            worker_restart_window_secs: 300,
+            kv_page_batch_size: 8,
         }
     }
 }

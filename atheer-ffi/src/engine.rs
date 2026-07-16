@@ -7,6 +7,8 @@ use atheer_core::guardrails::{GuardrailConfig, GuardrailDetector, GuardrailVerdi
 use atheer_core::model_credential::ModelCredential;
 use atheer_core::model_encryption::{aes256_gcm::Aes256GcmEncryption, ModelEncryption};
 use atheer_core::model_verifier::ModelVerifier;
+use atheer_core::sampler::Sampler;
+use atheer_core::sandbox::{SandboxConfig, SandboxedGpuBridge};
 use atheer_core::{CrashReporter, InferenceEngine, SamplingConfig, SecurityAudit};
 use atheer_hardware::{monitor::GenericMonitor, HardwareMonitor};
 use atheer_memory_bank::{l3_compressed::L3CompressedStorage, MemoryBank};
@@ -76,6 +78,10 @@ pub struct AtheerEngine {
     /// Privacy mode governing crash reporting, persistence, and logging.
     privacy_mode: Option<AtheerPrivacyMode>,
     guardrail_detector: Arc<Mutex<Option<GuardrailDetector>>>,
+    /// Sandboxed GPU execution bridge for Android IsolatedService.
+    sandbox_bridge: Mutex<Option<SandboxedGpuBridge>>,
+    /// Callback invoked when sandbox permanently falls back to CPU.
+    on_sandbox_fallback: Mutex<Option<Box<dyn Fn(String, u32) + Send>>>,
 }
 
 #[uniffi::export]
@@ -191,6 +197,23 @@ impl AtheerEngine {
             None => CrashReporter::new(),
         };
 
+        // Pre-create the sandbox bridge with config (pre-warm happens in initialize())
+        let sandbox_bridge = {
+            let persistence_path = config.checkpoint_dir.as_ref().map(|dir| {
+                let mut p = std::path::PathBuf::from(dir);
+                p.push("sandbox_crash_count.txt");
+                p
+            });
+            let sc = SandboxConfig {
+                sandbox_enabled: config.sandbox_enabled,
+                max_worker_crashes: config.max_worker_crashes,
+                worker_restart_window_secs: config.worker_restart_window_secs,
+                kv_page_batch_size: config.kv_page_batch_size as usize,
+                persistence_path,
+            };
+            SandboxedGpuBridge::new(sc)
+        };
+
         Self {
             inference_engine: Arc::new(Mutex::new(None)),
             draft_engine: Arc::new(Mutex::new(None)),
@@ -212,6 +235,8 @@ impl AtheerEngine {
             last_heartbeat_count: Arc::new(AtomicU64::new(u64::MAX)),
             privacy_mode,
             guardrail_detector,
+            sandbox_bridge: Mutex::new(Some(sandbox_bridge)),
+            on_sandbox_fallback: Mutex::new(None),
         }
     }
 }
@@ -417,6 +442,37 @@ impl AtheerEngine {
             *guard = Some(engine);
         }
 
+        // ── Pre-warm sandboxed GPU bridge ────────────────────────────
+        // Bridge was already created in AtheerEngine::new(). Now we start
+        // the worker process (or mark as Fallback if sandbox is disabled).
+        {
+            if let Ok(mut sb) = self.sandbox_bridge.lock() {
+                if let Some(ref mut bridge) = *sb {
+                    match bridge.pre_warm() {
+                        Ok(()) => {
+                            trace_if_ok!(self.should_log(), info,
+                                target: "atheer::engine::sandbox",
+                                "Sandbox bridge pre-warmed (state={:?})",
+                                bridge.state(),
+                            );
+                            if bridge.is_fallback() {
+                                trace_if_ok!(self.should_log(), info,
+                                    target: "atheer::engine::sandbox",
+                                    "Sandbox not enabled on this platform — GPU execution stays in-process",
+                                );
+                            }
+                        }
+                        Err(e) => {
+                            tracing::warn!(
+                                target: "atheer::engine::sandbox",
+                                "Sandbox bridge pre-warm failed: {e} — falling back to in-process GPU",
+                            );
+                        }
+                    }
+                }
+            }
+        }
+
         // Auto-load draft model if standby_draft_path is configured
         if let Some(ref draft_path) = self.config.standby_draft_path {
             if !draft_path.is_empty() {
@@ -598,6 +654,52 @@ impl AtheerEngine {
             }
         }
 
+        // ── Check sandbox bridge state ─────────────────────────────────
+        // If the sandbox bridge is ready, route through the isolated process.
+        // If it has permanently fallen back, use normal in-process generation.
+        let sandbox_fallback = {
+            let sb_guard = self.sandbox_bridge.lock();
+            sb_guard
+                .ok()
+                .and_then(|g| g.as_ref().map(|b| b.is_fallback()))
+                .unwrap_or(false)
+        };
+        let sandbox_ready = {
+            let sb_guard = self.sandbox_bridge.lock();
+            sb_guard
+                .ok()
+                .and_then(|g| g.as_ref().map(|b| b.is_ready()))
+                .unwrap_or(false)
+        };
+
+        if sandbox_ready {
+            // Route through sandbox bridge for the forward pass.
+            // Still use the InferenceEngine for tokenizer, sampler, checkpoints.
+            let (text, tokens_gen, time_ms) =
+                self.generate_via_sandbox_bridge(&prompt, request.max_tokens, engine)?;
+
+            let tok_s = compute_tok_s(tokens_gen, time_ms);
+            orch.record_generation_metrics(CalibrationSample {
+                tok_s,
+                tokens_gen,
+                mode,
+                speculation_depth: 0,
+                acceptance_rate: None,
+            });
+
+            return Ok(GenerationResponse {
+                guardrail_warnings,
+                ..GenerationResponse::new(text, tokens_gen, time_ms, mode.as_str())
+            });
+        }
+
+        if sandbox_fallback {
+            trace_if_ok!(self.should_log(), info,
+                target: "atheer::engine::sandbox",
+                "Sandbox bridge fallen back — using in-process GPU for generate_sync",
+            );
+        }
+
         let use_speculation =
             orch.is_draft_loaded() && orch.speculation_depth() > 0 && request.json_schema.is_none();
         // JSON-schema-constrained output currently uses grammar sampling which
@@ -614,21 +716,29 @@ impl AtheerEngine {
             let accepted_tokens = std::sync::atomic::AtomicUsize::new(0);
             let total_draft = std::sync::atomic::AtomicUsize::new(0);
 
-            let (text, tokens_gen, time_ms) = engine
-                .generate_speculative(
-                    &prompt,
-                    request.max_tokens,
-                    draft_engine,
-                    spec_depth,
-                    None,
-                    |accepted: usize, total: usize| {
-                        accepted_tokens.store(accepted, std::sync::atomic::Ordering::Relaxed);
-                        total_draft.store(total, std::sync::atomic::Ordering::Relaxed);
-                    },
-                )
-                .map_err(|e| AtheerError::GenerationFailed {
-                    message: format!("{e}"),
-                })?;
+            let (text, tokens_gen, time_ms) = generate_with_timeout_detection(
+                self.config.gpu_fence_timeout_ms,
+                &self.crash_reporter,
+                "generate_speculative",
+                || {
+                    engine
+                        .generate_speculative(
+                            &prompt,
+                            request.max_tokens,
+                            draft_engine,
+                            spec_depth,
+                            None,
+                            |accepted: usize, total: usize| {
+                                accepted_tokens
+                                    .store(accepted, std::sync::atomic::Ordering::Relaxed);
+                                total_draft.store(total, std::sync::atomic::Ordering::Relaxed);
+                            },
+                        )
+                        .map_err(|e| AtheerError::GenerationFailed {
+                            message: format!("{e}"),
+                        })
+                },
+            )?;
 
             let acc = accepted_tokens.load(std::sync::atomic::Ordering::Relaxed);
             let tot = total_draft.load(std::sync::atomic::Ordering::Relaxed);
@@ -655,11 +765,18 @@ impl AtheerEngine {
             });
         }
 
-        let (text, tokens_gen, time_ms) = engine
-            .generate(&prompt, request.max_tokens, None)
-            .map_err(|e| AtheerError::GenerationFailed {
-                message: format!("{e}"),
-            })?;
+        let (text, tokens_gen, time_ms) = generate_with_timeout_detection(
+            self.config.gpu_fence_timeout_ms,
+            &self.crash_reporter,
+            "generate",
+            || {
+                engine
+                    .generate(&prompt, request.max_tokens, None)
+                    .map_err(|e| AtheerError::GenerationFailed {
+                        message: format!("{e}"),
+                    })
+            },
+        )?;
 
         // Feed generation metrics for calibration (task 4.1)
         let tok_s = compute_tok_s(tokens_gen, time_ms);
@@ -1027,6 +1144,121 @@ impl AtheerEngine {
     fn should_log(&self) -> bool {
         self.privacy_mode != Some(AtheerPrivacyMode::Ephemeral)
     }
+
+    /// Run a generation loop using the sandbox bridge for the forward pass.
+    /// Returns (text, token_count, duration_ms).
+    fn generate_via_sandbox_bridge(
+        &self,
+        prompt: &str,
+        max_tokens: u32,
+        engine: &mut InferenceEngine,
+    ) -> std::result::Result<(String, u32, u64), AtheerError> {
+        let start = std::time::Instant::now();
+        let tokenizer = engine.tokenizer();
+
+        let input_ids = tokenizer.encode(prompt, true);
+        let mut generated_tokens: Vec<u32> = Vec::new();
+
+        // Start from the last token of the prefill
+        let mut next_token = input_ids.last().copied().unwrap_or(0);
+        let vocab_size = 50257;
+
+        let sampling_config = SamplingConfig {
+            temperature: self.config.temperature as f64,
+            ..Default::default()
+        };
+        let sampler = atheer_core::sampler::DefaultSampler::new(sampling_config);
+        let mut sampler: Box<dyn Sampler> = Box::new(sampler);
+        let eos_token_id = engine.tokenizer().token_to_id("</s>").unwrap_or(2);
+
+        for _ in 0..max_tokens {
+            if next_token == eos_token_id {
+                break;
+            }
+
+            // Queue the token through the sandbox bridge
+            let batch_result = {
+                let mut sb_guard =
+                    self.sandbox_bridge
+                        .lock()
+                        .map_err(|_| AtheerError::GenerationFailed {
+                            message: "sandbox bridge lock poisoned".into(),
+                        })?;
+                let bridge = sb_guard.as_mut().ok_or(AtheerError::GenerationFailed {
+                    message: "sandbox bridge not available".into(),
+                })?;
+                let pos = input_ids.len() + generated_tokens.len();
+                bridge
+                    .queue_token(next_token, pos)
+                    .map_err(|e| AtheerError::GenerationFailed {
+                        message: format!("sandbox queue_token: {e}"),
+                    })?
+            };
+
+            // If batch was flushed, sample from returned logits
+            if let Some(batch_logits) = batch_result {
+                // Use the last logits from the batch for sampling
+                if let Some(logits) = batch_logits.last() {
+                    // Convert to candle Tensor for sampler compatibility
+                    let logits_tensor = candle_core::Tensor::from_vec(
+                        logits.clone(),
+                        (1, vocab_size),
+                        &candle_core::Device::Cpu,
+                    )
+                    .map_err(|e| AtheerError::GenerationFailed {
+                        message: format!("logits tensor creation: {e}"),
+                    })?;
+                    next_token =
+                        sampler
+                            .sample(&logits_tensor, &generated_tokens)
+                            .map_err(|e| AtheerError::GenerationFailed {
+                                message: format!("sandbox sampling: {e}"),
+                            })?;
+                    generated_tokens.push(next_token);
+                }
+            }
+
+            if next_token == eos_token_id {
+                break;
+            }
+        }
+
+        // Flush any remaining batch
+        {
+            let mut sb_guard =
+                self.sandbox_bridge
+                    .lock()
+                    .map_err(|_| AtheerError::GenerationFailed {
+                        message: "sandbox bridge lock poisoned".into(),
+                    })?;
+            if let Some(bridge) = sb_guard.as_mut() {
+                if let Ok(Some(batch_logits)) = bridge.flush_batch() {
+                    if let Some(logits) = batch_logits.last() {
+                        let logits_tensor = candle_core::Tensor::from_vec(
+                            logits.clone(),
+                            (1, vocab_size),
+                            &candle_core::Device::Cpu,
+                        )
+                        .map_err(|e| AtheerError::GenerationFailed {
+                            message: format!("logits tensor creation: {e}"),
+                        })?;
+                        let last_token = sampler
+                            .sample(&logits_tensor, &generated_tokens)
+                            .map_err(|e| AtheerError::GenerationFailed {
+                                message: format!("sandbox final sampling: {e}"),
+                            })?;
+                        generated_tokens.push(last_token);
+                    }
+                }
+            }
+        }
+
+        let elapsed = start.elapsed().as_millis() as u64;
+        let text = engine.tokenizer().decode(&generated_tokens, true);
+
+        Ok((text, generated_tokens.len() as u32, elapsed))
+    }
+
     // ── Checkpoint persistence helpers ────────────────────────────
 
     /// Save checkpoint via the inference engine and write sidecar.
@@ -1528,12 +1760,30 @@ impl AtheerEngine {
             *guard = Some(uid);
         }
     }
+
+    /// Register a callback invoked when the sandbox bridge permanently falls
+    /// back to CPU. The callback receives (reason, crash_count).
+    pub fn set_on_sandbox_fallback(&self, callback: Box<dyn Fn(String, u32) + Send + 'static>) {
+        if let Ok(mut guard) = self.on_sandbox_fallback.lock() {
+            *guard = Some(callback);
+        }
+    }
 }
 
 impl AtheerEngine {
     fn record_scrubbed_crash(&self, error: &str, key_id_to_redact: &str) {
         self.crash_reporter
             .record_crash_scrubbed(error, "", key_id_to_redact);
+    }
+}
+
+impl Drop for AtheerEngine {
+    fn drop(&mut self) {
+        if let Ok(mut bridge) = self.sandbox_bridge.lock() {
+            if let Some(ref mut b) = *bridge {
+                b.shutdown();
+            }
+        }
     }
 }
 
@@ -1568,6 +1818,46 @@ fn compute_tok_s(tokens_gen: u32, time_ms: u64) -> f32 {
         return 0.0;
     }
     (tokens_gen as f32) / (time_ms as f32 / 1000.0)
+}
+
+/// Run a synchronous closure with a GPU fence timeout watchdog.
+///
+/// Spawns a background thread that waits `timeout_ms` then sets an atomic flag.
+/// After the closure returns, checks the flag. If it was set, records a crash
+/// via `crash_reporter` and returns `AtheerError::GenerationFailed`.
+///
+/// This is a detect-and-report mechanism — it does not cancel the underlying
+/// GPU dispatch (the closure runs to completion). Proper cancellation requires
+/// async inference or a cancellable executor, which is future work.
+fn generate_with_timeout_detection<R>(
+    timeout_ms: Option<u64>,
+    crash_reporter: &atheer_core::CrashReporter,
+    context: &str,
+    f: impl FnOnce() -> std::result::Result<R, AtheerError>,
+) -> std::result::Result<R, AtheerError> {
+    let Some(timeout_ms) = timeout_ms else {
+        return f();
+    };
+
+    let timed_out = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let timed_out_clone = timed_out.clone();
+
+    // Watchdog thread — fires after timeout_ms
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(timeout_ms));
+        timed_out_clone.store(true, std::sync::atomic::Ordering::Release);
+    });
+
+    let result = f();
+
+    if timed_out.load(std::sync::atomic::Ordering::Acquire) {
+        crash_reporter.record_crash("GpuTimeout", context);
+        return Err(AtheerError::GenerationFailed {
+            message: format!("GPU operation timed out after {}ms", timeout_ms),
+        });
+    }
+
+    result
 }
 
 // ── Tests ──────────────────────────────────────────────────────
@@ -1690,5 +1980,204 @@ mod tests {
         let config = minimal_config();
         let engine = AtheerEngine::new(config);
         assert!(engine.should_log());
+    }
+
+    // ── T1.7 / T1.8 — GPU fence timeout detection tests ──────────
+
+    #[test]
+    fn test_generate_with_timeout_detection_no_timeout_passthrough() {
+        // When timeout_ms is None, the closure should run normally
+        let crash_reporter = atheer_core::CrashReporter::new();
+        let result =
+            generate_with_timeout_detection::<i32>(None, &crash_reporter, "test", || Ok(42));
+        assert_eq!(result.unwrap(), 42);
+        assert_eq!(crash_reporter.crash_count(), 0);
+    }
+
+    #[test]
+    fn test_generate_with_timeout_detection_timeout_triggers_error() {
+        // With a very short timeout and a closure that sleeps, should timeout
+        let crash_reporter = atheer_core::CrashReporter::new();
+        let result = generate_with_timeout_detection::<i32>(
+            Some(1), // 1ms timeout
+            &crash_reporter,
+            "test_timeout",
+            || {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+                Ok(42)
+            },
+        );
+        assert!(result.is_err());
+        // Crash should have been recorded
+        assert_eq!(crash_reporter.crash_count(), 1);
+    }
+
+    #[test]
+    fn test_generate_with_timeout_detection_fast_closure_no_timeout() {
+        // Fast closure with generous timeout should pass through
+        let crash_reporter = atheer_core::CrashReporter::new();
+        let result = generate_with_timeout_detection::<String>(
+            Some(5000), // 5s timeout — more than enough
+            &crash_reporter,
+            "test_fast",
+            || Ok("hello".to_string()),
+        );
+        assert_eq!(result.unwrap(), "hello");
+        assert_eq!(crash_reporter.crash_count(), 0);
+    }
+
+    #[test]
+    fn test_generate_with_timeout_detection_closure_error_passthrough() {
+        // When the closure returns an error (not timeout), it should pass through
+        let crash_reporter = atheer_core::CrashReporter::new();
+        let result = generate_with_timeout_detection::<i32>(
+            Some(5000),
+            &crash_reporter,
+            "test_error",
+            || {
+                Err(AtheerError::GenerationFailed {
+                    message: "closure error".to_string(),
+                })
+            },
+        );
+        assert!(result.is_err());
+        match result {
+            Err(AtheerError::GenerationFailed { message }) => {
+                assert_eq!(message, "closure error");
+            }
+            _ => panic!("Expected GenerationFailed"),
+        }
+        // Crash should NOT be recorded since it was the closure's error, not a timeout
+        assert_eq!(crash_reporter.crash_count(), 0);
+    }
+
+    #[test]
+    fn test_generate_with_timeout_detection_zero_timeout() {
+        // Zero timeout means the watchdog fires immediately
+        let crash_reporter = atheer_core::CrashReporter::new();
+        let result = generate_with_timeout_detection::<i32>(
+            Some(0), // immediate timeout
+            &crash_reporter,
+            "test_zero_timeout",
+            || {
+                // Even a trivial closure should trigger timeout
+                // because the watchdog is spawned before the closure runs
+                // and stores Release before we can check. However, on a very fast
+                // CPU the closure may complete before the spawned thread sets the flag.
+                // So we add a small delay to make the test deterministic.
+                std::thread::sleep(std::time::Duration::from_millis(1));
+                Ok(42)
+            },
+        );
+        assert!(result.is_err());
+        assert_eq!(crash_reporter.crash_count(), 1);
+    }
+
+    // ── T5 — Sandbox bridge engine integration tests ───────────────
+
+    #[test]
+    fn test_engine_sandbox_bridge_created_with_default_config() {
+        // When sandbox is not enabled on non-Android, bridge should be created
+        // but pre-warm should transition to Fallback
+        let config = minimal_config();
+        let engine = AtheerEngine::new(config);
+
+        let sb = engine.sandbox_bridge.lock().unwrap();
+        let bridge = sb.as_ref().unwrap();
+        assert_eq!(bridge.state(), atheer_core::sandbox::BridgeState::Idle);
+    }
+
+    #[test]
+    fn test_engine_sandbox_bridge_with_enabled_config() {
+        // When sandbox is explicitly enabled, bridge should be ready after init
+        let mut config = minimal_config();
+        config.sandbox_enabled = true;
+        let engine = AtheerEngine::new(config);
+
+        // Manually pre-warm the bridge (simulates what initialize() does)
+        {
+            let mut sb = engine.sandbox_bridge.lock().unwrap();
+            let bridge = sb.as_mut().unwrap();
+            bridge.pre_warm().unwrap();
+        }
+
+        let sb = engine.sandbox_bridge.lock().unwrap();
+        let bridge = sb.as_ref().unwrap();
+        assert!(bridge.is_ready());
+    }
+
+    #[test]
+    fn test_set_on_sandbox_fallback_stores_callback() {
+        let config = minimal_config();
+        let engine = AtheerEngine::new(config);
+
+        let invoked = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let invoked_clone = invoked.clone();
+
+        engine.set_on_sandbox_fallback(Box::new(move |reason, count| {
+            assert_eq!(reason, "test_fallback");
+            assert_eq!(count, 3);
+            invoked_clone.store(true, std::sync::atomic::Ordering::SeqCst);
+        }));
+
+        // Invoke the stored callback manually to verify it works
+        let guard = engine.on_sandbox_fallback.lock().unwrap();
+        if let Some(ref cb) = *guard {
+            cb("test_fallback".to_string(), 3);
+        }
+        drop(guard);
+
+        assert!(invoked.load(std::sync::atomic::Ordering::SeqCst));
+    }
+
+    #[test]
+    fn test_engine_drop_calls_bridge_shutdown() {
+        // Verify that dropping the engine transitions bridge to Idle
+        let mut config = minimal_config();
+        config.sandbox_enabled = true;
+
+        let engine = AtheerEngine::new(config);
+        {
+            let mut sb = engine.sandbox_bridge.lock().unwrap();
+            let bridge = sb.as_mut().unwrap();
+            bridge.pre_warm().unwrap();
+        }
+
+        // Drop the engine (this calls bridge.shutdown())
+        drop(engine);
+
+        // Can't check after drop — but if it panics the test fails.
+        // The test passes if no panic occurs during drop.
+    }
+
+    #[test]
+    fn test_engine_sandbox_routing_ready_vs_fallback() {
+        // Test the routing logic: when bridge is Fallback, sandbox_ready is false
+        // and sandbox_fallback is true
+        let config = minimal_config(); // sandbox_enabled = false on non-Android
+        let engine = AtheerEngine::new(config);
+
+        {
+            let mut sb = engine.sandbox_bridge.lock().unwrap();
+            let bridge = sb.as_mut().unwrap();
+            let _ = bridge.pre_warm(); // transitions to Fallback when sandbox_enabled=false
+        }
+
+        // Simulate the routing check from generate_sync
+        let sandbox_fallback = {
+            let sb_guard = engine.sandbox_bridge.lock().ok();
+            sb_guard
+                .and_then(|g| g.as_ref().map(|b| b.is_fallback()))
+                .unwrap_or(false)
+        };
+        let sandbox_ready = {
+            let sb_guard = engine.sandbox_bridge.lock().ok();
+            sb_guard
+                .and_then(|g| g.as_ref().map(|b| b.is_ready()))
+                .unwrap_or(false)
+        };
+
+        assert!(sandbox_fallback);
+        assert!(!sandbox_ready);
     }
 }

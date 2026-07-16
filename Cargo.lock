@@ -349,6 +349,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "atheer-gpu-shard"
+version = "0.1.0"
+dependencies = [
+ "ash",
+ "atheer-accel",
+ "jni",
+ "serde",
+ "serde_json",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "atheer-hardware"
 version = "0.1.0"
 dependencies = [
