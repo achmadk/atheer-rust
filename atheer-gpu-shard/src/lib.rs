@@ -9,8 +9,8 @@
 //!
 //! All functions are JNI-compatible (`extern "system" fn` with `JNIEnv`).
 
-use jni::objects::{JClass, JLongArray, JObject, JPrimitiveArray, JString, JValue};
-use jni::sys::{jboolean, jint, jlong, JNI_TRUE};
+use jni::objects::{JClass, JLongArray, ReleaseMode};
+use jni::sys::{jboolean, jint, jlong, JNI_FALSE, JNI_TRUE};
 use jni::JNIEnv;
 use std::sync::Mutex;
 use tracing::{error, info};
@@ -32,7 +32,7 @@ static SHARD: Mutex<Option<GpuShardContext>> = Mutex::new(None);
 /// Returns an opaque handle (currently always 1 on success, 0 on failure).
 #[no_mangle]
 pub extern "system" fn Java_com_atheer_ffi_sandbox_GpuExecutionShardService_nativeInit(
-    mut env: JNIEnv,
+    _env: JNIEnv,
     _class: JClass,
     model_fd: jint,
     model_size: jlong,
@@ -66,7 +66,7 @@ pub extern "system" fn Java_com_atheer_ffi_sandbox_GpuExecutionShardService_nati
 /// Forwards a known tensor through the GPU and verifies the output.
 #[no_mangle]
 pub extern "system" fn Java_com_atheer_ffi_sandbox_GpuExecutionShardService_nativeProbe(
-    mut env: JNIEnv,
+    _env: JNIEnv,
     _class: JClass,
     handle: jlong,
 ) -> jboolean {
@@ -98,19 +98,17 @@ pub extern "system" fn Java_com_atheer_ffi_sandbox_GpuExecutionShardService_nati
     token_ids: JLongArray,
     positions: JLongArray,
 ) -> Vec<Vec<f32>> {
-    let tokens: Vec<u32> = env
-        .get_array_elements(&token_ids.into())
-        .unwrap_or_default()
-        .iter()
-        .map(|&v| v as u32)
-        .collect();
+    let tokens: Vec<u32> = unsafe {
+        env.get_array_elements(&token_ids.into(), ReleaseMode::NoCopyBack)
+            .map(|elements| elements.iter().map(|&v| v as u32).collect())
+            .unwrap_or_default()
+    };
 
-    let pos: Vec<usize> = env
-        .get_array_elements(&positions.into())
-        .unwrap_or_default()
-        .iter()
-        .map(|&v| v as usize)
-        .collect();
+    let pos: Vec<usize> = unsafe {
+        env.get_array_elements(&positions.into(), ReleaseMode::NoCopyBack)
+            .map(|elements| elements.iter().map(|&v| v as usize).collect())
+            .unwrap_or_default()
+    };
 
     info!(
         "nativeBatch: handle={handle}, tokens={}, pos={}",
@@ -130,9 +128,9 @@ pub extern "system" fn Java_com_atheer_ffi_sandbox_GpuExecutionShardService_nati
 /// Get worker diagnostics JSON.
 #[no_mangle]
 pub extern "system" fn Java_com_atheer_ffi_sandbox_GpuExecutionShardService_nativeGetInfo(
-    mut env: JNIEnv,
+    env: JNIEnv,
     _class: JClass,
-    handle: jlong,
+    _handle: jlong,
 ) -> jni::sys::jstring {
     let shard = SHARD.lock().unwrap();
     let info = match shard.as_ref() {
@@ -153,7 +151,7 @@ pub extern "system" fn Java_com_atheer_ffi_sandbox_GpuExecutionShardService_nati
 /// Release GPU resources.
 #[no_mangle]
 pub extern "system" fn Java_com_atheer_ffi_sandbox_GpuExecutionShardService_nativeShutdown(
-    mut env: JNIEnv,
+    _env: JNIEnv,
     _class: JClass,
     handle: jlong,
 ) {
@@ -164,7 +162,7 @@ pub extern "system" fn Java_com_atheer_ffi_sandbox_GpuExecutionShardService_nati
 
 // ─── Internal helpers ─────────────────────────────────────────────────────
 
-fn initialize_backend(model_fd: jint, _model_size: jlong) -> Result<String, String> {
+fn initialize_backend(_model_fd: jint, _model_size: jlong) -> Result<String, String> {
     #[cfg(target_os = "android")]
     {
         // Probe NNAPI first, fall back to Vulkan
@@ -196,7 +194,7 @@ fn initialize_backend(model_fd: jint, _model_size: jlong) -> Result<String, Stri
     }
 }
 
-fn run_probe(handle: jlong) -> Result<bool, String> {
+fn run_probe(_handle: jlong) -> Result<bool, String> {
     let shard = SHARD.lock().map_err(|e| format!("Mutex poisoned: {e}"))?;
     if shard.is_none() {
         return Err("Shard not initialized".to_string());
@@ -219,9 +217,9 @@ fn run_probe(handle: jlong) -> Result<bool, String> {
 }
 
 fn run_batch(
-    handle: jlong,
+    _handle: jlong,
     token_ids: &[u32],
-    positions: &[usize],
+    _positions: &[usize],
 ) -> Result<Vec<Vec<f32>>, String> {
     let shard = SHARD.lock().map_err(|e| format!("Mutex poisoned: {e}"))?;
     if shard.is_none() {
