@@ -79,7 +79,7 @@
 |---------|-------|-------|--------|
 | CPU (fallback) | 113 | — | ✅ One-hot logits |
 | Metal (iOS/macOS) | 164 | 4 tests | ⚠️ 4 tests panic on empty device list (`swap_remove` — upstream candle-core bug) |
-| Vulkan (Android) | 1,120 | — | ⚠️ 2 shaders compile (GEMV, Attention); build.rs gated |
+| Vulkan (Android) | ~800 | 14 unit tests (Android only) | ✅ Relocated from `atheer-accel` into `candle-core`; F16 GEMM + dequant + elementwise + reduce shaders; dequant-to-F16 wedge for quantized matmul |
 | NNAPI (Android) | 1,455 + 553 | 17 | ✅ Full graph builder, compiler, executor |
 | CoreML/ANE (macOS) | ~720 | 20 | ✅ All tests pass — background ANE pre-heat added |
 | Backend manager | 227 | ✅ | ✅ Probe-order routing |
@@ -276,7 +276,7 @@ _All P0 items from previous report have been addressed: `perf-bench` crate exist
 | 12 | **Deps** | **`candle-coreml` pinned to commit SHA** — should tag after testing |
 | 13 | **Deps** | **`tools/gen-bindings` and `atheer-bindgen` overlap** — two binding generator crates, one dead |
 | 14 | **Testing** | **3 ignored accuracy tests** need real GGUF model to run |
-| 15 | **Testing** | **Vulkan backend has no unit tests** — only build-time validation |
+| 15 | **Testing** | ~~Vulkan backend has no unit tests~~ — ✅ 14 unit tests added (q4k dequant, F16 matmul, elementwise, reduce ops; Android-only) |
 | 16 | **Testing** | **NNAPI never tested on real Android device** — graph builder verified only |
 | 17 | **iOS** | **`ios/atheer_ffi.swift` may be stale** — generated from earlier build, no regen verification |
 | 18 | **Config** | **No `.gitignore` entries** for generated bindings, model files, or bench outputs |

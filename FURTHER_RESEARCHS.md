@@ -322,7 +322,7 @@ Architecture is strong (speculative decoding framework, NGram cache, per-op devi
 | P5 | **ANE model compilation at startup** | ✅ Completed — background thread loads .mlpackage and runs warm-up forward pass, atomically swapped via `Arc<OnceLock>`, triggered in `AtheerEngine::initialize()` | Background compilation thread pre-heats ANE, avoid cold-start latency | ✅ Completed |
 | P6 | **No baseline performance numbers** | All BENCHMARKS.md entries "TBD" | Run `perf-bench` on real hardware and populate | 🟠 High |
 | P7 | **No competitive benchmarks** | Whitepaper claims superiority over llama.cpp/MLC with zero comparison data | Run identical models on identical hardware | 🟠 High |
-| P8 | **Vulkan shaders unoptimized** | GEMV/attention shaders use basic int8 quantized multiply | Warp-level reductions, shared memory tiling, async compute overlap | 🟡 Medium |
+| P8 | ~~Vulkan shaders unoptimized~~ | ✅ Completed — F16 GEMM, q4_k_m dequant, elementwise (affine/silu/exp/add/mul/div), reduce (sum/max) shaders implemented in `candle-core/shaders/` via naga GLSL→SPIR-V; dequant-to-F16 wedge defers fused Q-kernels | Warp-level reductions, shared memory tiling, async compute overlap | ✅ Completed |
 | P9 | **Context window eviction naive** | `maybe_evict()` drops oldest turns and clears entire KV cache | Incremental eviction — only remove evicted turn's KV entries | 🟡 Medium |
 | P10 | **No WASM/WebGPU backend** | No browser deployment path | `AccelBackend` trait makes extensible | 🟡 Medium |
 

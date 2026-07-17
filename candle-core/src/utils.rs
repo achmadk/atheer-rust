@@ -20,6 +20,10 @@ pub fn has_mkl() -> bool {
     cfg!(feature = "mkl")
 }
 
+pub fn has_vulkan() -> bool {
+    cfg!(feature = "vulkan")
+}
+
 pub fn cuda_is_available() -> bool {
     cfg!(feature = "cuda")
 }
