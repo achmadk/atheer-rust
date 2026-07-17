@@ -6,12 +6,15 @@ use crate::VulkanError;
 use crate::{CpuStorage, DType, DeviceLocation, Result, Shape, VulkanStorage};
 use std::ffi::CString;
 use std::mem::ManuallyDrop;
+use std::sync::Arc;
 
 #[cfg(all(feature = "vulkan", target_os = "android"))]
 use ash::vk;
 
 #[cfg(all(feature = "vulkan", target_os = "android"))]
 use gpu_allocator::vulkan::*;
+#[cfg(all(feature = "vulkan", target_os = "android"))]
+use gpu_allocator::MemoryLocation;
 
 #[cfg(all(feature = "vulkan", target_os = "android"))]
 use super::VulkanError;
@@ -19,14 +22,19 @@ use super::VulkanError;
 #[cfg(all(feature = "vulkan", target_os = "android"))]
 pub struct VulkanDevice {
     ordinal: usize,
+    inner: Arc<VulkanDeviceInner>,
+}
+
+#[cfg(all(feature = "vulkan", target_os = "android"))]
+struct VulkanDeviceInner {
     entry: ash::Entry,
     instance: ash::Instance,
     device: ash::Device,
     physical_device: vk::PhysicalDevice,
-    queue: vk::Queue,
+    queue: std::sync::Mutex<vk::Queue>,
     queue_family_index: u32,
-    allocator: ManuallyDrop<Allocator>,
-    command_pool: vk::CommandPool,
+    allocator: std::sync::Mutex<ManuallyDrop<Allocator>>,
+    command_pool: std::sync::Mutex<vk::CommandPool>,
     location: DeviceLocation,
 }
 
@@ -66,10 +74,12 @@ impl VulkanDevice {
                 vk::KHR_GET_PHYSICAL_DEVICE_PROPERTIES2_NAME.as_ptr(),
             ];
 
+            let app_name = CString::new("candle").unwrap();
+            let engine_name = CString::new("candle").unwrap();
             let app_info = vk::ApplicationInfo::default()
-                .application_name(&CString::new("candle").unwrap())
+                .application_name(&app_name)
                 .application_version(vk::make_api_version(0, 1, 0, 0))
-                .engine_name(&CString::new("candle").unwrap())
+                .engine_name(&engine_name)
                 .engine_version(vk::make_api_version(0, 1, 0, 0))
                 .api_version(vk::API_VERSION_1_1);
 
@@ -141,7 +151,7 @@ impl VulkanDevice {
 
             let queue = device.get_device_queue(queue_family_index, 0);
 
-            let mut allocator = Allocator::new(&AllocatorCreateDesc {
+            let allocator = Allocator::new(&AllocatorCreateDesc {
                 instance: instance.clone(),
                 device: device.clone(),
                 physical_device,
@@ -174,15 +184,17 @@ impl VulkanDevice {
 
             Ok(Self {
                 ordinal,
-                entry,
-                instance,
-                device,
-                physical_device,
-                queue,
-                queue_family_index,
-                allocator: ManuallyDrop::new(allocator),
-                command_pool,
-                location,
+                inner: Arc::new(VulkanDeviceInner {
+                    entry,
+                    instance,
+                    device,
+                    physical_device,
+                    queue: std::sync::Mutex::new(queue),
+                    queue_family_index,
+                    allocator: std::sync::Mutex::new(ManuallyDrop::new(allocator)),
+                    command_pool: std::sync::Mutex::new(command_pool),
+                    location,
+                }),
             })
         }
     }
@@ -198,17 +210,21 @@ impl VulkanDevice {
                 .usage(usage | vk::BufferUsageFlags::STORAGE_BUFFER)
                 .sharing_mode(vk::SharingMode::EXCLUSIVE);
 
-            let buffer = self.device.create_buffer(&buffer_info, None).map_err(|e| {
-                crate::Error::Vulkan(VulkanError::Message(format!(
-                    "Failed to create buffer: {:?}",
-                    e
-                )))
-            })?;
+            let buffer = self
+                .inner
+                .device
+                .create_buffer(&buffer_info, None)
+                .map_err(|e| {
+                    crate::Error::Vulkan(VulkanError::Message(format!(
+                        "Failed to create buffer: {:?}",
+                        e
+                    )))
+                })?;
 
-            let requirements = self.device.get_buffer_memory_requirements(buffer);
+            let requirements = self.inner.device.get_buffer_memory_requirements(buffer);
 
-            let allocation = self
-                .allocator
+            let mut allocator = self.inner.allocator.lock().unwrap();
+            let allocation = allocator
                 .allocate(&AllocationCreateDesc {
                     name: "buffer",
                     requirements,
@@ -223,7 +239,8 @@ impl VulkanDevice {
                     )))
                 })?;
 
-            self.device
+            self.inner
+                .device
                 .bind_buffer_memory(buffer, allocation.memory(), allocation.offset())
                 .map_err(|e| {
                     crate::Error::Vulkan(VulkanError::Message(format!(
@@ -237,23 +254,23 @@ impl VulkanDevice {
     }
 
     pub(crate) fn device(&self) -> &ash::Device {
-        &self.device
+        &self.inner.device
     }
 
     pub(crate) fn queue(&self) -> vk::Queue {
-        self.queue
+        *self.inner.queue.lock().unwrap()
     }
 
     pub(crate) fn command_pool(&self) -> vk::CommandPool {
-        self.command_pool
+        *self.inner.command_pool.lock().unwrap()
     }
 
     pub(crate) fn physical_device(&self) -> vk::PhysicalDevice {
-        self.physical_device
+        self.inner.physical_device
     }
 
     pub(crate) fn instance(&self) -> &ash::Instance {
-        &self.instance
+        &self.inner.instance
     }
 
     pub(crate) fn allocate_and_upload(
@@ -263,7 +280,7 @@ impl VulkanDevice {
     ) -> Result<(vk::Buffer, Allocation)> {
         let (buffer, mut allocation) = self.allocate_buffer(data.len() as u64, usage)?;
         unsafe {
-            let mapped = allocation.mapped_ptr().unwrap().as_ptr();
+            let mapped = allocation.mapped_ptr().unwrap().as_ptr() as *mut u8;
             std::ptr::copy_nonoverlapping(data.as_ptr(), mapped, data.len());
         }
         Ok((buffer, allocation))
@@ -276,15 +293,19 @@ impl VulkanDevice {
         data: &mut [u8],
     ) -> Result<()> {
         unsafe {
-            let mapped = allocation.mapped_ptr().unwrap().as_ptr();
+            let mapped = allocation.mapped_ptr().unwrap().as_ptr() as *const u8;
             std::ptr::copy_nonoverlapping(mapped, data.as_mut_ptr(), data.len());
         }
-        self.allocator.free(allocation).map_err(|e| {
+        let mut allocator = self.inner.allocator.lock().unwrap();
+        allocator.free(allocation).map_err(|e| {
             crate::Error::Vulkan(VulkanError::Message(format!(
                 "Failed to free GPU memory: {:?}",
                 e
             )))
         })?;
+        unsafe {
+            self.inner.device.destroy_buffer(buffer, None);
+        }
         Ok(())
     }
 }
@@ -302,23 +323,7 @@ impl Clone for VulkanDevice {
         Self {
             ordinal: self.ordinal,
             #[cfg(all(feature = "vulkan", target_os = "android"))]
-            entry: ash::Entry::load().unwrap(),
-            #[cfg(all(feature = "vulkan", target_os = "android"))]
-            instance: self.instance.clone(),
-            #[cfg(all(feature = "vulkan", target_os = "android"))]
-            device: self.device.clone(),
-            #[cfg(all(feature = "vulkan", target_os = "android"))]
-            physical_device: self.physical_device,
-            #[cfg(all(feature = "vulkan", target_os = "android"))]
-            queue: self.queue,
-            #[cfg(all(feature = "vulkan", target_os = "android"))]
-            queue_family_index: self.queue_family_index,
-            #[cfg(all(feature = "vulkan", target_os = "android"))]
-            allocator: ManuallyDrop::new(self.allocator.clone()),
-            #[cfg(all(feature = "vulkan", target_os = "android"))]
-            command_pool: self.command_pool,
-            #[cfg(all(feature = "vulkan", target_os = "android"))]
-            location: self.location,
+            inner: self.inner.clone(),
         }
     }
 }
@@ -429,11 +434,36 @@ impl BackendDevice for VulkanDevice {
                 let bytes: Vec<u8> = v.iter().flat_map(|&x| x.to_le_bytes()).collect();
                 (bytes, DType::I16, v.len())
             }
-            CpuStorage::F8E4M3(v) => (v.to_vec(), DType::F8E4M3, v.len()),
-            CpuStorage::F6E2M3(v) => (v.to_vec(), DType::F6E2M3, v.len()),
-            CpuStorage::F6E3M2(v) => (v.to_vec(), DType::F6E3M2, v.len()),
-            CpuStorage::F4(v) => (v.to_vec(), DType::F4, v.len()),
-            CpuStorage::F8E8M0(v) => (v.to_vec(), DType::F8E8M0, v.len()),
+            CpuStorage::F8E4M3(v) => {
+                let bytes: Vec<u8> =
+                    unsafe { std::slice::from_raw_parts(v.as_ptr() as *const u8, v.len()) }
+                        .to_vec();
+                (bytes, DType::F8E4M3, v.len())
+            }
+            CpuStorage::F6E2M3(v) => {
+                let bytes: Vec<u8> =
+                    unsafe { std::slice::from_raw_parts(v.as_ptr() as *const u8, v.len()) }
+                        .to_vec();
+                (bytes, DType::F6E2M3, v.len())
+            }
+            CpuStorage::F6E3M2(v) => {
+                let bytes: Vec<u8> =
+                    unsafe { std::slice::from_raw_parts(v.as_ptr() as *const u8, v.len()) }
+                        .to_vec();
+                (bytes, DType::F6E3M2, v.len())
+            }
+            CpuStorage::F4(v) => {
+                let bytes: Vec<u8> =
+                    unsafe { std::slice::from_raw_parts(v.as_ptr() as *const u8, v.len()) }
+                        .to_vec();
+                (bytes, DType::F4, v.len())
+            }
+            CpuStorage::F8E8M0(v) => {
+                let bytes: Vec<u8> =
+                    unsafe { std::slice::from_raw_parts(v.as_ptr() as *const u8, v.len()) }
+                        .to_vec();
+                (bytes, DType::F8E8M0, v.len())
+            }
         };
 
         let size = data.len();
@@ -553,12 +583,16 @@ impl BackendDevice for VulkanDevice {
 }
 
 #[cfg(all(feature = "vulkan", target_os = "android"))]
-impl Drop for VulkanDevice {
+impl Drop for VulkanDeviceInner {
     fn drop(&mut self) {
         unsafe {
             self.device.device_wait_idle().ok();
-            self.device.destroy_command_pool(self.command_pool, None);
-            ManuallyDrop::drop(&mut self.allocator);
+            if let Ok(command_pool) = self.command_pool.lock() {
+                self.device.destroy_command_pool(*command_pool, None);
+            }
+            if let Ok(mut allocator) = self.allocator.lock() {
+                ManuallyDrop::drop(&mut *allocator);
+            }
             self.device.destroy_device(None);
             self.instance.destroy_instance(None);
         }

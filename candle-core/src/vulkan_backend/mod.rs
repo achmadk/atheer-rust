@@ -14,7 +14,7 @@ impl From<String> for VulkanError {
     }
 }
 
-use crate::backend::BackendStorage;
+use crate::backend::{BackendDevice, BackendStorage};
 use crate::op::{BinaryOpT, CmpOp, ReduceOp, UnaryOpT};
 use crate::{CpuStorage, DType, Error, Layout, Result, Shape, StridedBlocks};
 
@@ -96,9 +96,7 @@ impl VulkanStorage {
 
     fn copy_to_cpu_impl(&self) -> Result<CpuStorage> {
         let size = self.count * self.dtype.size_in_bytes();
-        let mut data = vec![0u8; size];
-        self.device
-            .download_and_free(self.buffer, self.allocation, &mut data)?;
+        let data = self.read_to_bytes()?;
         match self.dtype {
             DType::U8 => Ok(CpuStorage::U8(data)),
             DType::U32 => {
@@ -160,7 +158,7 @@ impl VulkanStorage {
         let size = self.count * self.dtype.size_in_bytes();
         let mut data = vec![0u8; size];
         unsafe {
-            let mapped = self.allocation.mapped_ptr().unwrap().as_ptr();
+            let mapped = self.allocation.mapped_ptr().unwrap().as_ptr() as *const u8;
             std::ptr::copy_nonoverlapping(mapped, data.as_mut_ptr(), size);
         }
         Ok(data)
@@ -172,7 +170,7 @@ impl VulkanStorage {
             crate::bail!("data too large for vulkan storage");
         }
         unsafe {
-            let mapped = self.allocation.mapped_ptr().unwrap().as_ptr();
+            let mapped = self.allocation.mapped_ptr().unwrap().as_ptr() as *mut u8;
             std::ptr::copy_nonoverlapping(data.as_ptr(), mapped.add(offset_bytes), data.len());
         }
         Ok(())
@@ -234,7 +232,7 @@ impl VulkanStorage {
             DType::F32 => {
                 let ptr = data.as_ptr() as *const u8;
                 unsafe {
-                    let mapped = self.allocation.mapped_ptr().unwrap().as_ptr();
+                    let mapped = self.allocation.mapped_ptr().unwrap().as_ptr() as *mut u8;
                     std::ptr::copy_nonoverlapping(ptr, mapped.add(offset_bytes), data.len() * 4);
                 }
             }
@@ -245,14 +243,16 @@ impl VulkanStorage {
                     .collect();
                 let ptr = halfs.as_ptr() as *const u8;
                 unsafe {
-                    let mapped = self.allocation.mapped_ptr().unwrap().as_ptr();
+                    let mapped = self.allocation.mapped_ptr().unwrap().as_ptr() as *mut u8;
                     std::ptr::copy_nonoverlapping(ptr, mapped.add(offset_bytes), halfs.len() * 2);
                 }
             }
-            _ => Err(Error::Vulkan(VulkanError::Message(format!(
-                "write_from_f32 not supported for dtype {:?}",
-                self.dtype
-            )))),
+            _ => {
+                return Err(Error::Vulkan(VulkanError::Message(format!(
+                    "write_from_f32 not supported for dtype {:?}",
+                    self.dtype
+                ))))
+            }
         }
         Ok(())
     }
@@ -541,6 +541,7 @@ impl BackendStorage for VulkanStorage {
         let mut result = vec![0.0f32; dst_el];
 
         for (i, &id) in ids_u32.iter().enumerate() {
+            let id = id as usize;
             for j in 0..left_size {
                 for k in 0..right_size {
                     let src_idx = j + id * right_size + k;
@@ -567,6 +568,7 @@ impl BackendStorage for VulkanStorage {
 
         let mut result = Vec::with_capacity(indices_count);
         for &idx in &indices_u32 {
+            let idx = idx as usize;
             if idx >= self_dims[dim] {
                 crate::bail!(
                     "gather: index {} out of bounds for dim {} with size {}",
@@ -681,12 +683,11 @@ impl BackendStorage for VulkanStorage {
             } => {
                 if block_len == 1 {
                     let mut dst_idx = dst_offset;
-                    for &src_idx in block_start_index {
+                    for src_idx in block_start_index {
                         if dst_idx >= dst_count {
                             break;
                         }
                         let src_byte_offset = src_idx * elem_size;
-                        let dst_byte_offset = dst_idx * elem_size;
                         dst.write_from_bytes(
                             &src_bytes[src_byte_offset..src_byte_offset + elem_size],
                             dst_idx,
@@ -996,7 +997,7 @@ impl BackendStorage for VulkanStorage {
     }
 }
 
-#[cfg(target_os = "android")]
+#[cfg(all(test, target_os = "android"))]
 mod tests {
     use super::*;
 
@@ -1283,7 +1284,7 @@ mod tests {
     }
 }
 
-#[cfg(target_os = "android")]
+#[cfg(all(test, target_os = "android"))]
 mod quantized_vulkan_tests {
     use crate::quantized::vulkan::QVulkanStorage;
     use crate::quantized::GgmlDType;
