@@ -177,6 +177,9 @@ jobs:
             ${{ runner.os }}-android-cargo-
             ${{ runner.os }}-cargo-
 
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
       - name: Cross-compile candle-core with vulkan feature for arm64-v8a
         run: |
           cargo ndk \
@@ -194,7 +197,6 @@ jobs:
 
   candle-vulkan-tests:
     name: Candle Vulkan Unit Tests
-    needs: [candle-vulkan-build]
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -234,6 +236,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-android-cargo-
             ${{ runner.os }}-cargo-
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
 
       # ── Build test binary ───────────────────────────────────────
 
