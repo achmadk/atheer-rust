@@ -1,6 +1,7 @@
 use super::{GgmlDType, QStorage};
 use crate::backend::BackendDevice;
-use crate::{DType, Result, Shape, VulkanDevice, VulkanStorage};
+use crate::{Result, Shape, VulkanDevice, VulkanStorage};
+use half::{bf16, f16};
 
 pub struct QVulkanStorage {
     dtype: GgmlDType,

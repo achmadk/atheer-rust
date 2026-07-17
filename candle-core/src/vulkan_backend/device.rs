@@ -1,16 +1,20 @@
 #![allow(dead_code)]
 
 use crate::backend::BackendDevice;
-use crate::{CpuStorage, DType, DeviceLocation, Result, Shape, VulkanError, VulkanStorage};
+#[cfg(not(all(feature = "vulkan", target_os = "android")))]
+use crate::VulkanError;
+use crate::{CpuStorage, DType, DeviceLocation, Result, Shape, VulkanStorage};
 use std::ffi::CString;
 use std::mem::ManuallyDrop;
-use std::sync::Mutex;
 
 #[cfg(all(feature = "vulkan", target_os = "android"))]
 use ash::vk;
 
 #[cfg(all(feature = "vulkan", target_os = "android"))]
 use gpu_allocator::vulkan::*;
+
+#[cfg(all(feature = "vulkan", target_os = "android"))]
+use super::VulkanError;
 
 #[cfg(all(feature = "vulkan", target_os = "android"))]
 pub struct VulkanDevice {
@@ -392,7 +396,7 @@ impl BackendDevice for VulkanDevice {
 
     fn storage_from_cpu_storage_owned(&self, cpu_storage: CpuStorage) -> Result<Self::Storage> {
         let (data, dtype, elem_count) = match cpu_storage {
-            CpuStorage::U8(v) => (v.into_raw_vec(), DType::U8, v.len()),
+            CpuStorage::U8(v) => (v, DType::U8, v.len()),
             CpuStorage::U32(v) => {
                 let bytes: Vec<u8> = v.iter().flat_map(|&x| x.to_le_bytes()).collect();
                 (bytes, DType::U32, v.len())

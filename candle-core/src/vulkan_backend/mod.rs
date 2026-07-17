@@ -2,6 +2,18 @@ mod device;
 
 pub use device::VulkanDevice;
 
+#[derive(thiserror::Error, Debug)]
+pub enum VulkanError {
+    #[error("{0}")]
+    Message(String),
+}
+
+impl From<String> for VulkanError {
+    fn from(e: String) -> Self {
+        VulkanError::Message(e)
+    }
+}
+
 use crate::backend::BackendStorage;
 use crate::op::{BinaryOpT, CmpOp, ReduceOp, UnaryOpT};
 use crate::{CpuStorage, DType, Error, Layout, Result, Shape, StridedBlocks};
@@ -87,7 +99,61 @@ impl VulkanStorage {
         let mut data = vec![0u8; size];
         self.device
             .download_and_free(self.buffer, self.allocation, &mut data)?;
-        CpuStorage::from_bytes(&data, self.dtype, self.count)
+        match self.dtype {
+            DType::U8 => Ok(CpuStorage::U8(data)),
+            DType::U32 => {
+                let values: Vec<u32> = unsafe {
+                    std::slice::from_raw_parts(data.as_ptr() as *const u32, size / 4).to_vec()
+                };
+                Ok(CpuStorage::U32(values))
+            }
+            DType::I64 => {
+                let values: Vec<i64> = unsafe {
+                    std::slice::from_raw_parts(data.as_ptr() as *const i64, size / 8).to_vec()
+                };
+                Ok(CpuStorage::I64(values))
+            }
+            DType::F16 => {
+                let values: Vec<half::f16> = unsafe {
+                    std::slice::from_raw_parts(data.as_ptr() as *const half::f16, size / 2).to_vec()
+                };
+                Ok(CpuStorage::F16(values))
+            }
+            DType::BF16 => {
+                let values: Vec<half::bf16> = unsafe {
+                    std::slice::from_raw_parts(data.as_ptr() as *const half::bf16, size / 2)
+                        .to_vec()
+                };
+                Ok(CpuStorage::BF16(values))
+            }
+            DType::F32 => {
+                let values: Vec<f32> = unsafe {
+                    std::slice::from_raw_parts(data.as_ptr() as *const f32, size / 4).to_vec()
+                };
+                Ok(CpuStorage::F32(values))
+            }
+            DType::F64 => {
+                let values: Vec<f64> = unsafe {
+                    std::slice::from_raw_parts(data.as_ptr() as *const f64, size / 8).to_vec()
+                };
+                Ok(CpuStorage::F64(values))
+            }
+            DType::I32 => {
+                let values: Vec<i32> = unsafe {
+                    std::slice::from_raw_parts(data.as_ptr() as *const i32, size / 4).to_vec()
+                };
+                Ok(CpuStorage::I32(values))
+            }
+            DType::I16 => {
+                let values: Vec<i16> = unsafe {
+                    std::slice::from_raw_parts(data.as_ptr() as *const i16, size / 2).to_vec()
+                };
+                Ok(CpuStorage::I16(values))
+            }
+            DType::F8E4M3 | DType::F6E2M3 | DType::F6E3M2 | DType::F4 | DType::F8E8M0 => {
+                Err(Error::UnsupportedDTypeForOp(self.dtype, "copy_to_cpu_impl"))
+            }
+        }
     }
 
     fn read_to_bytes(&self) -> Result<Vec<u8>> {
