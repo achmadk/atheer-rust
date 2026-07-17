@@ -278,7 +278,7 @@ impl VulkanDevice {
         data: &[u8],
         usage: vk::BufferUsageFlags,
     ) -> Result<(vk::Buffer, Allocation)> {
-        let (buffer, mut allocation) = self.allocate_buffer(data.len() as u64, usage)?;
+        let (buffer, allocation) = self.allocate_buffer(data.len() as u64, usage)?;
         unsafe {
             let mapped = allocation.mapped_ptr().unwrap().as_ptr() as *mut u8;
             std::ptr::copy_nonoverlapping(data.as_ptr(), mapped, data.len());
@@ -337,7 +337,7 @@ impl BackendDevice for VulkanDevice {
     }
 
     fn location(&self) -> DeviceLocation {
-        self.location
+        self.inner.location
     }
 
     fn same_device(&self, other: &Self) -> bool {
@@ -470,7 +470,7 @@ impl BackendDevice for VulkanDevice {
         let (buffer, allocation) =
             self.allocate_buffer(size as u64, vk::BufferUsageFlags::STORAGE_BUFFER)?;
         unsafe {
-            let mapped = allocation.mapped_ptr().unwrap().as_ptr();
+            let mapped = allocation.mapped_ptr().unwrap().as_ptr() as *mut u8;
             std::ptr::copy_nonoverlapping(data.as_ptr(), mapped, size);
         }
         Ok(VulkanStorage::new(

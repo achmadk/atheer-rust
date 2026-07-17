@@ -330,7 +330,7 @@ impl BackendStorage for VulkanStorage {
             .iter()
             .map(|&x| {
                 if x < 0.0 {
-                    alpha as f32 * (exp(x) - 1.0)
+                    alpha as f32 * (x.exp() - 1.0)
                 } else {
                     x
                 }
@@ -343,13 +343,13 @@ impl BackendStorage for VulkanStorage {
         Ok(storage)
     }
 
-    fn reduce_op(&self, op: ReduceOp, layout: &Layout, dims: &[usize]) -> Result<Self> {
+    fn reduce_op(&self, op: ReduceOp, layout: &Layout, _dims: &[usize]) -> Result<Self> {
         let bytes = self.read_to_bytes()?;
         let shape = layout.shape();
         let values = self.bytes_to_f32(&bytes, layout)?;
 
-        let elems: usize = shape.dims().iter().product();
-        let mut result = match op {
+        let _elems: usize = shape.dims().iter().product();
+        let result = match op {
             ReduceOp::Sum => values.iter().sum::<f32>(),
             ReduceOp::Max => values.iter().cloned().fold(f32::NEG_INFINITY, f32::max),
             ReduceOp::Min => values.iter().cloned().fold(f32::INFINITY, f32::min),
@@ -551,7 +551,7 @@ impl BackendStorage for VulkanStorage {
             }
         }
 
-        let dst_shape =
+        let _dst_shape =
             Shape::from_dims(&[&lhs_dims[..dim], &[ids_el], &lhs_dims[dim + 1..]].concat());
         self.device.storage_from_slice(&result)
     }
@@ -583,7 +583,7 @@ impl BackendStorage for VulkanStorage {
             }
         }
 
-        let dst_shape = Shape::from_dims(
+        let _dst_shape = Shape::from_dims(
             &[&self_dims[..dim], &[indices_count], &self_dims[dim + 1..]].concat(),
         );
         self.device.storage_from_slice(&result)
@@ -674,7 +674,7 @@ impl BackendStorage for VulkanStorage {
                 let to_copy = (dst_count - dst_offset).min(len);
                 let src_start = start_offset * elem_size;
                 let src_end = src_start + to_copy * elem_size;
-                let dst_start = dst_offset * elem_size;
+                let _dst_start = dst_offset * elem_size;
                 dst.write_from_bytes(&src_bytes[src_start..src_end], dst_offset)?;
             }
             StridedBlocks::MultipleBlocks {
