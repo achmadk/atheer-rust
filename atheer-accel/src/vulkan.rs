@@ -97,10 +97,12 @@ impl VulkanContext {
                 vk::KHR_GET_PHYSICAL_DEVICE_PROPERTIES2_NAME.as_ptr(),
             ];
 
+            let app_name = CString::new("Atheer").unwrap();
+            let engine_name = CString::new("Atheer").unwrap();
             let app_info = vk::ApplicationInfo::default()
-                .application_name(&CString::new("Atheer").unwrap())
+                .application_name(&app_name)
                 .application_version(vk::make_api_version(0, 1, 0, 0))
-                .engine_name(&CString::new("Atheer").unwrap())
+                .engine_name(&engine_name)
                 .engine_version(vk::make_api_version(0, 1, 0, 0))
                 .api_version(vk::API_VERSION_1_1);
 
@@ -172,7 +174,7 @@ impl VulkanContext {
 
             let queue = device.get_device_queue(queue_family_index, 0);
 
-            let mut allocator = Allocator::new(&AllocatorCreateDesc {
+            let allocator = Allocator::new(&AllocatorCreateDesc {
                 instance: instance.clone(),
                 device: device.clone(),
                 physical_device,
