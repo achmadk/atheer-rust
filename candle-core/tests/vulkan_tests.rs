@@ -26,7 +26,7 @@ fn test_vulkan_matmul_f32() -> Result<()> {
     let result_cpu = lhs.matmul(&rhs)?;
 
     let diff = (result_v.to_device(&cpu_device)? - result_cpu)?.abs()?;
-    let max_diff = diff.max()?;
+    let max_diff = diff.max(1)?.max(0)?;
     if max_diff.to_scalar::<f32>()? > 1e-3 {
         println!(
             "WARNING: Vulkan matmul F32 differs from CPU by {}",
@@ -52,7 +52,7 @@ fn test_vulkan_matmul_f16() -> Result<()> {
     let result_cpu = lhs.matmul(&rhs)?.to_dtype(DType::F16)?;
 
     let diff = (result_v.to_device(&cpu_device)?.to_dtype(DType::F16)? - result_cpu)?.abs()?;
-    let max_diff = diff.max()?;
+    let max_diff = diff.max(1)?.max(0)?;
     if max_diff.to_scalar::<f32>()? > 1e-2 {
         println!(
             "WARNING: Vulkan matmul F16 differs from CPU by {}",
@@ -76,7 +76,7 @@ fn test_vulkan_elementwise_ops() -> Result<()> {
     let result_cpu = (input.exp())?;
 
     let diff = (result_v.to_device(&cpu_device)? - result_cpu)?.abs()?;
-    let max_diff = diff.max()?;
+    let max_diff = diff.max(1)?.max(0)?;
     if max_diff.to_scalar::<f32>()? > 1e-2 {
         println!(
             "WARNING: Vulkan exp differs from CPU by {}",
@@ -100,7 +100,7 @@ fn test_vulkan_reduce() -> Result<()> {
     let result_cpu = input.sum(2)?;
 
     let diff = (result_v.to_device(&cpu_device)? - result_cpu)?.abs()?;
-    let max_diff = diff.max()?;
+    let max_diff = diff.max(1)?.max(0)?;
     if max_diff.to_scalar::<f32>()? > 1e-2 {
         println!(
             "WARNING: Vulkan reduce differs from CPU by {}",
@@ -123,7 +123,7 @@ fn test_vulkan_storage_roundtrip() -> Result<()> {
     let roundtrip = tensor_v.to_device(&cpu_device)?;
 
     let diff = (tensor - roundtrip)?.abs()?;
-    let max_diff = diff.max()?;
+    let max_diff = diff.max(2)?.max(1)?.max(0)?;
     if max_diff.to_scalar::<f32>()? > 1e-5 {
         println!(
             "WARNING: Vulkan roundtrip differs by {}",
@@ -147,7 +147,7 @@ fn test_vulkan_copy_strided() -> Result<()> {
     let roundtrip = tensor_v.to_device(&cpu_device)?;
 
     let diff = (tensor - roundtrip)?.abs()?;
-    let max_diff = diff.max()?;
+    let max_diff = diff.max(1)?.max(0)?;
     if max_diff.to_scalar::<f32>()? > 1e-4 {
         println!(
             "WARNING: Vulkan strided copy differs by {}",
