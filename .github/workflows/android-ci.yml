@@ -298,55 +298,33 @@ jobs:
           disable-animations: true
           disable-spellchecker: true
           emulator-build: 11076708
-
-      - name: Wait for emulator
-        run: adb wait-for-device
-
-      # ── Run tests ───────────────────────────────────────────────
-
-      - name: Create test data directory
-        run: |
-          adb shell mkdir -p /data/local/tmp/candle-test
-          adb shell chmod 777 /data/local/tmp/candle-test
-
-      - name: Push test binary to device
-        run: |
-          # Find the test binary
-          TESTBIN=$(find target/aarch64-linux-android -name "candle_core*" -type f 2>/dev/null | grep -v dylib | head -1)
-          if [ -n "$TESTBIN" ]; then
-            echo "Pushing test binary: $TESTBIN"
-            adb push "$TESTBIN" /data/local/tmp/candle-test/candle_core_test
-            adb shell chmod +x /data/local/tmp/candle-test/candle_core_test
-          else
-            echo "Test binary not found, checking for any candle artifacts..."
-            find target/aarch64-linux-android -name "*candle*" -type f 2>/dev/null | head -10
-          fi
-
-      - name: Run Vulkan smoke test
-        run: |
-          # Try to run the test binary
-          # Note: On emulator with SwiftShader, Vulkan device creation may fail
-          # but compilation success is verified above
-          adb shell /data/local/tmp/candle-test/candle_core_test --test-threads=1 2>&1 | head -50 || echo "Test binary may not be runnable on emulator (expected for Vulkan GPU tests)"
-
-      - name: Verify ADB connectivity
-        run: |
-          echo "Testing ADB connectivity..."
-          adb devices
-          adb shell cat /proc/version 2>/dev/null || echo "proc/version not available"
-          adb shell getprop ro.build.version.sdk 2>/dev/null || echo "SDK version not available"
-
-      - name: Verify Vulkan support in emulator
-        run: |
-          echo "Checking Vulkan support in emulator environment..."
-          adb shell << 'EOF'
-            #!/system/bin/sh
-            echo "Vulkan info from /system/lib/libvulkan.so:"
-            ls -la /system/lib/libvulkan.so 2>/dev/null || echo "libvulkan.so not found"
-            echo ""
-            echo "Note: Emulator uses SwiftShader for Vulkan emulation"
-            echo "Real GPU dispatch requires physical Android device"
-          EOF
+          script: |
+            echo "Waiting for device..."
+            adb wait-for-device
+            
+            echo "Creating test data directory..."
+            adb shell mkdir -p /data/local/tmp/candle-test
+            adb shell chmod 777 /data/local/tmp/candle-test
+            
+            echo "Pushing test binary to device..."
+            TESTBIN=$(find target/aarch64-linux-android -name "candle_core*" -type f 2>/dev/null | grep -v dylib | head -1)
+            if [ -n "$TESTBIN" ]; then
+              adb push "$TESTBIN" /data/local/tmp/candle-test/candle_core_test
+              adb shell chmod +x /data/local/tmp/candle-test/candle_core_test
+            else
+              echo "Test binary not found!"
+              exit 1
+            fi
+            
+            echo "Running Vulkan smoke test..."
+            adb shell /data/local/tmp/candle-test/candle_core_test --test-threads=1 2>&1 | head -50 || echo "Test binary may not be runnable on emulator"
+            
+            echo "Testing ADB connectivity..."
+            adb devices
+            adb shell cat /proc/version 2>/dev/null || echo "proc/version not available"
+            
+            echo "Checking Vulkan support in emulator environment..."
+            adb shell ls -la /system/lib/libvulkan.so 2>/dev/null || echo "libvulkan.so not found"
 
       - name: Upload test results
         if: always()
@@ -364,7 +342,7 @@ jobs:
       github.event_name == 'workflow_dispatch'
       && inputs.run_instrumentation_tests == true
     needs: [build]
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     defaults:
       run:
         shell: bash
@@ -397,6 +375,16 @@ jobs:
           name: libatheer_gpu_shard-arm64-v8a
           path: android/atheer-sdk/src/main/jniLibs/arm64-v8a/
 
+      - name: Restore Gradle cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.gradle/caches/
+            ~/.gradle/wrapper/
+          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle.kts', 'android/gradle/libs.versions.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
       # ── Emulator ────────────────────────────────────────────────
 
       - uses: reactivecircus/android-emulator-runner@v2
@@ -410,54 +398,39 @@ jobs:
           disable-animations: true
           disable-spellchecker: true
           emulator-build: 11076708
-          # No script — test execution handled in subsequent steps
+          script: |
+            echo "Waiting for device..."
+            adb wait-for-device
+            
+            echo "Disabling animations..."
+            adb shell settings put global window_animation_scale 0
+            adb shell settings put global transition_animation_scale 0
+            adb shell settings put global animator_duration_scale 0
 
-      # ── Prepare test models ─────────────────────────────────────
+            echo "Generating test models..."
+            python3 -c "
+            import struct
+            header = b'GGUF'
+            header += struct.pack('<I', 3)
+            header += struct.pack('<Q', 0)
+            header += struct.pack('<Q', 0)
+            with open('/tmp/test_model_corrupt.gguf', 'wb') as f:
+                f.write(header)
+                f.write(b'\x00' * (4096 - len(header)))
+            "
+            
+            echo "Pushing test models..."
+            adb push /tmp/test_model_corrupt.gguf /data/local/tmp/test_model_corrupt.gguf
+            echo "placeholder" > /tmp/test_model.gguf
+            adb push /tmp/test_model.gguf /data/local/tmp/test_model.gguf
 
-      - name: Push test models to emulator
-        run: |
-          adb wait-for-device
-          adb shell settings put global window_animation_scale 0
-          adb shell settings put global transition_animation_scale 0
-          adb shell settings put global animator_duration_scale 0
+            echo "Installing APK..."
+            adb install -t android/atheer-sdk/build/outputs/apk/debug/atheer-sdk-debug.apk
 
-          # GGUFv3 header with tensor_count=0 — invalid model for probe-failure tests
-          python3 -c "
-          import struct
-          header = b'GGUF'
-          header += struct.pack('<I', 3)     # version
-          header += struct.pack('<Q', 0)     # tensor_count = 0
-          header += struct.pack('<Q', 0)     # metadata_kv_count = 0
-          with open('/tmp/test_model_corrupt.gguf', 'wb') as f:
-              f.write(header)
-              f.write(b'\x00' * (4096 - len(header)))
-          "
-          adb push /tmp/test_model_corrupt.gguf /data/local/tmp/test_model_corrupt.gguf
+            echo "Running connected Android tests..."
+            cd android
+            ./gradlew :atheer-sdk:connectedAndroidTest --no-daemon --stacktrace
 
-          # Placeholder for real model test (@Ignore in CI)
-          echo "placeholder" > /tmp/test_model.gguf
-          adb push /tmp/test_model.gguf /data/local/tmp/test_model.gguf
-
-      # ── Run tests ───────────────────────────────────────────────
-
-      - name: Install APK
-        run: adb install -t android/atheer-sdk/build/outputs/apk/debug/atheer-sdk-debug.apk
-
-      - name: Restore Gradle cache
-        uses: actions/cache@v6
-        with:
-          path: |
-            ~/.gradle/caches/
-            ~/.gradle/wrapper/
-          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle.kts', 'android/gradle/libs.versions.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
-      - name: Run connected Android tests
-        run: |
-          ./gradlew :atheer-sdk:connectedAndroidTest --no-daemon --stacktrace
-        working-directory: android
-        continue-on-error: true
 
       - name: Upload test results
         if: always()
