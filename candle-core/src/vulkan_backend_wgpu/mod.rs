@@ -44,9 +44,6 @@ use crate::op::{BinaryOpT, CmpOp, ReduceOp, UnaryOpT};
 use crate::{CpuStorage, DType, Error, Layout, Result, Shape};
 
 #[cfg(all(feature = "vulkan", target_os = "android"))]
-use shaders;
-
-#[cfg(all(feature = "vulkan", target_os = "android"))]
 pub struct VulkanStorage {
     buffer: wgpu::Buffer,
     count: usize,

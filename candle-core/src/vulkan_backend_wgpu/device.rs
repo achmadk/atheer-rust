@@ -483,23 +483,8 @@ impl BackendDevice for VulkanDevice {
             wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         )?;
 
-        let bytes: Vec<u8> = match dtype {
-            DType::U8 => data.iter().flat_map(|&x| x.to_le_bytes()).collect(),
-            DType::U32 => data.iter().flat_map(|&x| x.to_le_bytes()).collect(),
-            DType::I64 => data.iter().flat_map(|&x| x.to_le_bytes()).collect(),
-            DType::F16 => data.iter().flat_map(|&x| x.to_le_bytes()).collect(),
-            DType::BF16 => data.iter().flat_map(|&x| x.to_le_bytes()).collect(),
-            DType::F32 => data.iter().flat_map(|&x| x.to_le_bytes()).collect(),
-            DType::F64 => data.iter().flat_map(|&x| x.to_le_bytes()).collect(),
-            DType::I32 => data.iter().flat_map(|&x| x.to_le_bytes()).collect(),
-            DType::I16 => data.iter().flat_map(|&x| x.to_le_bytes()).collect(),
-            DType::F8E4M3 | DType::F6E2M3 | DType::F6E3M2 | DType::F4 | DType::F8E8M0 => {
-                return Err(crate::Error::Vulkan(VulkanError::Message(format!(
-                    "storage_from_slice not supported for dtype {:?}",
-                    dtype
-                ))))
-            }
-        };
+        let bytes: Vec<u8> =
+            unsafe { std::slice::from_raw_parts(data.as_ptr() as *const u8, size).to_vec() };
 
         self.queue().write_buffer(&buffer, 0, &bytes);
 
@@ -512,7 +497,10 @@ impl BackendDevice for VulkanDevice {
 
     fn storage_from_cpu_storage_owned(&self, cpu_storage: CpuStorage) -> Result<Self::Storage> {
         let (data, dtype, elem_count) = match cpu_storage {
-            CpuStorage::U8(v) => (v, DType::U8, v.len()),
+            CpuStorage::U8(v) => {
+                let len = v.len();
+                (v, DType::U8, len)
+            }
             CpuStorage::U32(v) => {
                 let bytes: Vec<u8> = v.iter().flat_map(|&x| x.to_le_bytes()).collect();
                 (bytes, DType::U32, v.len())
