@@ -304,7 +304,8 @@ jobs:
           adb shell chmod 777 /data/local/tmp/candle-test
 
           echo "Pushing test binary to device..."
-          TESTBIN=$(find target/x86_64-linux-android -name "candle_core*" -type f 2>/dev/null | grep -v dylib | head -1)
+          # Search specifically in release/deps and filter out metadata extensions (.d, .rlib, .rmeta, .so)
+          TESTBIN=$(find target/x86_64-linux-android/release/deps -maxdepth 1 -type f -name "candle_core*" ! -name "*.d" ! -name "*.rlib" ! -name "*.rmeta" ! -name "*.so" | head -1)
 
           if [ -n "$TESTBIN" ]; then
             echo "Found binary: $TESTBIN"
