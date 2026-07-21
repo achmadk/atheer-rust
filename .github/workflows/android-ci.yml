@@ -305,7 +305,9 @@ jobs:
 
           echo "Pushing test binary to device..."
           TESTBIN=$(find target/x86_64-linux-android -name "candle_core*" -type f 2>/dev/null | grep -v dylib | head -1)
+
           if [ -n "$TESTBIN" ]; then
+            echo "Found binary: $TESTBIN"
             adb push "$TESTBIN" /data/local/tmp/candle-test/candle_core_test
             adb shell chmod +x /data/local/tmp/candle-test/candle_core_test
           else
