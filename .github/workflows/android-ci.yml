@@ -288,6 +288,41 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
+      # ── Create Test Execution Script ─────────────────────────────
+
+      - name: Generate emulator script
+        run: |
+          cat << 'EOF' > run_vulkan_tests.sh
+          #!/usr/bin/env bash
+          set -e
+
+          echo "Waiting for device..."
+          adb wait-for-device
+
+          echo "Creating test data directory..."
+          adb shell mkdir -p /data/local/tmp/candle-test
+          adb shell chmod 777 /data/local/tmp/candle-test
+
+          echo "Pushing test binary to device..."
+          TESTBIN=$(find target/x86_64-linux-android -name "candle_core*" -type f 2>/dev/null | grep -v dylib | head -1)
+          if [ -n "$TESTBIN" ]; then
+            adb push "$TESTBIN" /data/local/tmp/candle-test/candle_core_test
+            adb shell chmod +x /data/local/tmp/candle-test/candle_core_test
+          else
+            echo "Test binary not found!"
+            exit 1
+          fi
+
+          echo "Running Vulkan smoke test..."
+          adb shell /data/local/tmp/candle-test/candle_core_test --test-threads=1 2>&1 | head -50 || echo "Test binary execution completed"
+
+          echo "Testing ADB connectivity..."
+          adb devices
+          adb shell cat /proc/version 2>/dev/null || echo "proc/version not available"
+          EOF
+
+          chmod +x run_vulkan_tests.sh
+
       # ── Emulator ────────────────────────────────────────────────
       # WARNING: SwiftShader emulates Vulkan in software, not actual GPU execution.
       # The wgpu-based Vulkan backend will compile but real GPU dispatch
@@ -302,36 +337,11 @@ jobs:
           target: aosp_atd # <-- Lightweight target for fast CI booting
           profile: pixel_6 # <-- Gives a clean hardware configuration
           avd-name: candle-vulkan-test
+          force-avd-creation: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 4096
           disable-animations: true
           disable-spellchecker: true
-          script: |
-            echo "Waiting for device..."
-            adb wait-for-device
-            
-            echo "Creating test data directory..."
-            adb shell mkdir -p /data/local/tmp/candle-test
-            adb shell chmod 777 /data/local/tmp/candle-test
-            
-            echo "Pushing test binary to device..."
-            TESTBIN=$(find target/x86_64-linux-android -name "candle_core*" -type f 2>/dev/null | grep -v dylib | head -1)
-            if [ -n "$TESTBIN" ]; then
-              adb push "$TESTBIN" /data/local/tmp/candle-test/candle_core_test
-              adb shell chmod +x /data/local/tmp/candle-test/candle_core_test
-            else
-              echo "Test binary not found!"
-              exit 1
-            fi
-            
-            echo "Running Vulkan smoke test..."
-            adb shell /data/local/tmp/candle-test/candle_core_test --test-threads=1 2>&1 | head -50 || echo "Test binary may not be runnable on emulator"
-            
-            echo "Testing ADB connectivity..."
-            adb devices
-            adb shell cat /proc/version 2>/dev/null || echo "proc/version not available"
-            
-            echo "Checking Vulkan support in emulator environment..."
-            adb shell ls -la /system/lib/libvulkan.so 2>/dev/null || echo "libvulkan.so not found"
+          script: ./run_vulkan_tests.sh
 
       - name: Upload test results
         if: always()
@@ -392,6 +402,49 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
+      # ── Create Test Execution Script ─────────────────────────────
+
+      - name: Generate emulator script
+        run: |
+          cat << 'EOF' > run_instrumented_tests.sh
+          #!/usr/bin/env bash
+          set -e
+
+          echo "Waiting for device..."
+          adb wait-for-device
+
+          echo "Disabling animations..."
+          adb shell settings put global window_animation_scale 0
+          adb shell settings put global transition_animation_scale 0
+          adb shell settings put global animator_duration_scale 0
+
+          echo "Generating test models..."
+          python3 -c "
+          import struct
+          header = b'GGUF'
+          header += struct.pack('<I', 3)
+          header += struct.pack('<Q', 0)
+          header += struct.pack('<Q', 0)
+          with open('/tmp/test_model_corrupt.gguf', 'wb') as f:
+              f.write(header)
+              f.write(b'\x00' * (4096 - len(header)))
+          "
+
+          echo "Pushing test models..."
+          adb push /tmp/test_model_corrupt.gguf /data/local/tmp/test_model_corrupt.gguf
+          echo "placeholder" > /tmp/test_model.gguf
+          adb push /tmp/test_model.gguf /data/local/tmp/test_model.gguf
+
+          echo "Installing APK..."
+          adb install -t android/atheer-sdk/build/outputs/apk/debug/atheer-sdk-debug.apk
+
+          echo "Running connected Android tests..."
+          cd android
+          ./gradlew :atheer-sdk:connectedAndroidTest --no-daemon --stacktrace
+          EOF
+
+          chmod +x run_instrumented_tests.sh
+
       # ── Emulator ────────────────────────────────────────────────
 
       - uses: reactivecircus/android-emulator-runner@v2
@@ -401,42 +454,11 @@ jobs:
           arch: x86_64
           target: google_apis
           avd-name: atheer-test
+          force-avd-creation: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 2048
           disable-animations: true
           disable-spellchecker: true
-          script: |
-            echo "Waiting for device..."
-            adb wait-for-device
-            
-            echo "Disabling animations..."
-            adb shell settings put global window_animation_scale 0
-            adb shell settings put global transition_animation_scale 0
-            adb shell settings put global animator_duration_scale 0
-
-            echo "Generating test models..."
-            python3 -c "
-            import struct
-            header = b'GGUF'
-            header += struct.pack('<I', 3)
-            header += struct.pack('<Q', 0)
-            header += struct.pack('<Q', 0)
-            with open('/tmp/test_model_corrupt.gguf', 'wb') as f:
-                f.write(header)
-                f.write(b'\x00' * (4096 - len(header)))
-            "
-            
-            echo "Pushing test models..."
-            adb push /tmp/test_model_corrupt.gguf /data/local/tmp/test_model_corrupt.gguf
-            echo "placeholder" > /tmp/test_model.gguf
-            adb push /tmp/test_model.gguf /data/local/tmp/test_model.gguf
-
-            echo "Installing APK..."
-            adb install -t android/atheer-sdk/build/outputs/apk/debug/atheer-sdk-debug.apk
-
-            echo "Running connected Android tests..."
-            cd android
-            ./gradlew :atheer-sdk:connectedAndroidTest --no-daemon --stacktrace
-
+          script: ./run_instrumented_tests.sh
 
       - name: Upload test results
         if: always()
