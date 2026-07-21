@@ -281,6 +281,13 @@ jobs:
         run: |
           find target/x86_64-linux-android -name "candle_core*" -type f 2>/dev/null | head -20
 
+      # ── KVM Permissions ─────────────────────────────────────────
+      - name: Enable KVM group permissions
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
       # ── Emulator ────────────────────────────────────────────────
       # WARNING: SwiftShader emulates Vulkan in software, not actual GPU execution.
       # The wgpu-based Vulkan backend will compile but real GPU dispatch
@@ -292,9 +299,10 @@ jobs:
         with:
           api-level: 34
           arch: x86_64
-          target: google_apis
+          target: aosp_atd # <-- Lightweight target for fast CI booting
+          profile: pixel_6 # <-- Gives a clean hardware configuration
           avd-name: candle-vulkan-test
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -memory 4096
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 4096
           disable-animations: true
           disable-spellchecker: true
           script: |
@@ -393,7 +401,7 @@ jobs:
           arch: x86_64
           target: google_apis
           avd-name: atheer-test
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -memory 2048
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 2048
           disable-animations: true
           disable-spellchecker: true
           script: |
