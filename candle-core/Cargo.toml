@@ -49,7 +49,7 @@ zip = { version = "7.2.0", default-features = false }
 candle-ug = { version = "0.10.2", optional = true }
 
 [target.'cfg(target_os = "android")'.dependencies]
-wgpu = { version = "22.0", features = ["vulkan"], optional = true }
+wgpu = { version = "22.0", features = ["vulkan-portability"], optional = true }
 pollster = { version = "0.4", optional = true }
 bytemuck = { version = "1.25", optional = true }
 
