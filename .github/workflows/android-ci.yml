@@ -317,7 +317,8 @@ jobs:
           fi
 
           echo "Running Vulkan smoke test..."
-          adb shell /data/local/tmp/candle-test/candle_core_test --test-threads=1 2>&1 | head -50 || echo "Test binary execution completed"
+          # Set working dir AND override TMPDIR to the writable tmp directory
+          adb shell "cd /data/local/tmp/candle-test && TMPDIR=/data/local/tmp/candle-test ./candle_core_test --test-threads=1"
 
           echo "Testing ADB connectivity..."
           adb devices
