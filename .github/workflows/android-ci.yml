@@ -297,7 +297,7 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -memory 4096
           disable-animations: true
           disable-spellchecker: true
-          emulator-build: 11076708
+          emulator-build: 15180164
           script: |
             echo "Waiting for device..."
             adb wait-for-device
@@ -397,7 +397,7 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -memory 2048
           disable-animations: true
           disable-spellchecker: true
-          emulator-build: 11076708
+          emulator-build: 15180164
           script: |
             echo "Waiting for device..."
             adb wait-for-device
