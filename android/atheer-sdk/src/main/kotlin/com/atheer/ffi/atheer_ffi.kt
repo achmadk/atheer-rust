@@ -1907,34 +1907,34 @@ sealed class AtheerException: kotlin.Exception() {
     
     class ModelLoadFailed(
         
-        val `message`: kotlin.String
+        val `msg`: kotlin.String
         ) : AtheerException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "msg=${ `msg` }"
     }
     
     class TokenizerLoadFailed(
         
-        val `message`: kotlin.String
+        val `msg`: kotlin.String
         ) : AtheerException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "msg=${ `msg` }"
     }
     
     class GenerationFailed(
         
-        val `message`: kotlin.String
+        val `msg`: kotlin.String
         ) : AtheerException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "msg=${ `msg` }"
     }
     
     class InvalidParameters(
         
-        val `message`: kotlin.String
+        val `msg`: kotlin.String
         ) : AtheerException() {
         override val message
-            get() = "message=${ `message` }"
+            get() = "msg=${ `msg` }"
     }
     
     class NotInitialized(
@@ -1995,22 +1995,22 @@ public object FfiConverterTypeAtheerError : FfiConverterRustBuffer<AtheerExcepti
             is AtheerException.ModelLoadFailed -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4UL
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`msg`)
             )
             is AtheerException.TokenizerLoadFailed -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4UL
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`msg`)
             )
             is AtheerException.GenerationFailed -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4UL
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`msg`)
             )
             is AtheerException.InvalidParameters -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 4UL
-                + FfiConverterString.allocationSize(value.`message`)
+                + FfiConverterString.allocationSize(value.`msg`)
             )
             is AtheerException.NotInitialized -> (
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
@@ -2028,22 +2028,22 @@ public object FfiConverterTypeAtheerError : FfiConverterRustBuffer<AtheerExcepti
         when(value) {
             is AtheerException.ModelLoadFailed -> {
                 buf.putInt(1)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`msg`, buf)
                 Unit
             }
             is AtheerException.TokenizerLoadFailed -> {
                 buf.putInt(2)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`msg`, buf)
                 Unit
             }
             is AtheerException.GenerationFailed -> {
                 buf.putInt(3)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`msg`, buf)
                 Unit
             }
             is AtheerException.InvalidParameters -> {
                 buf.putInt(4)
-                FfiConverterString.write(value.`message`, buf)
+                FfiConverterString.write(value.`msg`, buf)
                 Unit
             }
             is AtheerException.NotInitialized -> {
