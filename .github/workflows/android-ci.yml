@@ -1,5 +1,19 @@
 name: Android CI
 
+# =============================================================================
+# Vulkan Backend Note
+# =============================================================================
+# The candle-core Vulkan backend was reimplemented to use wgpu instead of raw ash.
+# - wgpu provides a safer, higher-level API with built-in WGSL shader compilation
+# - GPU compute is dispatched via compute pipelines, not CPU fallback
+# - Full GPU verification requires physical Android device (emulator uses SwiftShader)
+#
+# Key changes:
+# - candle-core/src/vulkan_backend_wgpu/ - new wgpu-backed implementation
+# - candle-core/src/vulkan_backend_old/ - preserved for rollback reference
+# - Tests in candle-core/tests/vulkan_tests.rs verify correctness vs CPU reference
+# =============================================================================
+
 on:
   push:
     branches: [main]
@@ -136,7 +150,7 @@ jobs:
           retention-days: 7
 
   candle-vulkan-build:
-    name: Candle Vulkan Build
+    name: Candle Vulkan Build (wgpu-backed)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -190,17 +204,28 @@ jobs:
 
       - name: Verify candle-core with vulkan compiled
         run: |
-          ls -lh target/aarch64-linux-android/release/libcandle_core.rlib || \
-          ls -lh target/aarch64-linux-android/release/deps/libcandle_core*.rlib || \
-          echo "Checking for compiled artifacts..."
-          find target/aarch64-linux-android -name "libcandle*" 2>/dev/null || true
+          # Check for compiled library
+          if ls target/aarch64-linux-android/release/libcandle_core.rlib 2>/dev/null; then
+            echo "✓ libcandle_core.rlib found"
+          elif ls target/aarch64-linux-android/release/deps/libcandle_core*.rlib 2>/dev/null; then
+            echo "✓ libcandle_core dependencies found"
+            ls target/aarch64-linux-android/release/deps/libcandle_core*.rlib | head -5
+          else
+            echo "Checking for compiled artifacts..."
+            find target/aarch64-linux-android -name "libcandle*" -type f 2>/dev/null | head -10
+            echo "Build may have succeeded but rlib naming differs"
+          fi
 
   candle-vulkan-tests:
-    name: Candle Vulkan Unit Tests
+    name: Candle Vulkan Unit Tests (wgpu)
     runs-on: ubuntu-latest
     defaults:
       run:
         shell: bash
+    # NOTE: Emulator-based Vulkan testing has limitations
+    # - SwiftShader (software renderer) emulates Vulkan, not real GPU
+    # - Full GPU verification requires physical Android device with Vulkan
+    # - Tests here verify compilation and basic API correctness against CPU reference
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -257,6 +282,10 @@ jobs:
           find target/aarch64-linux-android -name "candle_core*" -type f 2>/dev/null | head -20
 
       # ── Emulator ────────────────────────────────────────────────
+      # WARNING: SwiftShader emulates Vulkan in software, not actual GPU execution.
+      # The wgpu-based Vulkan backend will compile but real GPU dispatch
+      # requires physical hardware. See candle-core/tests/vulkan_tests.rs for
+      # tests that verify correctness against CPU reference.
 
       - uses: reactivecircus/android-emulator-runner@v2
         id: emulator
@@ -296,7 +325,9 @@ jobs:
       - name: Run Vulkan smoke test
         run: |
           # Try to run the test binary
-          adb shell /data/local/tmp/candle-test/candle_core_test --test-threads=1 2>&1 | head -50 || echo "Test binary may not be runnable (expected on emulator)"
+          # Note: On emulator with SwiftShader, Vulkan device creation may fail
+          # but compilation success is verified above
+          adb shell /data/local/tmp/candle-test/candle_core_test --test-threads=1 2>&1 | head -50 || echo "Test binary may not be runnable on emulator (expected for Vulkan GPU tests)"
 
       - name: Verify ADB connectivity
         run: |
@@ -305,14 +336,16 @@ jobs:
           adb shell cat /proc/version 2>/dev/null || echo "proc/version not available"
           adb shell getprop ro.build.version.sdk 2>/dev/null || echo "SDK version not available"
 
-      - name: Run Vulkan backend API test
+      - name: Verify Vulkan support in emulator
         run: |
-          # Create a simple shell script to test basic Vulkan device creation
+          echo "Checking Vulkan support in emulator environment..."
           adb shell << 'EOF'
             #!/system/bin/sh
-            echo "Testing Vulkan device creation via JNI is not possible without the full test binary"
-            echo "The candle-core test binary needs to be run natively on Android"
-            echo "This requires a cross-compiled native binary that can run on aarch64"
+            echo "Vulkan info from /system/lib/libvulkan.so:"
+            ls -la /system/lib/libvulkan.so 2>/dev/null || echo "libvulkan.so not found"
+            echo ""
+            echo "Note: Emulator uses SwiftShader for Vulkan emulation"
+            echo "Real GPU dispatch requires physical Android device"
           EOF
 
       - name: Upload test results

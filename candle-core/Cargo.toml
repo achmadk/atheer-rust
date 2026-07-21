@@ -17,7 +17,7 @@ nccl = ["cuda", "cudarc/nccl"]
 mkl = ["dep:libc", "dep:intel-mkl-src"]
 accelerate = ["dep:libc", "dep:accelerate-src"]
 metal = ["dep:objc2-metal", "dep:objc2-foundation", "dep:candle-metal-kernels", "candle-ug?/metal"]
-vulkan = ["dep:ash", "dep:gpu-allocator", "dep:bytemuck"]
+vulkan = ["dep:wgpu", "dep:pollster", "dep:bytemuck"]
 ug = ["dep:candle-ug"]
 
 [dependencies]
@@ -49,8 +49,8 @@ zip = { version = "7.2.0", default-features = false }
 candle-ug = { version = "0.10.2", optional = true }
 
 [target.'cfg(target_os = "android")'.dependencies]
-ash = { workspace = true, optional = true }
-gpu-allocator = { workspace = true, optional = true }
+wgpu = { version = "22.0", features = ["vulkan"], optional = true }
+pollster = { version = "0.4", optional = true }
 bytemuck = { version = "1.25", optional = true }
 
 [build-dependencies]

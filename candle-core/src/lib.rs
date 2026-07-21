@@ -20,7 +20,7 @@
 //! - Model training
 //! - Distributed computing (NCCL).
 //! - Models out of the box (Llama, Whisper, Falcon, ...)
-//! - Vulkan backend for Android GPU inference (via `vulkan` feature, Android-only)
+//! - Vulkan backend for Android GPU inference (via `vulkan` feature, Android-only, wgpu-backed)
 //!
 //! ## FAQ
 //!
@@ -127,11 +127,10 @@ pub use metal_backend::{MetalDevice, MetalError, MetalStorage};
 #[cfg(not(feature = "metal"))]
 pub use dummy_metal_backend::{MetalDevice, MetalError, MetalStorage};
 
-// Phase 0: Vulkan resolves to the dummy backend on all targets. The real
-// `vulkan_backend` module (ash-backed, Android-gated) lands in Phase 1 behind
-// `#[cfg(all(feature = "vulkan", target_os = "android"))]`.
+// Vulkan: real wgpu-backed Vulkan backend on Android with `vulkan` feature,
+// dummy implementation on other targets.
 #[cfg(all(feature = "vulkan", target_os = "android"))]
-pub use vulkan_backend::{VulkanDevice, VulkanError, VulkanStorage};
+pub use vulkan_backend_wgpu::{VulkanDevice, VulkanError, VulkanStorage};
 
 #[cfg(not(all(feature = "vulkan", target_os = "android")))]
 pub use dummy_vulkan_backend::{VulkanDevice, VulkanError, VulkanStorage};
@@ -142,9 +141,9 @@ extern crate intel_mkl_src;
 #[cfg(feature = "accelerate")]
 extern crate accelerate_src;
 
-// Vulkan: real backend on Android with vulkan feature, dummy otherwise.
+// Vulkan: wgpu-backed backend on Android, dummy otherwise.
 #[cfg(all(feature = "vulkan", target_os = "android"))]
-pub mod vulkan_backend;
+pub mod vulkan_backend_wgpu;
 
 pub trait ToUsize2 {
     fn to_usize2(self) -> (usize, usize);
