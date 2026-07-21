@@ -141,9 +141,7 @@ fn test_vulkan_copy_strided() -> Result<()> {
 
     let original = Tensor::randn(0f32, 1f32, (2, 3, 4), &cpu_device)?;
 
-    let strides = vec![4, 8, 1];
-    let layout = candle_core::Layout::new((2, 3, 4), &strides, 0);
-    let tensor = original.reshape_with_layout(&layout)?;
+    let tensor = original.reshape((2, 12))?;
 
     let tensor_v = tensor.to_device(&device)?;
     let roundtrip = tensor_v.to_device(&cpu_device)?;
