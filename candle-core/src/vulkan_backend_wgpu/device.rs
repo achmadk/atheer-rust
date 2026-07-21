@@ -63,6 +63,7 @@ impl VulkanDevice {
                 label: Some("candle-wgpu-device"),
                 required_features: wgpu::Features::empty(),
                 required_limits: wgpu::Limits::downlevel_defaults(),
+                memory_hints: Default::default(),
             },
             None,
         ))
@@ -127,7 +128,7 @@ impl VulkanDevice {
     }
 
     pub(crate) fn sync(&self) -> Result<()> {
-        self.inner.queue.on_submitted_work_done(|_| {});
+        self.inner.queue.on_submitted_work_done(|| {});
         Ok(())
     }
 
@@ -136,7 +137,7 @@ impl VulkanDevice {
     }
 
     pub(crate) fn max_storage_buffer_binding_size(&self) -> u64 {
-        self.inner.limits.max_storage_buffer_binding_size
+        self.inner.limits.max_storage_buffer_binding_size as u64
     }
 
     pub(crate) fn compile_shader(&self, wgsl: &str) -> Result<wgpu::ShaderModule> {
@@ -215,7 +216,9 @@ impl VulkanDevice {
                     label: Some("binary-op"),
                     layout: Some(&pipeline_layout),
                     module: &shader,
-                    entry_point: Some("main"),
+                    entry_point: "main",
+                    cache: None,
+                    compilation_options: Default::default(),
                 });
 
         let bind_group = self
@@ -262,6 +265,7 @@ impl VulkanDevice {
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("binary-op-pass"),
+                timestamp_writes: None,
             });
             pass.set_pipeline(&pipeline);
             pass.set_bind_group(0, &bind_group, &[]);
@@ -349,7 +353,9 @@ impl VulkanDevice {
                     label: Some("affine"),
                     layout: Some(&pipeline_layout),
                     module: &shader,
-                    entry_point: Some("main"),
+                    entry_point: "main",
+                    cache: None,
+                    compilation_options: Default::default(),
                 });
 
         let bind_group = self
@@ -396,6 +402,7 @@ impl VulkanDevice {
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
                 label: Some("affine-pass"),
+                timestamp_writes: None,
             });
             pass.set_pipeline(&pipeline);
             pass.set_bind_group(0, &bind_group, &[]);
@@ -448,13 +455,13 @@ impl BackendDevice for VulkanDevice {
         let size = elem_count * dtype.size_in_bytes();
         let buffer = self.allocate_buffer(
             size as u64,
-            wgpu::BufferUsages::STORAGE_BUFFER | wgpu::BufferUsages::COPY_DST,
+            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         )?;
 
         let zero_bytes = vec![0u8; size as usize];
         self.queue().write_buffer(&buffer, 0, &zero_bytes);
 
-        Ok(WgpuStorage::new(buffer, elem_count, dtype, self.clone()))
+        Ok(VulkanStorage::new(buffer, elem_count, dtype, self.clone()))
     }
 
     unsafe fn alloc_uninit(&self, shape: &Shape, dtype: DType) -> Result<Self::Storage> {
@@ -462,9 +469,9 @@ impl BackendDevice for VulkanDevice {
         let size = elem_count * dtype.size_in_bytes();
         let buffer = self.allocate_buffer(
             size as u64,
-            wgpu::BufferUsages::STORAGE_BUFFER | wgpu::BufferUsages::COPY_DST,
+            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         )?;
-        Ok(WgpuStorage::new(buffer, elem_count, dtype, self.clone()))
+        Ok(VulkanStorage::new(buffer, elem_count, dtype, self.clone()))
     }
 
     fn storage_from_slice<T: crate::WithDType>(&self, data: &[T]) -> Result<Self::Storage> {
@@ -473,24 +480,30 @@ impl BackendDevice for VulkanDevice {
         let size = elem_count * dtype.size_in_bytes();
         let buffer = self.allocate_buffer(
             size as u64,
-            wgpu::BufferUsages::STORAGE_BUFFER | wgpu::BufferUsages::COPY_DST,
+            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         )?;
 
-        let bytes: Vec<u8> = data
-            .iter()
-            .flat_map(|&x| {
-                let mut bytes = [0u8; 8];
-                let dtype_size = dtype.size_in_bytes();
-                for i in 0..dtype_size {
-                    bytes[i] = (x.to_bytes()[i]);
-                }
-                bytes[..dtype_size].to_vec()
-            })
-            .collect();
+        let bytes: Vec<u8> = match dtype {
+            DType::U8 => data.iter().flat_map(|&x| x.to_le_bytes()).collect(),
+            DType::U32 => data.iter().flat_map(|&x| x.to_le_bytes()).collect(),
+            DType::I64 => data.iter().flat_map(|&x| x.to_le_bytes()).collect(),
+            DType::F16 => data.iter().flat_map(|&x| x.to_le_bytes()).collect(),
+            DType::BF16 => data.iter().flat_map(|&x| x.to_le_bytes()).collect(),
+            DType::F32 => data.iter().flat_map(|&x| x.to_le_bytes()).collect(),
+            DType::F64 => data.iter().flat_map(|&x| x.to_le_bytes()).collect(),
+            DType::I32 => data.iter().flat_map(|&x| x.to_le_bytes()).collect(),
+            DType::I16 => data.iter().flat_map(|&x| x.to_le_bytes()).collect(),
+            DType::F8E4M3 | DType::F6E2M3 | DType::F6E3M2 | DType::F4 | DType::F8E8M0 => {
+                return Err(crate::Error::Vulkan(VulkanError::Message(format!(
+                    "storage_from_slice not supported for dtype {:?}",
+                    dtype
+                ))))
+            }
+        };
 
         self.queue().write_buffer(&buffer, 0, &bytes);
 
-        Ok(WgpuStorage::new(buffer, elem_count, dtype, self.clone()))
+        Ok(VulkanStorage::new(buffer, elem_count, dtype, self.clone()))
     }
 
     fn storage_from_cpu_storage(&self, cpu_storage: &CpuStorage) -> Result<Self::Storage> {
@@ -567,11 +580,11 @@ impl BackendDevice for VulkanDevice {
         let size = data.len();
         let buffer = self.allocate_buffer(
             size as u64,
-            wgpu::BufferUsages::STORAGE_BUFFER | wgpu::BufferUsages::COPY_DST,
+            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         )?;
         self.queue().write_buffer(&buffer, 0, &data);
 
-        Ok(WgpuStorage::new(buffer, elem_count, dtype, self.clone()))
+        Ok(VulkanStorage::new(buffer, elem_count, dtype, self.clone()))
     }
 
     fn rand_uniform(
@@ -611,7 +624,7 @@ impl BackendDevice for VulkanDevice {
     }
 
     fn synchronize(&self) -> Result<()> {
-        self.queue().on_submitted_work_done(|_| {});
+        self.queue().on_submitted_work_done(|| {});
         Ok(())
     }
 }

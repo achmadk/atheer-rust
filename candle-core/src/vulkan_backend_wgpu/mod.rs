@@ -1,7 +1,11 @@
+#[cfg(all(feature = "vulkan", target_os = "android"))]
 mod device;
+#[cfg(all(feature = "vulkan", target_os = "android"))]
 mod shaders;
 
+#[cfg(all(feature = "vulkan", target_os = "android"))]
 pub use device::VulkanDevice;
+#[cfg(all(feature = "vulkan", target_os = "android"))]
 pub use shaders::{ADD_SHADER, AFFINE_SHADER, BROADCAST_ADD_SHADER, GEMM_SHADER};
 
 #[derive(thiserror::Error, Debug)]
@@ -40,10 +44,7 @@ use crate::op::{BinaryOpT, CmpOp, ReduceOp, UnaryOpT};
 use crate::{CpuStorage, DType, Error, Layout, Result, Shape};
 
 #[cfg(all(feature = "vulkan", target_os = "android"))]
-use super::shaders;
-
-#[cfg(all(feature = "vulkan", target_os = "android"))]
-use std::sync::Arc;
+use shaders;
 
 #[cfg(all(feature = "vulkan", target_os = "android"))]
 pub struct VulkanStorage {
@@ -87,7 +88,7 @@ impl VulkanStorage {
         let size = elem_count * self.dtype.size_in_bytes();
         let buffer = self
             .device
-            .allocate_buffer(size as u64, wgpu::BufferUsages::STORAGE_BUFFER)?;
+            .allocate_buffer(size as u64, wgpu::BufferUsages::STORAGE)?;
         Ok(VulkanStorage::new(
             buffer,
             elem_count,
@@ -181,7 +182,7 @@ impl VulkanStorage {
         slice.map_async(wgpu::MapMode::Read, move |result| {
             tx.send(result).unwrap();
         });
-        pollster::block_on(rx.recv()).unwrap().map_err(|e| {
+        rx.recv().unwrap().map_err(|e| {
             Error::Vulkan(VulkanError::Mapping(format!("failed to map buffer: {}", e)))
         })?;
         let data = slice.get_mapped_range().to_vec();
@@ -280,7 +281,7 @@ impl BackendStorage for VulkanStorage {
 
         let mut output = self.device.allocate_buffer(
             (count * self.dtype.size_in_bytes()) as u64,
-            wgpu::BufferUsages::STORAGE_BUFFER | wgpu::BufferUsages::COPY_DST,
+            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         )?;
 
         self.device.dispatch_affine(
@@ -410,7 +411,7 @@ impl BackendStorage for VulkanStorage {
             "add" => {
                 let mut output = self.device.allocate_buffer(
                     (count * self.dtype.size_in_bytes()) as u64,
-                    wgpu::BufferUsages::STORAGE_BUFFER | wgpu::BufferUsages::COPY_DST,
+                    wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
                 )?;
 
                 self.device.dispatch_binary_op(
