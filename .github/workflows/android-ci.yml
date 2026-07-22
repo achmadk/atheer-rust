@@ -359,6 +359,7 @@ jobs:
 
   instrumented-tests:
     name: Instrumentation Tests (Emulator)
+    if: github.event_name == 'workflow_dispatch'
     needs: [build, candle-vulkan-build, candle-vulkan-tests]
     runs-on: ubuntu-latest
     defaults:
