@@ -359,10 +359,7 @@ jobs:
 
   instrumented-tests:
     name: Instrumentation Tests (Emulator)
-    if: >
-      github.event_name == 'workflow_dispatch'
-      && inputs.run_instrumentation_tests == true
-    needs: [build]
+    needs: [build, candle-vulkan-build, candle-vulkan-tests]
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -370,7 +367,7 @@ jobs:
     strategy:
       matrix:
         api-level:
-          - ${{ fromJSON(format('[{0}]', inputs.emulator_api_level)) }}
+          - ${{ github.event_name == 'workflow_dispatch' && inputs.emulator_api_level || '34' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
