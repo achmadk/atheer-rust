@@ -612,7 +612,7 @@ mod tests {
         assert!(result.is_err());
 
         match result.unwrap_err() {
-            crate::AtheerError::ModelLoadFailed { message } => {
+            crate::AtheerError::ModelLoadFailed { msg } => {
                 // On Metal-unavailable systems, device() returns Cpu for Metal,
                 // so both attempts produce the same error. Still exercises the
                 // degradation retry code path.
