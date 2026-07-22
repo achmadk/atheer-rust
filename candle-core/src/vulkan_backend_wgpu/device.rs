@@ -127,6 +127,15 @@ impl VulkanDevice {
         Ok(())
     }
 
+    pub fn new_buffer_with_data(&self, data: &[u8]) -> Result<wgpu::Buffer> {
+        let buffer = self.allocate_buffer(
+            data.len() as u64,
+            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        )?;
+        self.queue().write_buffer(&buffer, 0, data)?;
+        Ok(buffer)
+    }
+
     pub(crate) fn sync(&self) -> Result<()> {
         self.inner.queue.on_submitted_work_done(|| {});
         Ok(())
