@@ -132,7 +132,7 @@ impl VulkanDevice {
             data.len() as u64,
             wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         )?;
-        self.queue().write_buffer(&buffer, 0, data)?;
+        self.queue().write_buffer(&buffer, 0, data);
         Ok(buffer)
     }
 
