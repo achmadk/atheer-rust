@@ -41,7 +41,12 @@ impl Storage {
             Self::Cpu(_) => Device::Cpu,
             Self::Cuda(storage) => Device::Cuda(storage.device().clone()),
             Self::Metal(storage) => Device::Metal(storage.device().clone()),
+            #[cfg(all(feature = "vulkan", target_os = "android"))]
             Self::Vulkan(storage) => Device::Vulkan(storage.device().clone()),
+            #[cfg(not(all(feature = "vulkan", target_os = "android")))]
+            Self::Vulkan(_) => {
+                unreachable!("Storage::Vulkan cannot be created on non-Android platforms")
+            }
         }
     }
 
@@ -50,7 +55,12 @@ impl Storage {
             Self::Cpu(storage) => storage.dtype(),
             Self::Cuda(storage) => storage.dtype(),
             Self::Metal(storage) => storage.dtype(),
+            #[cfg(all(feature = "vulkan", target_os = "android"))]
             Self::Vulkan(storage) => storage.dtype(),
+            #[cfg(not(all(feature = "vulkan", target_os = "android")))]
+            Self::Vulkan(_) => {
+                unreachable!("Storage::Vulkan cannot be created on non-Android platforms")
+            }
         }
     }
 

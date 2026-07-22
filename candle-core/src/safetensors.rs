@@ -206,6 +206,7 @@ impl Load for st::TensorView<'_> {
 }
 
 impl Tensor {
+    #[cfg(all(feature = "vulkan", target_os = "android"))]
     pub fn from_raw_buffer(
         data: &[u8],
         dtype: DType,
@@ -224,7 +225,6 @@ impl Tensor {
             DType::F64 => convert_slice::<f64>(data, shape, device),
             DType::F8E4M3 => convert_slice::<float8::F8E4M3>(data, shape, device),
             DType::F6E2M3 | DType::F6E3M2 | DType::F4 | DType::F8E8M0 => {
-                // For dummy types, create storage with raw bytes
                 let storage = match device {
                     Device::Cpu => {
                         let cpu_storage = match dtype {
@@ -274,8 +274,92 @@ impl Tensor {
                     Device::Metal(_) => {
                         return Err(Error::Msg("Metal support not compiled".to_string()));
                     }
-                    Device::Vulkan(_) => {
-                        return Err(Error::Msg("Vulkan support not compiled".to_string()));
+                    Device::Vulkan(device) => {
+                        let buffer = device.new_buffer_with_data(data)?;
+
+                        let storage = crate::vulkan_backend_wgpu::VulkanStorage::new(
+                            buffer,
+                            data.len(),
+                            dtype,
+                            device.clone(),
+                        );
+                        Storage::Vulkan(storage)
+                    }
+                };
+
+                let op = BackpropOp::none();
+                Ok(from_storage(storage, shape, op, false))
+            }
+        }
+    }
+
+    #[cfg(not(all(feature = "vulkan", target_os = "android")))]
+    pub fn from_raw_buffer(
+        data: &[u8],
+        dtype: DType,
+        shape: &[usize],
+        device: &Device,
+    ) -> Result<Self> {
+        match dtype {
+            DType::U8 => convert_slice::<u8>(data, shape, device),
+            DType::U32 => convert_slice::<u32>(data, shape, device),
+            DType::I16 => convert_slice::<i16>(data, shape, device),
+            DType::I32 => convert_slice::<i32>(data, shape, device),
+            DType::I64 => convert_slice::<i64>(data, shape, device),
+            DType::BF16 => convert_slice::<half::bf16>(data, shape, device),
+            DType::F16 => convert_slice::<half::f16>(data, shape, device),
+            DType::F32 => convert_slice::<f32>(data, shape, device),
+            DType::F64 => convert_slice::<f64>(data, shape, device),
+            DType::F8E4M3 => convert_slice::<float8::F8E4M3>(data, shape, device),
+            DType::F6E2M3 | DType::F6E3M2 | DType::F4 | DType::F8E8M0 => {
+                let storage = match device {
+                    Device::Cpu => {
+                        let cpu_storage = match dtype {
+                            DType::F6E2M3 => crate::cpu_backend::CpuStorage::F6E2M3(data.to_vec()),
+                            DType::F6E3M2 => crate::cpu_backend::CpuStorage::F6E3M2(data.to_vec()),
+                            DType::F4 => crate::cpu_backend::CpuStorage::F4(data.to_vec()),
+                            DType::F8E8M0 => crate::cpu_backend::CpuStorage::F8E8M0(data.to_vec()),
+                            _ => unreachable!(),
+                        };
+                        Storage::Cpu(cpu_storage)
+                    }
+                    #[cfg(feature = "cuda")]
+                    Device::Cuda(device) => {
+                        let mut slice = unsafe { device.alloc::<u8>(data.len())? };
+                        device.memcpy_htod(data, &mut slice)?;
+
+                        let slice = match dtype {
+                            DType::F6E2M3 => crate::cuda_backend::CudaStorageSlice::F6E2M3(slice),
+                            DType::F6E3M2 => crate::cuda_backend::CudaStorageSlice::F6E3M2(slice),
+                            DType::F4 => crate::cuda_backend::CudaStorageSlice::F4(slice),
+                            DType::F8E8M0 => crate::cuda_backend::CudaStorageSlice::F8E8M0(slice),
+                            _ => unreachable!(),
+                        };
+                        let storage = crate::cuda_backend::CudaStorage {
+                            slice,
+                            device: device.clone(),
+                        };
+                        Storage::Cuda(storage)
+                    }
+                    #[cfg(not(feature = "cuda"))]
+                    Device::Cuda(_) => {
+                        return Err(Error::Msg("CUDA support not compiled".to_string()));
+                    }
+                    #[cfg(feature = "metal")]
+                    Device::Metal(device) => {
+                        let buffer = device.new_buffer_with_data(data)?;
+
+                        let storage = crate::metal_backend::MetalStorage::new(
+                            buffer,
+                            device.clone(),
+                            data.len(),
+                            dtype,
+                        );
+                        Storage::Metal(storage)
+                    }
+                    #[cfg(not(feature = "metal"))]
+                    Device::Metal(_) => {
+                        return Err(Error::Msg("Metal support not compiled".to_string()));
                     }
                 };
 
@@ -373,8 +457,17 @@ fn convert_dummy(view: &st::TensorView<'_>, device: &Device) -> Result<Tensor> {
         Device::Metal(_) => {
             return Err(Error::Msg("Metal support not compiled".to_string()));
         }
-        Device::Vulkan(_) => {
-            return Err(Error::Msg("Vulkan support not compiled".to_string()));
+        #[cfg(all(feature = "vulkan", target_os = "android"))]
+        Device::Vulkan(device) => {
+            let buffer = device.new_buffer_with_data(data)?;
+
+            let storage = crate::vulkan_backend_wgpu::VulkanStorage::new(
+                buffer,
+                data.len(),
+                dtype,
+                device.clone(),
+            );
+            Storage::Vulkan(storage)
         }
     };
 

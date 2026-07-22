@@ -2369,6 +2369,7 @@ impl Tensor {
     }
 
     /// If the target device is the same as the tensor device, only a shallow copy is performed.
+    #[cfg(all(feature = "vulkan", target_os = "android"))]
     pub fn to_device(&self, device: &Device) -> Result<Tensor> {
         if self.device().same_device(device) {
             Ok(self.clone())
@@ -2387,7 +2388,47 @@ impl Tensor {
                 (Storage::Metal(storage), Device::Cpu) => Storage::Cpu(storage.to_cpu_storage()?),
                 (Storage::Vulkan(storage), Device::Cpu) => Storage::Cpu(storage.to_cpu_storage()?),
                 (Storage::Cuda(storage), Device::Cuda(cuda)) => {
-                    // can't clone storage if it's the same device because of the underlying device ptr
+                    let dst_storage = storage.transfer_to_device(cuda)?;
+                    Storage::Cuda(dst_storage)
+                }
+                (Storage::Cpu(storage), Device::Cpu) => Storage::Cpu(storage.clone()),
+                _ => {
+                    bail!(
+                        "not implemented yet, self.device: {:?}, device: {:?}",
+                        self.device(),
+                        device
+                    )
+                }
+            };
+            let op = BackpropOp::new1(self, Op::ToDevice);
+            let tensor_ = Tensor_ {
+                id: TensorId::new(),
+                storage: Arc::new(RwLock::new(storage)),
+                layout: self.layout.clone(),
+                op,
+                is_variable: false,
+                dtype: self.dtype,
+                device: device.clone(),
+            };
+            Ok(Tensor(Arc::new(tensor_)))
+        }
+    }
+
+    #[cfg(not(all(feature = "vulkan", target_os = "android")))]
+    pub fn to_device(&self, device: &Device) -> Result<Tensor> {
+        if self.device().same_device(device) {
+            Ok(self.clone())
+        } else {
+            let storage = match (&*self.storage(), device) {
+                (Storage::Cpu(storage), Device::Cuda(cuda)) => {
+                    Storage::Cuda(cuda.storage_from_cpu_storage(storage)?)
+                }
+                (Storage::Cpu(storage), Device::Metal(metal)) => {
+                    Storage::Metal(metal.storage_from_cpu_storage(storage)?)
+                }
+                (Storage::Cuda(storage), Device::Cpu) => Storage::Cpu(storage.to_cpu_storage()?),
+                (Storage::Metal(storage), Device::Cpu) => Storage::Cpu(storage.to_cpu_storage()?),
+                (Storage::Cuda(storage), Device::Cuda(cuda)) => {
                     let dst_storage = storage.transfer_to_device(cuda)?;
                     Storage::Cuda(dst_storage)
                 }

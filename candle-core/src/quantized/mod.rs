@@ -68,6 +68,7 @@ pub struct QTensor {
     shape: Shape,
 }
 
+#[cfg(all(feature = "vulkan", target_os = "android"))]
 impl Device {
     fn qzeros(&self, elem_count: usize, dtype: GgmlDType) -> Result<QStorage> {
         match self {
@@ -91,6 +92,26 @@ impl Device {
     }
 }
 
+#[cfg(not(all(feature = "vulkan", target_os = "android")))]
+impl Device {
+    fn qzeros(&self, elem_count: usize, dtype: GgmlDType) -> Result<QStorage> {
+        match self {
+            Device::Cpu => {
+                let storage = dtype.cpu_zeros(elem_count);
+                Ok(QStorage::Cpu(storage))
+            }
+            Device::Metal(metal) => {
+                let storage = metal::QMetalStorage::zeros(metal, elem_count, dtype)?;
+                Ok(QStorage::Metal(storage))
+            }
+            Device::Cuda(cuda) => {
+                let storage = cuda::QCudaStorage::zeros(cuda, elem_count, dtype)?;
+                Ok(QStorage::Cuda(storage))
+            }
+        }
+    }
+}
+
 pub enum QStorage {
     Cpu(Box<dyn QuantizedType>),
     Metal(metal::QMetalStorage),
@@ -99,6 +120,7 @@ pub enum QStorage {
 }
 
 impl QStorage {
+    #[cfg(all(feature = "vulkan", target_os = "android"))]
     pub fn from_data(data: Cow<'_, [u8]>, device: &Device, dtype: GgmlDType) -> Result<Self> {
         match device {
             Device::Cpu => Ok(Self::Cpu(dtype.from_data(data))),
@@ -156,6 +178,47 @@ impl QStorage {
         }
     }
 
+    #[cfg(not(all(feature = "vulkan", target_os = "android")))]
+    pub fn from_data(data: Cow<'_, [u8]>, device: &Device, dtype: GgmlDType) -> Result<Self> {
+        match device {
+            Device::Cpu => Ok(Self::Cpu(dtype.from_data(data))),
+            Device::Metal(d) => match dtype {
+                GgmlDType::F32 => metal::load_quantized(d, as_t_slice::<f32>(data)),
+                GgmlDType::F16 => metal::load_quantized(d, as_t_slice::<f16>(data)),
+                GgmlDType::Q4_0 => metal::load_quantized(d, as_t_slice::<BlockQ4_0>(data)),
+                GgmlDType::Q4_1 => metal::load_quantized(d, as_t_slice::<BlockQ4_1>(data)),
+                GgmlDType::Q5_0 => metal::load_quantized(d, as_t_slice::<BlockQ5_0>(data)),
+                GgmlDType::Q5_1 => metal::load_quantized(d, as_t_slice::<BlockQ5_1>(data)),
+                GgmlDType::Q8_0 => metal::load_quantized(d, as_t_slice::<BlockQ8_0>(data)),
+                GgmlDType::Q8_1 => metal::load_quantized(d, as_t_slice::<BlockQ8_1>(data)),
+                GgmlDType::Q2K => metal::load_quantized(d, as_t_slice::<BlockQ2K>(data)),
+                GgmlDType::Q3K => metal::load_quantized(d, as_t_slice::<BlockQ3K>(data)),
+                GgmlDType::Q4K => metal::load_quantized(d, as_t_slice::<BlockQ4K>(data)),
+                GgmlDType::Q5K => metal::load_quantized(d, as_t_slice::<BlockQ5K>(data)),
+                GgmlDType::Q6K => metal::load_quantized(d, as_t_slice::<BlockQ6K>(data)),
+                GgmlDType::Q8K => metal::load_quantized(d, as_t_slice::<BlockQ8K>(data)),
+                GgmlDType::BF16 => metal::load_quantized(d, as_t_slice::<bf16>(data)),
+            },
+            Device::Cuda(d) => match dtype {
+                GgmlDType::F32 => cuda::load_quantized(d, as_t_slice::<f32>(data)),
+                GgmlDType::F16 => cuda::load_quantized(d, as_t_slice::<f16>(data)),
+                GgmlDType::Q4_0 => cuda::load_quantized(d, as_t_slice::<BlockQ4_0>(data)),
+                GgmlDType::Q4_1 => cuda::load_quantized(d, as_t_slice::<BlockQ4_1>(data)),
+                GgmlDType::Q5_0 => cuda::load_quantized(d, as_t_slice::<BlockQ5_0>(data)),
+                GgmlDType::Q5_1 => cuda::load_quantized(d, as_t_slice::<BlockQ5_1>(data)),
+                GgmlDType::Q8_0 => cuda::load_quantized(d, as_t_slice::<BlockQ8_0>(data)),
+                GgmlDType::Q8_1 => cuda::load_quantized(d, as_t_slice::<BlockQ8_1>(data)),
+                GgmlDType::Q2K => cuda::load_quantized(d, as_t_slice::<BlockQ2K>(data)),
+                GgmlDType::Q3K => cuda::load_quantized(d, as_t_slice::<BlockQ3K>(data)),
+                GgmlDType::Q4K => cuda::load_quantized(d, as_t_slice::<BlockQ4K>(data)),
+                GgmlDType::Q5K => cuda::load_quantized(d, as_t_slice::<BlockQ5K>(data)),
+                GgmlDType::Q6K => cuda::load_quantized(d, as_t_slice::<BlockQ6K>(data)),
+                GgmlDType::Q8K => cuda::load_quantized(d, as_t_slice::<BlockQ8K>(data)),
+                GgmlDType::BF16 => cuda::load_quantized(d, as_t_slice::<bf16>(data)),
+            },
+        }
+    }
+
     fn block_size(&self) -> usize {
         match self {
             QStorage::Cpu(storage) => storage.block_size(),
@@ -174,12 +237,25 @@ impl QStorage {
         }
     }
 
+    #[cfg(all(feature = "vulkan", target_os = "android"))]
     fn device(&self) -> Device {
         match self {
             QStorage::Cpu(_storage) => Device::Cpu,
             QStorage::Metal(storage) => Device::Metal(storage.device().clone()),
             QStorage::Cuda(storage) => Device::Cuda(storage.device().clone()),
             QStorage::Vulkan(storage) => Device::Vulkan(storage.device().clone()),
+        }
+    }
+
+    #[cfg(not(all(feature = "vulkan", target_os = "android")))]
+    fn device(&self) -> Device {
+        match self {
+            QStorage::Cpu(_storage) => Device::Cpu,
+            QStorage::Metal(storage) => Device::Metal(storage.device().clone()),
+            QStorage::Cuda(storage) => Device::Cuda(storage.device().clone()),
+            QStorage::Vulkan(_) => {
+                unreachable!("QVulkanStorage cannot be created on non-Android platforms")
+            }
         }
     }
 
