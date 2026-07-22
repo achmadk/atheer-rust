@@ -390,8 +390,8 @@ jobs:
       - name: Download .so artifact
         uses: actions/download-artifact@v6
         with:
-          name: libatheer_gpu_shard-x86_64
-          path: android/atheer-sdk/src/main/jniLibs/x86_64/
+          name: libatheer_gpu_shard-arm64-v8a
+          path: android/atheer-sdk/src/main/jniLibs/arm64-v8a/
 
       - name: Restore Gradle cache
         uses: actions/cache@v6
@@ -452,7 +452,7 @@ jobs:
         id: emulator
         with:
           api-level: ${{ matrix.api-level }}
-          arch: x86_64
+          arch: arm64-v8a
           target: google_apis
           avd-name: atheer-test
           force-avd-creation: true
