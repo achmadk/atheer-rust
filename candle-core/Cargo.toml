@@ -17,6 +17,7 @@ nccl = ["cuda", "cudarc/nccl"]
 mkl = ["dep:libc", "dep:intel-mkl-src"]
 accelerate = ["dep:libc", "dep:accelerate-src"]
 metal = ["dep:objc2-metal", "dep:objc2-foundation", "dep:candle-metal-kernels", "candle-ug?/metal"]
+vulkan = ["dep:wgpu", "dep:pollster", "dep:bytemuck"]
 ug = ["dep:candle-ug"]
 
 [dependencies]
@@ -46,6 +47,14 @@ zip = { version = "7.2.0", default-features = false }
 
 [target.'cfg(all(not(target_arch = "wasm32"), not(target_os = "ios")))'.dependencies]
 candle-ug = { version = "0.10.2", optional = true }
+
+[target.'cfg(target_os = "android")'.dependencies]
+wgpu = { version = "22.0", features = ["vulkan-portability"], optional = true }
+pollster = { version = "0.4", optional = true }
+bytemuck = { version = "1.25", optional = true }
+
+[build-dependencies]
+naga = { workspace = true, optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokenizers = { version = "0.22.0", features = ["onig"], default-features = false }

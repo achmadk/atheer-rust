@@ -1,17 +1,33 @@
 name: Android CI
 
+# =============================================================================
+# Vulkan Backend Note
+# =============================================================================
+# The candle-core Vulkan backend was reimplemented to use wgpu instead of raw ash.
+# - wgpu provides a safer, higher-level API with built-in WGSL shader compilation
+# - GPU compute is dispatched via compute pipelines, not CPU fallback
+# - Full GPU verification requires physical Android device (emulator uses SwiftShader)
+#
+# Key changes:
+# - candle-core/src/vulkan_backend_wgpu/ - new wgpu-backed implementation
+# - candle-core/src/vulkan_backend_old/ - preserved for rollback reference
+# - Tests in candle-core/tests/vulkan_tests.rs verify correctness vs CPU reference
+# =============================================================================
+
 on:
   push:
     branches: [main]
     paths:
       - 'android/**'
       - 'atheer-gpu-shard/**'
+      - 'candle-core/**'
       - '.github/workflows/android-ci.yml'
   pull_request:
     branches: [main]
     paths:
       - 'android/**'
       - 'atheer-gpu-shard/**'
+      - 'candle-core/**'
       - '.github/workflows/android-ci.yml'
   workflow_dispatch:
     inputs:
@@ -133,12 +149,218 @@ jobs:
           path: android/atheer-sdk/src/main/jniLibs/arm64-v8a/libatheer_gpu_shard.so
           retention-days: 7
 
+  candle-vulkan-build:
+    name: Candle Vulkan Build (wgpu-backed)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install NDK
+        run: |
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install \
+            "ndk;27.3.13750724" \
+            --sdk_root="$ANDROID_HOME"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Restore Rust cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry/
+            ~/.cargo/git/
+            target/
+          key: ${{ runner.os }}-android-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-android-cargo-
+            ${{ runner.os }}-cargo-
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - name: Cross-compile candle-core with vulkan feature for arm64-v8a
+        run: |
+          cargo ndk \
+            -t arm64-v8a \
+            build -p candle-core --features vulkan --release
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.3.13750724
+
+      - name: Verify candle-core with vulkan compiled
+        run: |
+          # Check for compiled library
+          if ls target/aarch64-linux-android/release/libcandle_core.rlib 2>/dev/null; then
+            echo "✓ libcandle_core.rlib found"
+          elif ls target/aarch64-linux-android/release/deps/libcandle_core*.rlib 2>/dev/null; then
+            echo "✓ libcandle_core dependencies found"
+            ls target/aarch64-linux-android/release/deps/libcandle_core*.rlib | head -5
+          else
+            echo "Checking for compiled artifacts..."
+            find target/aarch64-linux-android -name "libcandle*" -type f 2>/dev/null | head -10
+            echo "Build may have succeeded but rlib naming differs"
+          fi
+
+  candle-vulkan-tests:
+    name: Candle Vulkan Unit Tests (wgpu)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    # NOTE: Emulator-based Vulkan testing has limitations
+    # - SwiftShader (software renderer) emulates Vulkan, not real GPU
+    # - Full GPU verification requires physical Android device with Vulkan
+    # - Tests here verify compilation and basic API correctness against CPU reference
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install NDK
+        run: |
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install \
+            "ndk;27.3.13750724" \
+            --sdk_root="$ANDROID_HOME"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-linux-android
+
+      - name: Restore Rust cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry/
+            ~/.cargo/git/
+            target/
+          key: ${{ runner.os }}-android-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-android-cargo-
+            ${{ runner.os }}-cargo-
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      # ── Build test binary ───────────────────────────────────────
+
+      - name: Build candle-vulkan-test binary for Android
+        run: |
+          # Build the test binary targeting Android
+          cargo ndk \
+            -t x86_64 \
+            build -p candle-core --features vulkan \
+            --tests --release 2>&1 | tail -30
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.3.13750724
+
+      - name: Find test binary
+        run: |
+          find target/x86_64-linux-android -name "candle_core*" -type f 2>/dev/null | head -20
+
+      # ── KVM Permissions ─────────────────────────────────────────
+      - name: Enable KVM group permissions
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # ── Create Test Execution Script ─────────────────────────────
+
+      - name: Generate emulator script
+        run: |
+          cat << 'EOF' > run_vulkan_tests.sh
+          #!/usr/bin/env bash
+          set -e
+
+          echo "Waiting for device..."
+          adb wait-for-device
+
+          echo "Creating test data directory..."
+          adb shell mkdir -p /data/local/tmp/candle-test
+          adb shell chmod 777 /data/local/tmp/candle-test
+
+          echo "Pushing test binary to device..."
+          # Search specifically in release/deps and filter out metadata extensions (.d, .rlib, .rmeta, .so)
+          TESTBIN=$(find target/x86_64-linux-android/release/deps -maxdepth 1 -type f -name "candle_core*" ! -name "*.d" ! -name "*.rlib" ! -name "*.rmeta" ! -name "*.so" | head -1)
+
+          if [ -n "$TESTBIN" ]; then
+            echo "Found binary: $TESTBIN"
+            adb push "$TESTBIN" /data/local/tmp/candle-test/candle_core_test
+            adb shell chmod +x /data/local/tmp/candle-test/candle_core_test
+          else
+            echo "Test binary not found!"
+            exit 1
+          fi
+
+          echo "Running Vulkan smoke test..."
+          # Set working dir AND override TMPDIR to the writable tmp directory
+          adb shell "cd /data/local/tmp/candle-test && TMPDIR=/data/local/tmp/candle-test ./candle_core_test --test-threads=1"
+
+          echo "Testing ADB connectivity..."
+          adb devices
+          adb shell cat /proc/version 2>/dev/null || echo "proc/version not available"
+          EOF
+
+          chmod +x run_vulkan_tests.sh
+
+      # ── Emulator ────────────────────────────────────────────────
+      # WARNING: SwiftShader emulates Vulkan in software, not actual GPU execution.
+      # The wgpu-based Vulkan backend will compile but real GPU dispatch
+      # requires physical hardware. See candle-core/tests/vulkan_tests.rs for
+      # tests that verify correctness against CPU reference.
+
+      - uses: reactivecircus/android-emulator-runner@v2
+        id: emulator
+        with:
+          api-level: 34
+          arch: x86_64
+          target: aosp_atd # <-- Lightweight target for fast CI booting
+          profile: pixel_6 # <-- Gives a clean hardware configuration
+          avd-name: candle-vulkan-test
+          force-avd-creation: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 4096
+          disable-animations: true
+          disable-spellchecker: true
+          script: ./run_vulkan_tests.sh
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: candle-vulkan-test-results
+          path: |
+            target/x86_64-linux-android/
+            /tmp/candle-test-results/
+          retention-days: 14
+
   instrumented-tests:
     name: Instrumentation Tests (Emulator)
-    if: >
-      github.event_name == 'workflow_dispatch'
-      && inputs.run_instrumentation_tests == true
-    needs: [build]
+    if: github.event_name == 'workflow_dispatch'
+    needs: [build, candle-vulkan-build, candle-vulkan-tests]
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -146,7 +368,7 @@ jobs:
     strategy:
       matrix:
         api-level:
-          - ${{ fromJSON(format('[{0}]', inputs.emulator_api_level)) }}
+          - ${{ github.event_name == 'workflow_dispatch' && inputs.emulator_api_level || '34' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -172,52 +394,6 @@ jobs:
           name: libatheer_gpu_shard-arm64-v8a
           path: android/atheer-sdk/src/main/jniLibs/arm64-v8a/
 
-      # ── Emulator ────────────────────────────────────────────────
-
-      - uses: reactivecircus/android-emulator-runner@v2
-        id: emulator
-        with:
-          api-level: ${{ matrix.api-level }}
-          arch: arm64-v8a
-          target: google_apis
-          avd-name: atheer-test
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -memory 2048
-          disable-animations: true
-          disable-spellchecker: true
-          emulator-build: 11076708
-          # No script — test execution handled in subsequent steps
-
-      # ── Prepare test models ─────────────────────────────────────
-
-      - name: Push test models to emulator
-        run: |
-          adb wait-for-device
-          adb shell settings put global window_animation_scale 0
-          adb shell settings put global transition_animation_scale 0
-          adb shell settings put global animator_duration_scale 0
-
-          # GGUFv3 header with tensor_count=0 — invalid model for probe-failure tests
-          python3 -c "
-          import struct
-          header = b'GGUF'
-          header += struct.pack('<I', 3)     # version
-          header += struct.pack('<Q', 0)     # tensor_count = 0
-          header += struct.pack('<Q', 0)     # metadata_kv_count = 0
-          with open('/tmp/test_model_corrupt.gguf', 'wb') as f:
-              f.write(header)
-              f.write(b'\x00' * (4096 - len(header)))
-          "
-          adb push /tmp/test_model_corrupt.gguf /data/local/tmp/test_model_corrupt.gguf
-
-          # Placeholder for real model test (@Ignore in CI)
-          echo "placeholder" > /tmp/test_model.gguf
-          adb push /tmp/test_model.gguf /data/local/tmp/test_model.gguf
-
-      # ── Run tests ───────────────────────────────────────────────
-
-      - name: Install APK
-        run: adb install -t android/atheer-sdk/build/outputs/apk/debug/atheer-sdk-debug.apk
-
       - name: Restore Gradle cache
         uses: actions/cache@v6
         with:
@@ -228,11 +404,63 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: Run connected Android tests
+      # ── Create Test Execution Script ─────────────────────────────
+
+      - name: Generate emulator script
         run: |
+          cat << 'EOF' > run_instrumented_tests.sh
+          #!/usr/bin/env bash
+          set -e
+
+          echo "Waiting for device..."
+          adb wait-for-device
+
+          echo "Disabling animations..."
+          adb shell settings put global window_animation_scale 0
+          adb shell settings put global transition_animation_scale 0
+          adb shell settings put global animator_duration_scale 0
+
+          echo "Generating test models..."
+          python3 -c "
+          import struct
+          header = b'GGUF'
+          header += struct.pack('<I', 3)
+          header += struct.pack('<Q', 0)
+          header += struct.pack('<Q', 0)
+          with open('/tmp/test_model_corrupt.gguf', 'wb') as f:
+              f.write(header)
+              f.write(b'\x00' * (4096 - len(header)))
+          "
+
+          echo "Pushing test models..."
+          adb push /tmp/test_model_corrupt.gguf /data/local/tmp/test_model_corrupt.gguf
+          echo "placeholder" > /tmp/test_model.gguf
+          adb push /tmp/test_model.gguf /data/local/tmp/test_model.gguf
+
+          echo "Installing APK..."
+          adb install -t android/atheer-sdk/build/outputs/apk/debug/atheer-sdk-debug.apk
+
+          echo "Running connected Android tests..."
+          cd android
           ./gradlew :atheer-sdk:connectedAndroidTest --no-daemon --stacktrace
-        working-directory: android
-        continue-on-error: true
+          EOF
+
+          chmod +x run_instrumented_tests.sh
+
+      # ── Emulator ────────────────────────────────────────────────
+
+      - uses: reactivecircus/android-emulator-runner@v2
+        id: emulator
+        with:
+          api-level: ${{ matrix.api-level }}
+          arch: x86_64
+          target: google_apis
+          avd-name: atheer-test
+          force-avd-creation: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 2048
+          disable-animations: true
+          disable-spellchecker: true
+          script: ./run_instrumented_tests.sh
 
       - name: Upload test results
         if: always()

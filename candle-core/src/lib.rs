@@ -20,6 +20,7 @@
 //! - Model training
 //! - Distributed computing (NCCL).
 //! - Models out of the box (Llama, Whisper, Falcon, ...)
+//! - Vulkan backend for Android GPU inference (via `vulkan` feature, Android-only, wgpu-backed)
 //!
 //! ## FAQ
 //!
@@ -67,6 +68,7 @@ mod dtype;
 pub mod dummy_cuda_backend;
 pub mod dummy_dtype;
 mod dummy_metal_backend;
+mod dummy_vulkan_backend;
 pub mod error;
 mod indexer;
 pub mod layout;
@@ -125,11 +127,23 @@ pub use metal_backend::{MetalDevice, MetalError, MetalStorage};
 #[cfg(not(feature = "metal"))]
 pub use dummy_metal_backend::{MetalDevice, MetalError, MetalStorage};
 
+// Vulkan: real wgpu-backed Vulkan backend on Android with `vulkan` feature,
+// dummy implementation on other targets.
+#[cfg(all(feature = "vulkan", target_os = "android"))]
+pub use vulkan_backend_wgpu::{VulkanDevice, VulkanError, VulkanStorage};
+
+#[cfg(not(all(feature = "vulkan", target_os = "android")))]
+pub use dummy_vulkan_backend::{VulkanDevice, VulkanError, VulkanStorage};
+
 #[cfg(feature = "mkl")]
 extern crate intel_mkl_src;
 
 #[cfg(feature = "accelerate")]
 extern crate accelerate_src;
+
+// Vulkan: wgpu-backed backend on Android, dummy otherwise.
+#[cfg(all(feature = "vulkan", target_os = "android"))]
+pub mod vulkan_backend_wgpu;
 
 pub trait ToUsize2 {
     fn to_usize2(self) -> (usize, usize);

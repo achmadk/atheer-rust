@@ -301,10 +301,10 @@ impl AtheerEngine {
             .as_ref()
             .map(|hex_str| -> std::result::Result<[u8; 32], AtheerError> {
                 let bytes = hex::decode(hex_str).map_err(|e| AtheerError::ModelLoadFailed {
-                    message: format!("Invalid model_expected_sha256 hex: {e}"),
+                    msg: format!("Invalid model_expected_sha256 hex: {e}"),
                 })?;
                 bytes.try_into().map_err(|_| AtheerError::ModelLoadFailed {
-                    message: "model_expected_sha256 must be 32 bytes (64 hex chars)".into(),
+                    msg: "model_expected_sha256 must be 32 bytes (64 hex chars)".into(),
                 })
             })
             .transpose()?;
@@ -322,7 +322,7 @@ impl AtheerEngine {
             );
             audit.verify_model_hash(model_path, &hash).map_err(|e| {
                 AtheerError::ModelLoadFailed {
-                    message: format!("{e}"),
+                    msg: format!("{e}"),
                 }
             })?;
         }
@@ -334,7 +334,7 @@ impl AtheerEngine {
             );
             let verifier =
                 ModelVerifier::new(key_bytes).map_err(|e| AtheerError::ModelLoadFailed {
-                    message: format!("{e}"),
+                    msg: format!("{e}"),
                 })?;
             let sig_path = {
                 let mut s = model_path_str.clone();
@@ -344,7 +344,7 @@ impl AtheerEngine {
             verifier
                 .verify_detached(model_path, &sig_path)
                 .map_err(|e| AtheerError::ModelLoadFailed {
-                    message: format!("Signature verification failed: {e}"),
+                    msg: format!("Signature verification failed: {e}"),
                 })?;
         }
 
@@ -355,13 +355,13 @@ impl AtheerEngine {
                     let mut cursor = std::io::Cursor::new(bytes);
                     atheer_core::Model::from_gguf_reader(&mut cursor, dev, expected_hash).map_err(|e| {
                         AtheerError::ModelLoadFailed {
-                            message: format!("{e}"),
+                            msg: format!("{e}"),
                         }
                     })
                 } else {
                     atheer_core::Model::from_gguf(model_path, dev, expected_hash).map_err(|e| {
                         AtheerError::ModelLoadFailed {
-                            message: format!("{e}"),
+                            msg: format!("{e}"),
                         }
                     })
                 }
@@ -384,7 +384,7 @@ impl AtheerEngine {
                         }
                         Err(second_err) => {
                             return Err(AtheerError::ModelLoadFailed {
-                                message: format!(
+                                msg: format!(
                                     "All device attempts failed. \
                                      Preferred ({device:?}): {first_err}. \
                                      CPU fallback: {second_err}"
@@ -413,7 +413,7 @@ impl AtheerEngine {
 
         let tokenizer = atheer_core::Tokenizer::from_file(tokenizer_path).map_err(|e| {
             AtheerError::TokenizerLoadFailed {
-                message: format!("{e}"),
+                msg: format!("{e}"),
             }
         })?;
 
@@ -425,7 +425,7 @@ impl AtheerEngine {
         let mut engine =
             InferenceEngine::new(model, tokenizer, sampling_config, 4096).map_err(|e| {
                 AtheerError::ModelLoadFailed {
-                    message: format!("Device validation: {e}"),
+                    msg: format!("Device validation: {e}"),
                 }
             })?;
 
@@ -738,7 +738,7 @@ impl AtheerEngine {
                             },
                         )
                         .map_err(|e| AtheerError::GenerationFailed {
-                            message: format!("{e}"),
+                            msg: format!("{e}"),
                         })
                 },
             )?;
@@ -776,7 +776,7 @@ impl AtheerEngine {
                 engine
                     .generate(&prompt, request.max_tokens, None)
                     .map_err(|e| AtheerError::GenerationFailed {
-                        message: format!("{e}"),
+                        msg: format!("{e}"),
                     })
             },
         )?;
@@ -845,13 +845,13 @@ impl AtheerEngine {
 
         let model = atheer_core::Model::from_gguf(path, &device, None).map_err(|e| {
             AtheerError::ModelLoadFailed {
-                message: format!("Failed to load draft model: {e}"),
+                msg: format!("Failed to load draft model: {e}"),
             }
         })?;
 
         let tokenizer = atheer_core::Tokenizer::from_file(tokenizer_path).map_err(|e| {
             AtheerError::TokenizerLoadFailed {
-                message: format!("{e}"),
+                msg: format!("{e}"),
             }
         })?;
 
@@ -863,7 +863,7 @@ impl AtheerEngine {
         let engine =
             InferenceEngine::new(model, tokenizer, sampling_config, 4096).map_err(|e| {
                 AtheerError::ModelLoadFailed {
-                    message: format!("Draft engine init: {e}"),
+                    msg: format!("Draft engine init: {e}"),
                 }
             })?;
 
@@ -1128,7 +1128,7 @@ impl AtheerEngine {
             detector
                 .reload_patterns()
                 .map_err(|e| AtheerError::GenerationFailed {
-                    message: format!("reload_guardrail_patterns: {e}"),
+                    msg: format!("reload_guardrail_patterns: {e}"),
                 })?;
             trace_if_ok!(self.should_log(), info,
                 target: "atheer::engine::guardrails",
@@ -1185,16 +1185,16 @@ impl AtheerEngine {
                     self.sandbox_bridge
                         .lock()
                         .map_err(|_| AtheerError::GenerationFailed {
-                            message: "sandbox bridge lock poisoned".into(),
+                            msg: "sandbox bridge lock poisoned".into(),
                         })?;
                 let bridge = sb_guard.as_mut().ok_or(AtheerError::GenerationFailed {
-                    message: "sandbox bridge not available".into(),
+                    msg: "sandbox bridge not available".into(),
                 })?;
                 let pos = input_ids.len() + generated_tokens.len();
                 bridge
                     .queue_token(next_token, pos)
                     .map_err(|e| AtheerError::GenerationFailed {
-                        message: format!("sandbox queue_token: {e}"),
+                        msg: format!("sandbox queue_token: {e}"),
                     })?
             };
 
@@ -1209,13 +1209,13 @@ impl AtheerEngine {
                         &candle_core::Device::Cpu,
                     )
                     .map_err(|e| AtheerError::GenerationFailed {
-                        message: format!("logits tensor creation: {e}"),
+                        msg: format!("logits tensor creation: {e}"),
                     })?;
                     next_token =
                         sampler
                             .sample(&logits_tensor, &generated_tokens)
                             .map_err(|e| AtheerError::GenerationFailed {
-                                message: format!("sandbox sampling: {e}"),
+                                msg: format!("sandbox sampling: {e}"),
                             })?;
                     generated_tokens.push(next_token);
                 }
@@ -1232,7 +1232,7 @@ impl AtheerEngine {
                 self.sandbox_bridge
                     .lock()
                     .map_err(|_| AtheerError::GenerationFailed {
-                        message: "sandbox bridge lock poisoned".into(),
+                        msg: "sandbox bridge lock poisoned".into(),
                     })?;
             if let Some(bridge) = sb_guard.as_mut() {
                 if let Ok(Some(batch_logits)) = bridge.flush_batch() {
@@ -1243,12 +1243,12 @@ impl AtheerEngine {
                             &candle_core::Device::Cpu,
                         )
                         .map_err(|e| AtheerError::GenerationFailed {
-                            message: format!("logits tensor creation: {e}"),
+                            msg: format!("logits tensor creation: {e}"),
                         })?;
                         let last_token = sampler
                             .sample(&logits_tensor, &generated_tokens)
                             .map_err(|e| AtheerError::GenerationFailed {
-                                message: format!("sandbox final sampling: {e}"),
+                                msg: format!("sandbox final sampling: {e}"),
                             })?;
                         generated_tokens.push(last_token);
                     }
@@ -1274,7 +1274,7 @@ impl AtheerEngine {
         let uuid = engine
             .save_checkpoint()
             .map_err(|e| AtheerError::GenerationFailed {
-                message: format!("checkpoint save failed: {e}"),
+                msg: format!("checkpoint save failed: {e}"),
             })?;
 
         // Store in memory
@@ -1314,7 +1314,7 @@ impl AtheerEngine {
         engine
             .load_checkpoint(&uuid)
             .map_err(|e| AtheerError::GenerationFailed {
-                message: format!("checkpoint load failed: {e}"),
+                msg: format!("checkpoint load failed: {e}"),
             })?;
 
         // Update in-memory UUID
@@ -1336,7 +1336,7 @@ impl AtheerEngine {
         let snapshot = engine
             .kv_cache_snapshot()
             .map_err(|e| AtheerError::GenerationFailed {
-                message: format!("L3 snapshot: kv_cache_snapshot failed: {e}"),
+                msg: format!("L3 snapshot: kv_cache_snapshot failed: {e}"),
             })?;
 
         // Serialize into the same binary format as a checkpoint (layer-prefixed)
@@ -1361,12 +1361,12 @@ impl AtheerEngine {
             let storage = storage_guard
                 .as_mut()
                 .ok_or_else(|| AtheerError::GenerationFailed {
-                    message: "L3 storage not initialized".to_string(),
+                    msg: "L3 storage not initialized".to_string(),
                 })?;
             storage
                 .snapshot(model_id, &buf)
                 .map_err(|e| AtheerError::GenerationFailed {
-                    message: format!("L3 snapshot failed: {e}"),
+                    msg: format!("L3 snapshot failed: {e}"),
                 })?
         };
 
@@ -1531,13 +1531,13 @@ impl AtheerEngine {
         let storage = storage_guard
             .as_ref()
             .ok_or_else(|| AtheerError::GenerationFailed {
-                message: "L3 storage not initialized".to_string(),
+                msg: "L3 storage not initialized".to_string(),
             })?;
 
         let bytes = storage
             .restore(snapshot_id)
             .map_err(|e| AtheerError::GenerationFailed {
-                message: format!("L3 restore failed: {e}"),
+                msg: format!("L3 restore failed: {e}"),
             })?;
 
         if bytes.is_empty() {
@@ -1594,7 +1594,7 @@ impl AtheerEngine {
         engine
             .kv_cache_restore(&snapshot)
             .map_err(|e| AtheerError::GenerationFailed {
-                message: format!("L3 thaw: kv_cache_restore failed: {e}"),
+                msg: format!("L3 thaw: kv_cache_restore failed: {e}"),
             })?;
 
         Ok(true)
@@ -1620,14 +1620,14 @@ impl AtheerEngine {
                     wrapped_key
                         .as_ref()
                         .ok_or_else(|| AtheerError::ModelDecryptionFailed {
-                            message: format!(
+                            msg: format!(
                                 "ServerDistributed key '{key_id}': key not provided. \
                              Resolve from Keychain/Keystore and pass as wrapped_key."
                             ),
                         })?;
                 if key_bytes.len() != 32 {
                     return Err(AtheerError::ModelDecryptionFailed {
-                        message: format!(
+                        msg: format!(
                             "ServerDistributed key for {key_id}: expected 32 bytes, got {}",
                             key_bytes.len()
                         ),
@@ -1645,7 +1645,7 @@ impl AtheerEngine {
                         enc.scrub();
                         self.record_scrubbed_crash("ModelDecryptFailed", model_path);
                         Err(AtheerError::ModelDecryptionFailed {
-                            message: format!("{e}"),
+                            msg: format!("{e}"),
                         })
                     }
                     Err(panic) => {
@@ -1653,7 +1653,7 @@ impl AtheerEngine {
                         let msg = extract_panic_msg(&panic);
                         self.record_scrubbed_crash("ModelDecryptPanic", "");
                         Err(AtheerError::ModelDecryptionFailed {
-                            message: format!("decrypt panicked: {msg}"),
+                            msg: format!("decrypt panicked: {msg}"),
                         })
                     }
                 }
@@ -1663,11 +1663,11 @@ impl AtheerEngine {
                     .device_uid
                     .lock()
                     .map_err(|_| AtheerError::ModelDecryptionFailed {
-                        message: "device_uid lock poisoned".into(),
+                        msg: "device_uid lock poisoned".into(),
                     })?
                     .clone()
                     .ok_or_else(|| AtheerError::ModelDecryptionFailed {
-                        message: "DeviceDerived: device_uid not set. Call set_device_uid() first."
+                        msg: "DeviceDerived: device_uid not set. Call set_device_uid() first."
                             .into(),
                     })?;
 
@@ -1680,7 +1680,7 @@ impl AtheerEngine {
                 let info = [model_hash.as_slice(), salt.as_slice()].concat();
                 prk.expand(&info, &mut key)
                     .map_err(|e| AtheerError::ModelDecryptionFailed {
-                        message: format!("DeviceDerived HKDF expand failed: {e}"),
+                        msg: format!("DeviceDerived HKDF expand failed: {e}"),
                     })?;
 
                 let enc = Aes256GcmEncryption::new(key);
@@ -1692,14 +1692,14 @@ impl AtheerEngine {
                     Ok(Err(e)) => {
                         enc.scrub();
                         Err(AtheerError::ModelDecryptionFailed {
-                            message: format!("{e}"),
+                            msg: format!("{e}"),
                         })
                     }
                     Err(panic) => {
                         enc.scrub();
                         let msg = extract_panic_msg(&panic);
                         Err(AtheerError::ModelDecryptionFailed {
-                            message: format!("decrypt panicked: {msg}"),
+                            msg: format!("decrypt panicked: {msg}"),
                         })
                     }
                 }
@@ -1710,14 +1710,14 @@ impl AtheerEngine {
             } => {
                 let schemes = self.encryption_schemes.lock().map_err(|_| {
                     AtheerError::ModelDecryptionFailed {
-                        message: "encryption_schemes lock poisoned".into(),
+                        msg: "encryption_schemes lock poisoned".into(),
                     }
                 })?;
                 let scheme =
                     schemes
                         .get(scheme_name)
                         .ok_or_else(|| AtheerError::ModelDecryptionFailed {
-                            message: format!(
+                            msg: format!(
                                 "Custom encryption scheme '{scheme_name}' not registered. \
                              Call register_encryption_scheme() before initialize()."
                             ),
@@ -1728,12 +1728,12 @@ impl AtheerEngine {
                 match result {
                     Ok(Ok(bytes)) => Ok(bytes),
                     Ok(Err(e)) => Err(AtheerError::ModelDecryptionFailed {
-                        message: format!("{e}"),
+                        msg: format!("{e}"),
                     }),
                     Err(panic) => {
                         let msg = extract_panic_msg(&panic);
                         Err(AtheerError::ModelDecryptionFailed {
-                            message: format!("Custom scheme '{scheme_name}' panicked: {msg}"),
+                            msg: format!("Custom scheme '{scheme_name}' panicked: {msg}"),
                         })
                     }
                 }
@@ -1856,7 +1856,7 @@ fn generate_with_timeout_detection<R>(
     if timed_out.load(std::sync::atomic::Ordering::Acquire) {
         crash_reporter.record_crash("GpuTimeout", context);
         return Err(AtheerError::GenerationFailed {
-            message: format!("GPU operation timed out after {}ms", timeout_ms),
+            msg: format!("GPU operation timed out after {}ms", timeout_ms),
         });
     }
 
@@ -2039,14 +2039,14 @@ mod tests {
             "test_error",
             || {
                 Err(AtheerError::GenerationFailed {
-                    message: "closure error".to_string(),
+                    msg: "closure error".to_string(),
                 })
             },
         );
         assert!(result.is_err());
         match result {
-            Err(AtheerError::GenerationFailed { message }) => {
-                assert_eq!(message, "closure error");
+            Err(AtheerError::GenerationFailed { msg }) => {
+                assert_eq!(msg, "closure error");
             }
             _ => panic!("Expected GenerationFailed"),
         }

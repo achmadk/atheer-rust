@@ -55,6 +55,8 @@ kotlin {
 
 dependencies {
     implementation(files("src/main/jniLibs/arm64-v8a/libatheer_ffi.so"))
+    implementation(libs.androidx.appcompat)
+    implementation(libs.jna)
 
     // AndroidX Test (instrumentation tests)
     androidTestImplementation(libs.androidx.test.runner)

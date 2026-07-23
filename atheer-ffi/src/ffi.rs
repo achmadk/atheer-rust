@@ -588,10 +588,10 @@ mod tests {
         assert!(result.is_err());
 
         match result.unwrap_err() {
-            crate::AtheerError::ModelLoadFailed { message } => {
+            crate::AtheerError::ModelLoadFailed { msg } => {
                 assert!(
-                    message.contains("failed") || message.contains("error"),
-                    "Expected error message about failure, got: {message}"
+                    msg.contains("failed") || msg.contains("error"),
+                    "Expected error message about failure, got: {msg}"
                 );
             }
             other => panic!("Expected ModelLoadFailed, got {other:?}"),
@@ -612,13 +612,13 @@ mod tests {
         assert!(result.is_err());
 
         match result.unwrap_err() {
-            crate::AtheerError::ModelLoadFailed { message } => {
+            crate::AtheerError::ModelLoadFailed { msg } => {
                 // On Metal-unavailable systems, device() returns Cpu for Metal,
                 // so both attempts produce the same error. Still exercises the
                 // degradation retry code path.
                 assert!(
-                    message.contains("failed") || message.contains("error"),
-                    "Expected error message about failure, got: {message}"
+                    msg.contains("failed") || msg.contains("error"),
+                    "Expected error message about failure, got: {msg}"
                 );
             }
             other => panic!("Expected ModelLoadFailed, got {other:?}"),
