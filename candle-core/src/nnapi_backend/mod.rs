@@ -111,16 +111,6 @@ pub use nnapi_ndk::NnapiError;
 #[cfg(not(all(feature = "nnapi", target_os = "android")))]
 pub use nnapi_ndk::NnapiError;
 
-#[derive(thiserror::Error, Debug)]
-pub enum NnapiError {
-    #[error("{0}")]
-    Message(String),
-    #[error("NNAPI error: {0}")]
-    Nnapi(String),
-    #[error("buffer error: {0}")]
-    Buffer(String),
-}
-
 impl From<String> for NnapiError {
     fn from(e: String) -> Self {
         NnapiError::Message(e)

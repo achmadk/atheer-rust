@@ -23,13 +23,22 @@ use std::os::unix::io::AsRawFd;
 use std::sync::Arc;
 
 #[cfg(all(feature = "nnapi", target_os = "android"))]
+use crate::nnapi_backend::nnapi_ndk::{
+    nnapi_result, AHardwareBuffer, AHardwareBuffer_Desc, AHardwareBuffer_allocate,
+    AHardwareBuffer_release, ANeuralNetworksMemory, ANeuralNetworksMemory_createFromFd,
+    ANeuralNetworksMemory_createFromHardwareBuffer, ANeuralNetworksMemory_free, NnapiError,
+    AHARDWAREBUFFER_FORMAT_BLOB, AHARDWAREBUFFER_USAGE_CPU_READ_OFTEN,
+    AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN,
+};
+
+#[cfg(all(feature = "nnapi", target_os = "android"))]
 pub struct NnapiStorage {
     data: Vec<u8>,
     dtype: DType,
     device: NnapiDevice,
     executor: SharedExecutor,
-    memory: Option<*mut ndk::ANeuralNetworksMemory>,
-    hwbuffer: Option<*mut ndk::AHardwareBuffer>,
+    memory: Option<*mut ANeuralNetworksMemory>,
+    hwbuffer: Option<*mut AHardwareBuffer>,
 }
 
 #[cfg(not(all(feature = "nnapi", target_os = "android")))]
@@ -166,47 +175,45 @@ impl NnapiStorage {
 
     fn allocate_ahardware_buffer(
         size: usize,
-    ) -> Result<(*mut ndk::ANeuralNetworksMemory, *mut ndk::AHardwareBuffer)> {
+    ) -> Result<(*mut ANeuralNetworksMemory, *mut AHardwareBuffer)> {
         use std::ptr;
 
-        let desc = ndk::AHardwareBuffer_Desc {
+        let desc = AHardwareBuffer_Desc {
             width: size as u64,
             height: 1,
             layers: 1,
-            format: ndk::AHARDWAREBUFFER_FORMAT_BLOB,
-            usage: ndk::AHARDWAREBUFFER_USAGE_CPU_READ_OFTEN
-                | ndk::AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN,
+            format: AHARDWAREBUFFER_FORMAT_BLOB,
+            usage: AHARDWAREBUFFER_USAGE_CPU_READ_OFTEN | AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN,
             stride: 0,
         };
 
-        let mut hw_buffer: *mut ndk::AHardwareBuffer = ptr::null_mut();
-        let rc = unsafe {
-            ndk::AHardwareBuffer_allocate(&desc, &mut hw_buffer as *mut *mut ndk::AHardwareBuffer)
-        };
-        ndk::nnapi_result(rc)?;
+        let mut hw_buffer: *mut AHardwareBuffer = ptr::null_mut();
+        let rc =
+            unsafe { AHardwareBuffer_allocate(&desc, &mut hw_buffer as *mut *mut AHardwareBuffer) };
+        nnapi_result(rc)?;
 
-        let mut memory: *mut ndk::ANeuralNetworksMemory = ptr::null_mut();
+        let mut memory: *mut ANeuralNetworksMemory = ptr::null_mut();
         let rc = unsafe {
-            ndk::ANeuralNetworksMemory_createFromHardwareBuffer(
+            ANeuralNetworksMemory_createFromHardwareBuffer(
                 ptr::null(),
                 hw_buffer,
-                &mut memory as *mut *mut ndk::ANeuralNetworksMemory,
+                &mut memory as *mut *mut ANeuralNetworksMemory,
             )
         };
         if rc != 0 {
             unsafe {
-                ndk::AHardwareBuffer_release(hw_buffer);
+                AHardwareBuffer_release(hw_buffer);
             }
             return Err(crate::Error::Nnapi(NnapiError::Nnapi(format!(
                 "ANeuralNetworksMemory_createFromHardwareBuffer failed: {:?}",
-                ndk::NnapiError::from_code(rc)
+                NnapiError::from_code(rc)
             ))));
         }
 
         Ok((memory, hw_buffer))
     }
 
-    fn allocate_from_fd(size: usize) -> Result<(*mut ndk::ANeuralNetworksMemory, i32)> {
+    fn allocate_from_fd(size: usize) -> Result<(*mut ANeuralNetworksMemory, i32)> {
         use std::fs;
         use std::io::Write;
         use std::os::unix::io::FromRawFd;
@@ -220,26 +227,26 @@ impl NnapiStorage {
         tmpfile.write_all(&vec![0u8; size])?;
         let fd = tmpfile.into_raw_fd();
 
-        let mut memory: *mut ndk::ANeuralNetworksMemory = ptr::null_mut();
+        let mut memory: *mut ANeuralNetworksMemory = ptr::null_mut();
         let rc = unsafe {
-            ndk::ANeuralNetworksMemory_createFromFd(
+            ANeuralNetworksMemory_createFromFd(
                 size,
                 libc::PROT_READ | libc::PROT_WRITE,
                 fd,
                 0,
-                &mut memory as *mut *mut ndk::ANeuralNetworksMemory,
+                &mut memory as *mut *mut ANeuralNetworksMemory,
             )
         };
-        ndk::nnapi_result(rc)?;
+        nnapi_result(rc)?;
 
         Ok((memory, fd))
     }
 
-    pub fn memory(&self) -> Option<*mut ndk::ANeuralNetworksMemory> {
+    pub fn memory(&self) -> Option<*mut ANeuralNetworksMemory> {
         self.memory
     }
 
-    pub fn hwbuffer(&self) -> Option<*mut ndk::AHardwareBuffer> {
+    pub fn hwbuffer(&self) -> Option<*mut AHardwareBuffer> {
         self.hwbuffer
     }
 
@@ -280,6 +287,65 @@ impl NnapiStorage {
 
     pub fn from_slice(data: &[u8], dtype: DType, device: &crate::NnapiDevice) -> Result<Self> {
         Self::new(data.to_vec(), dtype, device.clone())
+    }
+
+    pub fn from_slice_impl<D: crate::WithDType>(
+        device: &crate::NnapiDevice,
+        data: &[D],
+    ) -> Result<Self> {
+        let bytes: Vec<u8> = data.iter().flat_map(|&x| x.to_bytes()).collect();
+        Self::new(bytes, D::DTYPE, device.clone())
+    }
+
+    pub unsafe fn alloc_uninit_impl(
+        device: &crate::NnapiDevice,
+        shape: &crate::Shape,
+        dtype: DType,
+    ) -> Result<Self> {
+        let count = shape.elem_count();
+        let size = count * dtype.size_in_bytes();
+        let data = vec![0u8; size];
+        Self::new(data, dtype, device.clone())
+    }
+
+    pub fn rand_uniform_impl(
+        device: &crate::NnapiDevice,
+        shape: &crate::Shape,
+        dtype: DType,
+        lo: f64,
+        up: f64,
+    ) -> Result<Self> {
+        let count = shape.elem_count();
+        let size = count * dtype.size_in_bytes();
+        let mut data = vec![0u8; size];
+        let count_f32 = count * (dtype.size_in_bytes() / 4);
+        let ptr = data.as_mut_ptr() as *mut f32;
+        for i in 0..count_f32 {
+            unsafe {
+                *ptr.add(i) = (lo + (up - lo) * rand::random::<f64>()) as f32;
+            }
+        }
+        Self::new(data, dtype, device.clone())
+    }
+
+    pub fn rand_normal_impl(
+        device: &crate::NnapiDevice,
+        shape: &crate::Shape,
+        dtype: DType,
+        mean: f64,
+        std: f64,
+    ) -> Result<Self> {
+        let count = shape.elem_count();
+        let size = count * dtype.size_in_bytes();
+        let mut data = vec![0u8; size];
+        let count_f32 = count * (dtype.size_in_bytes() / 4);
+        let ptr = data.as_mut_ptr() as *mut f32;
+        for i in 0..count_f32 {
+            unsafe {
+                *ptr.add(i) = (mean + std * rand::random::<f64>()) as f32;
+            }
+        }
+        Self::new(data, dtype, device.clone())
     }
 
     pub fn to_cpu_storage_impl(&self) -> Result<crate::CpuStorage> {
@@ -447,12 +513,12 @@ impl Drop for NnapiStorage {
     fn drop(&mut self) {
         if let Some(memory) = self.memory {
             unsafe {
-                ndk::ANeuralNetworksMemory_free(memory);
+                ANeuralNetworksMemory_free(memory);
             }
         }
         if let Some(hwbuffer) = self.hwbuffer {
             unsafe {
-                ndk::AHardwareBuffer_release(hwbuffer);
+                AHardwareBuffer_release(hwbuffer);
             }
         }
     }
@@ -736,7 +802,7 @@ impl BackendStorage for NnapiStorage {
             output_dims,
             padding_arr,
             stride_arr,
-            ndk::ANEURALNETWORKS_FUSED_NONE as i32,
+            ANEURALNETWORKS_FUSED_NONE as i32,
         ) {
             Ok(()) => {
                 let bytes: Vec<u8> = output.iter().flat_map(|&x| x.to_le_bytes()).collect();

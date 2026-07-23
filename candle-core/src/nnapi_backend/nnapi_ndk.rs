@@ -274,6 +274,7 @@ extern "C" {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NnapiError {
+    Message(String),
     NoError,
     OutOfMemory,
     Incomplete,
@@ -454,5 +455,4 @@ extern "C" {
         buffer: *const AHardwareBuffer,
         memory: *mut *mut ANeuralNetworksMemory,
     ) -> i32;
-    pub fn ANeuralNetworksMemory_free(memory: *mut ANeuralNetworksMemory);
 }

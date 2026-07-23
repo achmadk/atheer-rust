@@ -23,16 +23,19 @@
 //! accelerator (NPU > GPU > CPU) for inference.
 
 use crate::backend::BackendDevice;
-use crate::{DType, DeviceLocation, Result, Shape};
+use crate::nnapi_backend::storage::NnapiStorage;
+use crate::{CpuStorage, DType, DeviceLocation, Layout, Result, Shape};
 use std::sync::Arc;
 
 #[cfg(all(feature = "nnapi", target_os = "android"))]
+#[derive(Clone)]
 pub struct NnapiDevice {
     ordinal: usize,
     inner: Arc<NnapiDeviceInner>,
 }
 
 #[cfg(all(feature = "nnapi", target_os = "android"))]
+#[derive(Clone)]
 struct NnapiDeviceInner {
     location: DeviceLocation,
 }
@@ -124,8 +127,52 @@ impl std::fmt::Debug for NnapiDevice {
 
 #[cfg(all(feature = "nnapi", target_os = "android"))]
 impl BackendDevice for NnapiDevice {
+    type Storage = NnapiStorage;
+
+    fn new(ordinal: usize) -> Result<Self> {
+        Self::new(ordinal)
+    }
+
     fn location(&self) -> DeviceLocation {
         self.location()
+    }
+
+    fn same_device(&self, other: &Self) -> bool {
+        self.ordinal == other.ordinal
+    }
+
+    fn zeros_impl(&self, shape: &Shape, dtype: DType) -> Result<Self::Storage> {
+        NnapiStorage::zeros_impl(self, shape, dtype)
+    }
+
+    unsafe fn alloc_uninit(&self, shape: &Shape, dtype: DType) -> Result<Self::Storage> {
+        NnapiStorage::alloc_uninit_impl(self, shape, dtype)
+    }
+
+    fn storage_from_slice<T: crate::WithDType>(&self, data: &[T]) -> Result<Self::Storage> {
+        NnapiStorage::from_slice_impl(self, data)
+    }
+
+    fn storage_from_cpu_storage(&self, cpu: &CpuStorage) -> Result<Self::Storage> {
+        NnapiStorage::from_cpu_storage_impl(self, cpu)
+    }
+
+    fn storage_from_cpu_storage_owned(&self, cpu: CpuStorage) -> Result<Self::Storage> {
+        NnapiStorage::from_cpu_storage_impl(self, &cpu)
+    }
+
+    fn rand_uniform(&self, shape: &Shape, dtype: DType, lo: f64, up: f64) -> Result<Self::Storage> {
+        NnapiStorage::rand_uniform_impl(self, shape, dtype, lo, up)
+    }
+
+    fn rand_normal(
+        &self,
+        shape: &Shape,
+        dtype: DType,
+        mean: f64,
+        std: f64,
+    ) -> Result<Self::Storage> {
+        NnapiStorage::rand_normal_impl(self, shape, dtype, mean, std)
     }
 
     fn set_seed(&self, seed: u64) -> Result<()> {
@@ -134,5 +181,9 @@ impl BackendDevice for NnapiDevice {
 
     fn get_current_seed(&self) -> Result<u64> {
         self.get_current_seed()
+    }
+
+    fn synchronize(&self) -> Result<()> {
+        self.synchronize()
     }
 }

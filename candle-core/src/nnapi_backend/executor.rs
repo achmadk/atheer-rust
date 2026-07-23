@@ -47,15 +47,28 @@ impl ShapeSignature {
 }
 
 #[cfg(all(feature = "nnapi", target_os = "android"))]
-use ndk::{nnapi_result, ANeuralNetworksExecution, ANeuralNetworksOperandType};
-
-#[cfg(all(feature = "nnapi", target_os = "android"))]
-use ndk;
+use super::nnapi::{
+    get_devices, nnapi_result, ANeuralNetworksCompilation, ANeuralNetworksCompilation_create,
+    ANeuralNetworksCompilation_finish, ANeuralNetworksCompilation_free,
+    ANeuralNetworksCompilation_setPreference, ANeuralNetworksExecution,
+    ANeuralNetworksExecution_compute, ANeuralNetworksExecution_create,
+    ANeuralNetworksExecution_free, ANeuralNetworksExecution_setInput,
+    ANeuralNetworksExecution_setInputFromMemory, ANeuralNetworksExecution_setOutput,
+    ANeuralNetworksExecution_setOutputFromMemory, ANeuralNetworksMemory, ANeuralNetworksModel,
+    ANeuralNetworksModel_addOperand, ANeuralNetworksModel_addOperation,
+    ANeuralNetworksModel_create, ANeuralNetworksModel_finish,
+    ANeuralNetworksModel_identifyInputsAndOutputs, ANeuralNetworksModel_setOperandValue,
+    ANeuralNetworksOperandType, NnapiError, ANEURALNETWORKS_DEVICE_ACCELERATOR,
+    ANEURALNETWORKS_DEVICE_CPU, ANEURALNETWORKS_DEVICE_GPU, ANEURALNETWORKS_DEVICE_OTHER,
+    ANEURALNETWORKS_FULLY_CONNECTED, ANEURALNETWORKS_FUSED_NONE, ANEURALNETWORKS_INT32,
+    ANEURALNETWORKS_LOGISTIC, ANEURALNETWORKS_NO_ERROR, ANEURALNETWORKS_PREFER_SUSTAINED_SPEED,
+    ANEURALNETWORKS_RELU, ANEURALNETWORKS_TANH, ANEURALNETWORKS_TENSOR_FLOAT32,
+};
 
 #[cfg(all(feature = "nnapi", target_os = "android"))]
 struct CompiledModel {
-    compilation: *mut ndk::ANeuralNetworksCompilation,
-    _model: *mut ndk::ANeuralNetworksModel,
+    compilation: *mut ANeuralNetworksCompilation,
+    _model: *mut ANeuralNetworksModel,
 }
 
 #[cfg(all(feature = "nnapi", target_os = "android"))]
@@ -75,17 +88,17 @@ pub struct NnapiExecutor {
 #[cfg(all(feature = "nnapi", target_os = "android"))]
 impl NnapiExecutor {
     pub fn probe() -> Option<Self> {
-        match ndk::get_devices() {
+        match get_devices() {
             Ok(devices) if !devices.is_empty() => {
                 let executor_devices: Vec<NnapiExecutorDevice> = devices
                     .into_iter()
                     .map(|d| NnapiExecutorDevice {
                         name: d.name,
                         device_type: match d.device_type {
-                            ndk::ANEURALNETWORKS_DEVICE_CPU => NnapiDeviceKind::Cpu,
-                            ndk::ANEURALNETWORKS_DEVICE_GPU => NnapiDeviceKind::Gpu,
-                            ndk::ANEURALNETWORKS_DEVICE_ACCELERATOR => NnapiDeviceKind::Accelerator,
-                            ndk::ANEURALNETWORKS_DEVICE_OTHER => NnapiDeviceKind::Other,
+                            ANEURALNETWORKS_DEVICE_CPU => NnapiDeviceKind::Cpu,
+                            ANEURALNETWORKS_DEVICE_GPU => NnapiDeviceKind::Gpu,
+                            ANEURALNETWORKS_DEVICE_ACCELERATOR => NnapiDeviceKind::Accelerator,
+                            ANEURALNETWORKS_DEVICE_OTHER => NnapiDeviceKind::Other,
                             _ => NnapiDeviceKind::Unknown,
                         },
                         feature_level: d.feature_level,
@@ -149,16 +162,16 @@ impl NnapiExecutor {
         let input_size = input.len();
         let num_units = output.len();
 
-        let mut model: *mut ndk::ANeuralNetworksModel = ptr::null_mut();
+        let mut model: *mut ANeuralNetworksModel = ptr::null_mut();
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_create(
-                &mut model as *mut *mut ndk::ANeuralNetworksModel,
+            nnapi_result(ANeuralNetworksModel_create(
+                &mut model as *mut *mut ANeuralNetworksModel,
             ))?;
         }
 
         let input_dims = [batch_size as u32, input_size as u32];
         let input_type = ANeuralNetworksOperandType {
-            type_: ndk::ANEURALNETWORKS_TENSOR_FLOAT32,
+            type_: ANEURALNETWORKS_TENSOR_FLOAT32,
             dimension_count: 2,
             dimensions: input_dims.as_ptr(),
             scale: 0.0,
@@ -167,7 +180,7 @@ impl NnapiExecutor {
 
         let weights_dims = [num_units as u32, input_size as u32];
         let weights_type = ANeuralNetworksOperandType {
-            type_: ndk::ANEURALNETWORKS_TENSOR_FLOAT32,
+            type_: ANEURALNETWORKS_TENSOR_FLOAT32,
             dimension_count: 2,
             dimensions: weights_dims.as_ptr(),
             scale: 0.0,
@@ -176,7 +189,7 @@ impl NnapiExecutor {
 
         let bias_dims = [num_units as u32];
         let bias_type = ANeuralNetworksOperandType {
-            type_: ndk::ANEURALNETWORKS_TENSOR_FLOAT32,
+            type_: ANEURALNETWORKS_TENSOR_FLOAT32,
             dimension_count: 1,
             dimensions: bias_dims.as_ptr(),
             scale: 0.0,
@@ -184,7 +197,7 @@ impl NnapiExecutor {
         };
 
         let act_type = ANeuralNetworksOperandType {
-            type_: ndk::ANEURALNETWORKS_INT32,
+            type_: ANEURALNETWORKS_INT32,
             dimension_count: 0,
             dimensions: ptr::null(),
             scale: 0.0,
@@ -193,7 +206,7 @@ impl NnapiExecutor {
 
         let output_dims = [batch_size as u32, num_units as u32];
         let output_type = ANeuralNetworksOperandType {
-            type_: ndk::ANEURALNETWORKS_TENSOR_FLOAT32,
+            type_: ANEURALNETWORKS_TENSOR_FLOAT32,
             dimension_count: 2,
             dimensions: output_dims.as_ptr(),
             scale: 0.0,
@@ -201,44 +214,44 @@ impl NnapiExecutor {
         };
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_addOperand(
+            nnapi_result(ANeuralNetworksModel_addOperand(
                 model,
                 &input_type as *const _,
             ))?;
-            nnapi_result(ndk::ANeuralNetworksModel_addOperand(
+            nnapi_result(ANeuralNetworksModel_addOperand(
                 model,
                 &weights_type as *const _,
             ))?;
-            nnapi_result(ndk::ANeuralNetworksModel_addOperand(
+            nnapi_result(ANeuralNetworksModel_addOperand(
                 model,
                 &bias_type as *const _,
             ))?;
-            nnapi_result(ndk::ANeuralNetworksModel_addOperand(
+            nnapi_result(ANeuralNetworksModel_addOperand(
                 model,
                 &act_type as *const _,
             ))?;
-            nnapi_result(ndk::ANeuralNetworksModel_addOperand(
+            nnapi_result(ANeuralNetworksModel_addOperand(
                 model,
                 &output_type as *const _,
             ))?;
         }
 
-        let fused_activation = ndk::ANEURALNETWORKS_FUSED_NONE as i32;
+        let fused_activation = ANEURALNETWORKS_FUSED_NONE as i32;
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_setOperandValue(
+            nnapi_result(ANeuralNetworksModel_setOperandValue(
                 model,
                 1,
                 weights.as_ptr() as *const std::ffi::c_void,
                 weights.len() * std::mem::size_of::<f32>(),
             ))?;
-            nnapi_result(ndk::ANeuralNetworksModel_setOperandValue(
+            nnapi_result(ANeuralNetworksModel_setOperandValue(
                 model,
                 2,
                 bias.as_ptr() as *const std::ffi::c_void,
                 bias.len() * std::mem::size_of::<f32>(),
             ))?;
-            nnapi_result(ndk::ANeuralNetworksModel_setOperandValue(
+            nnapi_result(ANeuralNetworksModel_setOperandValue(
                 model,
                 3,
                 &fused_activation as *const i32 as *const std::ffi::c_void,
@@ -247,9 +260,9 @@ impl NnapiExecutor {
         }
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_addOperation(
+            nnapi_result(ANeuralNetworksModel_addOperation(
                 model,
-                ndk::ANEURALNETWORKS_FULLY_CONNECTED,
+                ANEURALNETWORKS_FULLY_CONNECTED,
                 4,
                 [0u32, 1, 2, 3].as_ptr(),
                 1,
@@ -258,7 +271,7 @@ impl NnapiExecutor {
         }
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_identifyInputsAndOutputs(
+            nnapi_result(ANeuralNetworksModel_identifyInputsAndOutputs(
                 model,
                 1,
                 [0u32].as_ptr(),
@@ -268,39 +281,39 @@ impl NnapiExecutor {
         }
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_finish(model))?;
+            nnapi_result(ANeuralNetworksModel_finish(model))?;
         }
 
-        let mut compilation: *mut ndk::ANeuralNetworksCompilation = ptr::null_mut();
+        let mut compilation: *mut ANeuralNetworksCompilation = ptr::null_mut();
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksCompilation_create(
+            nnapi_result(ANeuralNetworksCompilation_create(
                 model,
-                &mut compilation as *mut *mut ndk::ANeuralNetworksCompilation,
+                &mut compilation as *mut *mut ANeuralNetworksCompilation,
             ))?;
-            nnapi_result(ndk::ANeuralNetworksCompilation_setPreference(
+            nnapi_result(ANeuralNetworksCompilation_setPreference(
                 compilation,
-                ndk::ANEURALNETWORKS_PREFER_SUSTAINED_SPEED,
+                ANEURALNETWORKS_PREFER_SUSTAINED_SPEED,
             ))?;
-            nnapi_result(ndk::ANeuralNetworksCompilation_finish(compilation))?;
+            nnapi_result(ANeuralNetworksCompilation_finish(compilation))?;
         }
 
         let mut execution: *mut ANeuralNetworksExecution = ptr::null_mut();
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksExecution_create(
+            nnapi_result(ANeuralNetworksExecution_create(
                 compilation,
                 &mut execution as *mut *mut ANeuralNetworksExecution,
             ))?;
         }
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksExecution_setInput(
+            nnapi_result(ANeuralNetworksExecution_setInput(
                 execution,
                 0,
                 ptr::null(),
                 input.as_ptr() as *const std::ffi::c_void,
                 input.len() * std::mem::size_of::<f32>(),
             ))?;
-            nnapi_result(ndk::ANeuralNetworksExecution_setOutput(
+            nnapi_result(ANeuralNetworksExecution_setOutput(
                 execution,
                 0,
                 ptr::null(),
@@ -311,21 +324,21 @@ impl NnapiExecutor {
 
         let result;
         unsafe {
-            let rc = ndk::ANeuralNetworksExecution_compute(execution);
-            if rc == ndk::ANEURALNETWORKS_NO_ERROR {
+            let rc = ANeuralNetworksExecution_compute(execution);
+            if rc == ANEURALNETWORKS_NO_ERROR {
                 result = Ok(());
             } else {
                 result = Err(crate::Error::Nnapi(crate::NnapiError::Nnapi(format!(
                     "NNAPI compute failed: {:?}",
-                    ndk::NnapiError::from_code(rc)
+                    NnapiError::from_code(rc)
                 ))));
             }
         }
 
         unsafe {
-            ndk::ANeuralNetworksExecution_free(execution);
-            ndk::ANeuralNetworksCompilation_free(compilation);
-            ndk::ANeuralNetworksModel_free(model);
+            ANeuralNetworksExecution_free(execution);
+            ANeuralNetworksCompilation_free(compilation);
+            ANeuralNetworksModel_free(model);
         }
 
         result
@@ -337,8 +350,8 @@ impl NnapiExecutor {
         weights: &[f32],
         bias: &[f32],
         output: &mut [f32],
-        input_memory: *mut ndk::ANeuralNetworksMemory,
-        output_memory: *mut ndk::ANeuralNetworksMemory,
+        input_memory: *mut ANeuralNetworksMemory,
+        output_memory: *mut ANeuralNetworksMemory,
     ) -> Result<()> {
         use std::ptr;
 
@@ -346,16 +359,16 @@ impl NnapiExecutor {
         let input_size = input.len();
         let num_units = output.len();
 
-        let mut model: *mut ndk::ANeuralNetworksModel = ptr::null_mut();
+        let mut model: *mut ANeuralNetworksModel = ptr::null_mut();
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_create(
-                &mut model as *mut *mut ndk::ANeuralNetworksModel,
+            nnapi_result(ANeuralNetworksModel_create(
+                &mut model as *mut *mut ANeuralNetworksModel,
             ))?;
         }
 
         let input_dims = [batch_size as u32, input_size as u32];
         let input_type = ANeuralNetworksOperandType {
-            type_: ndk::ANEURALNETWORKS_TENSOR_FLOAT32,
+            type_: ANEURALNETWORKS_TENSOR_FLOAT32,
             dimension_count: 2,
             dimensions: input_dims.as_ptr(),
             scale: 0.0,
@@ -364,7 +377,7 @@ impl NnapiExecutor {
 
         let weights_dims = [num_units as u32, input_size as u32];
         let weights_type = ANeuralNetworksOperandType {
-            type_: ndk::ANEURALNETWORKS_TENSOR_FLOAT32,
+            type_: ANEURALNETWORKS_TENSOR_FLOAT32,
             dimension_count: 2,
             dimensions: weights_dims.as_ptr(),
             scale: 0.0,
@@ -373,7 +386,7 @@ impl NnapiExecutor {
 
         let bias_dims = [num_units as u32];
         let bias_type = ANeuralNetworksOperandType {
-            type_: ndk::ANEURALNETWORKS_TENSOR_FLOAT32,
+            type_: ANEURALNETWORKS_TENSOR_FLOAT32,
             dimension_count: 1,
             dimensions: bias_dims.as_ptr(),
             scale: 0.0,
@@ -381,7 +394,7 @@ impl NnapiExecutor {
         };
 
         let act_type = ANeuralNetworksOperandType {
-            type_: ndk::ANEURALNETWORKS_INT32,
+            type_: ANEURALNETWORKS_INT32,
             dimension_count: 0,
             dimensions: ptr::null(),
             scale: 0.0,
@@ -390,7 +403,7 @@ impl NnapiExecutor {
 
         let output_dims = [batch_size as u32, num_units as u32];
         let output_type = ANeuralNetworksOperandType {
-            type_: ndk::ANEURALNETWORKS_TENSOR_FLOAT32,
+            type_: ANEURALNETWORKS_TENSOR_FLOAT32,
             dimension_count: 2,
             dimensions: output_dims.as_ptr(),
             scale: 0.0,
@@ -398,44 +411,44 @@ impl NnapiExecutor {
         };
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_addOperand(
+            nnapi_result(ANeuralNetworksModel_addOperand(
                 model,
                 &input_type as *const _,
             ))?;
-            nnapi_result(ndk::ANeuralNetworksModel_addOperand(
+            nnapi_result(ANeuralNetworksModel_addOperand(
                 model,
                 &weights_type as *const _,
             ))?;
-            nnapi_result(ndk::ANeuralNetworksModel_addOperand(
+            nnapi_result(ANeuralNetworksModel_addOperand(
                 model,
                 &bias_type as *const _,
             ))?;
-            nnapi_result(ndk::ANeuralNetworksModel_addOperand(
+            nnapi_result(ANeuralNetworksModel_addOperand(
                 model,
                 &act_type as *const _,
             ))?;
-            nnapi_result(ndk::ANeuralNetworksModel_addOperand(
+            nnapi_result(ANeuralNetworksModel_addOperand(
                 model,
                 &output_type as *const _,
             ))?;
         }
 
-        let fused_activation = ndk::ANEURALNETWORKS_FUSED_NONE as i32;
+        let fused_activation = ANEURALNETWORKS_FUSED_NONE as i32;
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_setOperandValue(
+            nnapi_result(ANeuralNetworksModel_setOperandValue(
                 model,
                 1,
                 weights.as_ptr() as *const std::ffi::c_void,
                 weights.len() * std::mem::size_of::<f32>(),
             ))?;
-            nnapi_result(ndk::ANeuralNetworksModel_setOperandValue(
+            nnapi_result(ANeuralNetworksModel_setOperandValue(
                 model,
                 2,
                 bias.as_ptr() as *const std::ffi::c_void,
                 bias.len() * std::mem::size_of::<f32>(),
             ))?;
-            nnapi_result(ndk::ANeuralNetworksModel_setOperandValue(
+            nnapi_result(ANeuralNetworksModel_setOperandValue(
                 model,
                 3,
                 &fused_activation as *const i32 as *const std::ffi::c_void,
@@ -444,9 +457,9 @@ impl NnapiExecutor {
         }
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_addOperation(
+            nnapi_result(ANeuralNetworksModel_addOperation(
                 model,
-                ndk::ANEURALNETWORKS_FULLY_CONNECTED,
+                ANEURALNETWORKS_FULLY_CONNECTED,
                 4,
                 [0u32, 1, 2, 3].as_ptr(),
                 1,
@@ -455,7 +468,7 @@ impl NnapiExecutor {
         }
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_identifyInputsAndOutputs(
+            nnapi_result(ANeuralNetworksModel_identifyInputsAndOutputs(
                 model,
                 1,
                 [0u32].as_ptr(),
@@ -465,25 +478,25 @@ impl NnapiExecutor {
         }
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_finish(model))?;
+            nnapi_result(ANeuralNetworksModel_finish(model))?;
         }
 
-        let mut compilation: *mut ndk::ANeuralNetworksCompilation = ptr::null_mut();
+        let mut compilation: *mut ANeuralNetworksCompilation = ptr::null_mut();
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksCompilation_create(
+            nnapi_result(ANeuralNetworksCompilation_create(
                 model,
-                &mut compilation as *mut *mut ndk::ANeuralNetworksCompilation,
+                &mut compilation as *mut *mut ANeuralNetworksCompilation,
             ))?;
-            nnapi_result(ndk::ANeuralNetworksCompilation_setPreference(
+            nnapi_result(ANeuralNetworksCompilation_setPreference(
                 compilation,
-                ndk::ANEURALNETWORKS_PREFER_SUSTAINED_SPEED,
+                ANEURALNETWORKS_PREFER_SUSTAINED_SPEED,
             ))?;
-            nnapi_result(ndk::ANeuralNetworksCompilation_finish(compilation))?;
+            nnapi_result(ANeuralNetworksCompilation_finish(compilation))?;
         }
 
         let mut execution: *mut ANeuralNetworksExecution = ptr::null_mut();
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksExecution_create(
+            nnapi_result(ANeuralNetworksExecution_create(
                 compilation,
                 &mut execution as *mut *mut ANeuralNetworksExecution,
             ))?;
@@ -493,7 +506,7 @@ impl NnapiExecutor {
         let output_size_bytes = output.len() * std::mem::size_of::<f32>();
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksExecution_setInputFromMemory(
+            nnapi_result(ANeuralNetworksExecution_setInputFromMemory(
                 execution,
                 0,
                 ptr::null(),
@@ -501,7 +514,7 @@ impl NnapiExecutor {
                 0,
                 input_size_bytes,
             ))?;
-            nnapi_result(ndk::ANeuralNetworksExecution_setOutputFromMemory(
+            nnapi_result(ANeuralNetworksExecution_setOutputFromMemory(
                 execution,
                 0,
                 ptr::null(),
@@ -513,21 +526,21 @@ impl NnapiExecutor {
 
         let result;
         unsafe {
-            let rc = ndk::ANeuralNetworksExecution_compute(execution);
-            if rc == ndk::ANEURALNETWORKS_NO_ERROR {
+            let rc = ANeuralNetworksExecution_compute(execution);
+            if rc == ANEURALNETWORKS_NO_ERROR {
                 result = Ok(());
             } else {
                 result = Err(crate::Error::Nnapi(crate::NnapiError::Nnapi(format!(
                     "NNAPI compute failed: {:?}",
-                    ndk::NnapiError::from_code(rc)
+                    NnapiError::from_code(rc)
                 ))));
             }
         }
 
         unsafe {
-            ndk::ANeuralNetworksExecution_free(execution);
-            ndk::ANeuralNetworksCompilation_free(compilation);
-            ndk::ANeuralNetworksModel_free(model);
+            ANeuralNetworksExecution_free(execution);
+            ANeuralNetworksCompilation_free(compilation);
+            ANeuralNetworksModel_free(model);
         }
 
         result
@@ -546,15 +559,15 @@ impl NnapiExecutor {
         let num_units = output_data.len();
         let batch_size = 1;
 
-        let mut model: *mut ndk::ANeuralNetworksModel = ptr::null_mut();
+        let mut model: *mut ANeuralNetworksModel = ptr::null_mut();
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_create(
-                &mut model as *mut *mut ndk::ANeuralNetworksModel,
+            nnapi_result(ANeuralNetworksModel_create(
+                &mut model as *mut *mut ANeuralNetworksModel,
             ))?;
         }
 
         let input_type = ANeuralNetworksOperandType {
-            type_: ndk::ANEURALNETWORKS_TENSOR_FLOAT32,
+            type_: ANEURALNETWORKS_TENSOR_FLOAT32,
             dimension_count: 2,
             dimensions: [batch_size as u32, input_size as u32].as_ptr(),
             scale: 0.0,
@@ -562,7 +575,7 @@ impl NnapiExecutor {
         };
 
         let output_type = ANeuralNetworksOperandType {
-            type_: ndk::ANEURALNETWORKS_TENSOR_FLOAT32,
+            type_: ANEURALNETWORKS_TENSOR_FLOAT32,
             dimension_count: 2,
             dimensions: [batch_size as u32, num_units as u32].as_ptr(),
             scale: 0.0,
@@ -570,18 +583,18 @@ impl NnapiExecutor {
         };
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_addOperand(model, &input_type))?;
-            nnapi_result(ndk::ANeuralNetworksModel_addOperand(model, &output_type))?;
+            nnapi_result(ANeuralNetworksModel_addOperand(model, &input_type))?;
+            nnapi_result(ANeuralNetworksModel_addOperand(model, &output_type))?;
         }
 
         let op_code = match op {
-            UnaryOp::Relu => ndk::ANEURALNETWORKS_RELU,
-            UnaryOp::Tanh => ndk::ANEURALNETWORKS_TANH,
-            UnaryOp::Logistic => ndk::ANEURALNETWORKS_LOGISTIC,
+            UnaryOp::Relu => ANEURALNETWORKS_RELU,
+            UnaryOp::Tanh => ANEURALNETWORKS_TANH,
+            UnaryOp::Logistic => ANEURALNETWORKS_LOGISTIC,
         };
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_addOperation(
+            nnapi_result(ANeuralNetworksModel_addOperation(
                 model,
                 op_code,
                 1,
@@ -592,7 +605,7 @@ impl NnapiExecutor {
         }
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_identifyInputsAndOutputs(
+            nnapi_result(ANeuralNetworksModel_identifyInputsAndOutputs(
                 model,
                 1,
                 [0u32].as_ptr(),
@@ -602,39 +615,33 @@ impl NnapiExecutor {
         }
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_finish(model))?;
+            nnapi_result(ANeuralNetworksModel_finish(model))?;
         }
 
-        let mut compilation: *mut ndk::ANeuralNetworksCompilation = ptr::null_mut();
+        let mut compilation: *mut ANeuralNetworksCompilation = ptr::null_mut();
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksCompilation_create(
-                model,
-                &mut compilation,
-            ))?;
-            nnapi_result(ndk::ANeuralNetworksCompilation_setPreference(
+            nnapi_result(ANeuralNetworksCompilation_create(model, &mut compilation))?;
+            nnapi_result(ANeuralNetworksCompilation_setPreference(
                 compilation,
-                ndk::ANEURALNETWORKS_PREFER_SUSTAINED_SPEED,
+                ANEURALNETWORKS_PREFER_SUSTAINED_SPEED,
             ))?;
-            nnapi_result(ndk::ANeuralNetworksCompilation_finish(compilation))?;
+            nnapi_result(ANeuralNetworksCompilation_finish(compilation))?;
         }
 
         let mut execution: *mut ANeuralNetworksExecution = ptr::null_mut();
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksExecution_create(
-                compilation,
-                &mut execution,
-            ))?;
+            nnapi_result(ANeuralNetworksExecution_create(compilation, &mut execution))?;
         }
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksExecution_setInput(
+            nnapi_result(ANeuralNetworksExecution_setInput(
                 execution,
                 0,
                 ptr::null(),
                 input_data.as_ptr() as *const std::ffi::c_void,
                 input_data.len() * std::mem::size_of::<f32>(),
             ))?;
-            nnapi_result(ndk::ANeuralNetworksExecution_setOutput(
+            nnapi_result(ANeuralNetworksExecution_setOutput(
                 execution,
                 0,
                 ptr::null(),
@@ -645,21 +652,21 @@ impl NnapiExecutor {
 
         let result;
         unsafe {
-            let rc = ndk::ANeuralNetworksExecution_compute(execution);
-            if rc == ndk::ANEURALNETWORKS_NO_ERROR {
+            let rc = ANeuralNetworksExecution_compute(execution);
+            if rc == ANEURALNETWORKS_NO_ERROR {
                 result = Ok(());
             } else {
                 result = Err(crate::Error::Nnapi(crate::NnapiError::Nnapi(format!(
                     "NNAPI compute failed: {:?}",
-                    ndk::NnapiError::from_code(rc)
+                    NnapiError::from_code(rc)
                 ))));
             }
         }
 
         unsafe {
-            ndk::ANeuralNetworksExecution_free(execution);
-            ndk::ANeuralNetworksCompilation_free(compilation);
-            ndk::ANeuralNetworksModel_free(model);
+            ANeuralNetworksExecution_free(execution);
+            ANeuralNetworksCompilation_free(compilation);
+            ANeuralNetworksModel_free(model);
         }
 
         result
@@ -679,15 +686,15 @@ impl NnapiExecutor {
         let num_units = output.len();
         let batch_size = 1;
 
-        let mut model: *mut ndk::ANeuralNetworksModel = ptr::null_mut();
+        let mut model: *mut ANeuralNetworksModel = ptr::null_mut();
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_create(
-                &mut model as *mut *mut ndk::ANeuralNetworksModel,
+            nnapi_result(ANeuralNetworksModel_create(
+                &mut model as *mut *mut ANeuralNetworksModel,
             ))?;
         }
 
         let input_type = ANeuralNetworksOperandType {
-            type_: ndk::ANEURALNETWORKS_TENSOR_FLOAT32,
+            type_: ANEURALNETWORKS_TENSOR_FLOAT32,
             dimension_count: 2,
             dimensions: [batch_size as u32, input_size as u32].as_ptr(),
             scale: 0.0,
@@ -695,7 +702,7 @@ impl NnapiExecutor {
         };
 
         let act_type = ANeuralNetworksOperandType {
-            type_: ndk::ANEURALNETWORKS_INT32,
+            type_: ANEURALNETWORKS_INT32,
             dimension_count: 0,
             dimensions: ptr::null(),
             scale: 0.0,
@@ -703,7 +710,7 @@ impl NnapiExecutor {
         };
 
         let output_type = ANeuralNetworksOperandType {
-            type_: ndk::ANEURALNETWORKS_TENSOR_FLOAT32,
+            type_: ANEURALNETWORKS_TENSOR_FLOAT32,
             dimension_count: 2,
             dimensions: [batch_size as u32, num_units as u32].as_ptr(),
             scale: 0.0,
@@ -711,14 +718,14 @@ impl NnapiExecutor {
         };
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_addOperand(model, &input_type))?;
-            nnapi_result(ndk::ANeuralNetworksModel_addOperand(model, &input_type))?;
-            nnapi_result(ndk::ANeuralNetworksModel_addOperand(model, &act_type))?;
-            nnapi_result(ndk::ANeuralNetworksModel_addOperand(model, &output_type))?;
+            nnapi_result(ANeuralNetworksModel_addOperand(model, &input_type))?;
+            nnapi_result(ANeuralNetworksModel_addOperand(model, &input_type))?;
+            nnapi_result(ANeuralNetworksModel_addOperand(model, &act_type))?;
+            nnapi_result(ANeuralNetworksModel_addOperand(model, &output_type))?;
         }
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_setOperandValue(
+            nnapi_result(ANeuralNetworksModel_setOperandValue(
                 model,
                 2,
                 &fused_activation as *const i32 as *const std::ffi::c_void,
@@ -727,12 +734,12 @@ impl NnapiExecutor {
         }
 
         let op_code = match op {
-            BinaryOp::Add => ndk::ANEURALNETWORKS_ADD,
-            BinaryOp::Mul => ndk::ANEURALNETWORKS_MUL,
+            BinaryOp::Add => ANEURALNETWORKS_ADD,
+            BinaryOp::Mul => ANEURALNETWORKS_MUL,
         };
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_addOperation(
+            nnapi_result(ANeuralNetworksModel_addOperation(
                 model,
                 op_code,
                 3,
@@ -743,7 +750,7 @@ impl NnapiExecutor {
         }
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_identifyInputsAndOutputs(
+            nnapi_result(ANeuralNetworksModel_identifyInputsAndOutputs(
                 model,
                 2,
                 [0u32, 1u32].as_ptr(),
@@ -753,46 +760,40 @@ impl NnapiExecutor {
         }
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_finish(model))?;
+            nnapi_result(ANeuralNetworksModel_finish(model))?;
         }
 
-        let mut compilation: *mut ndk::ANeuralNetworksCompilation = ptr::null_mut();
+        let mut compilation: *mut ANeuralNetworksCompilation = ptr::null_mut();
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksCompilation_create(
-                model,
-                &mut compilation,
-            ))?;
-            nnapi_result(ndk::ANeuralNetworksCompilation_setPreference(
+            nnapi_result(ANeuralNetworksCompilation_create(model, &mut compilation))?;
+            nnapi_result(ANeuralNetworksCompilation_setPreference(
                 compilation,
-                ndk::ANEURALNETWORKS_PREFER_SUSTAINED_SPEED,
+                ANEURALNETWORKS_PREFER_SUSTAINED_SPEED,
             ))?;
-            nnapi_result(ndk::ANeuralNetworksCompilation_finish(compilation))?;
+            nnapi_result(ANeuralNetworksCompilation_finish(compilation))?;
         }
 
         let mut execution: *mut ANeuralNetworksExecution = ptr::null_mut();
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksExecution_create(
-                compilation,
-                &mut execution,
-            ))?;
+            nnapi_result(ANeuralNetworksExecution_create(compilation, &mut execution))?;
         }
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksExecution_setInput(
+            nnapi_result(ANeuralNetworksExecution_setInput(
                 execution,
                 0,
                 ptr::null(),
                 lhs.as_ptr() as *const std::ffi::c_void,
                 lhs.len() * std::mem::size_of::<f32>(),
             ))?;
-            nnapi_result(ndk::ANeuralNetworksExecution_setInput(
+            nnapi_result(ANeuralNetworksExecution_setInput(
                 execution,
                 1,
                 ptr::null(),
                 rhs.as_ptr() as *const std::ffi::c_void,
                 rhs.len() * std::mem::size_of::<f32>(),
             ))?;
-            nnapi_result(ndk::ANeuralNetworksExecution_setOutput(
+            nnapi_result(ANeuralNetworksExecution_setOutput(
                 execution,
                 0,
                 ptr::null(),
@@ -803,21 +804,21 @@ impl NnapiExecutor {
 
         let result;
         unsafe {
-            let rc = ndk::ANeuralNetworksExecution_compute(execution);
-            if rc == ndk::ANEURALNETWORKS_NO_ERROR {
+            let rc = ANeuralNetworksExecution_compute(execution);
+            if rc == ANEURALNETWORKS_NO_ERROR {
                 result = Ok(());
             } else {
                 result = Err(crate::Error::Nnapi(crate::NnapiError::Nnapi(format!(
                     "NNAPI compute failed: {:?}",
-                    ndk::NnapiError::from_code(rc)
+                    NnapiError::from_code(rc)
                 ))));
             }
         }
 
         unsafe {
-            ndk::ANeuralNetworksExecution_free(execution);
-            ndk::ANeuralNetworksCompilation_free(compilation);
-            ndk::ANeuralNetworksModel_free(model);
+            ANeuralNetworksExecution_free(execution);
+            ANeuralNetworksCompilation_free(compilation);
+            ANeuralNetworksModel_free(model);
         }
 
         result
@@ -834,15 +835,15 @@ impl NnapiExecutor {
         let input_size = input_data.len();
         let batch_size = 1;
 
-        let mut model: *mut ndk::ANeuralNetworksModel = ptr::null_mut();
+        let mut model: *mut ANeuralNetworksModel = ptr::null_mut();
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_create(
-                &mut model as *mut *mut ndk::ANeuralNetworksModel,
+            nnapi_result(ANeuralNetworksModel_create(
+                &mut model as *mut *mut ANeuralNetworksModel,
             ))?;
         }
 
         let input_type = ANeuralNetworksOperandType {
-            type_: ndk::ANEURALNETWORKS_TENSOR_FLOAT32,
+            type_: ANEURALNETWORKS_TENSOR_FLOAT32,
             dimension_count: 2,
             dimensions: [batch_size as u32, input_size as u32].as_ptr(),
             scale: 0.0,
@@ -850,7 +851,7 @@ impl NnapiExecutor {
         };
 
         let output_type = ANeuralNetworksOperandType {
-            type_: ndk::ANEURALNETWORKS_TENSOR_FLOAT32,
+            type_: ANEURALNETWORKS_TENSOR_FLOAT32,
             dimension_count: 2,
             dimensions: [batch_size as u32, input_size as u32].as_ptr(),
             scale: 0.0,
@@ -858,12 +859,12 @@ impl NnapiExecutor {
         };
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_addOperand(model, &input_type))?;
-            nnapi_result(ndk::ANeuralNetworksModel_addOperand(model, &output_type))?;
+            nnapi_result(ANeuralNetworksModel_addOperand(model, &input_type))?;
+            nnapi_result(ANeuralNetworksModel_addOperand(model, &output_type))?;
         }
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_setOperandValue(
+            nnapi_result(ANeuralNetworksModel_setOperandValue(
                 model,
                 0,
                 input_data.as_ptr() as *const std::ffi::c_void,
@@ -872,9 +873,9 @@ impl NnapiExecutor {
         }
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_addOperation(
+            nnapi_result(ANeuralNetworksModel_addOperation(
                 model,
-                ndk::ANEURALNETWORKS_SOFTMAX,
+                ANEURALNETWORKS_SOFTMAX,
                 1,
                 [0u32].as_ptr(),
                 1,
@@ -883,7 +884,7 @@ impl NnapiExecutor {
         }
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_identifyInputsAndOutputs(
+            nnapi_result(ANeuralNetworksModel_identifyInputsAndOutputs(
                 model,
                 1,
                 [0u32].as_ptr(),
@@ -893,32 +894,26 @@ impl NnapiExecutor {
         }
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_finish(model))?;
+            nnapi_result(ANeuralNetworksModel_finish(model))?;
         }
 
-        let mut compilation: *mut ndk::ANeuralNetworksCompilation = ptr::null_mut();
+        let mut compilation: *mut ANeuralNetworksCompilation = ptr::null_mut();
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksCompilation_create(
-                model,
-                &mut compilation,
-            ))?;
-            nnapi_result(ndk::ANeuralNetworksCompilation_setPreference(
+            nnapi_result(ANeuralNetworksCompilation_create(model, &mut compilation))?;
+            nnapi_result(ANeuralNetworksCompilation_setPreference(
                 compilation,
-                ndk::ANEURALNETWORKS_PREFER_SUSTAINED_SPEED,
+                ANEURALNETWORKS_PREFER_SUSTAINED_SPEED,
             ))?;
-            nnapi_result(ndk::ANeuralNetworksCompilation_finish(compilation))?;
+            nnapi_result(ANeuralNetworksCompilation_finish(compilation))?;
         }
 
         let mut execution: *mut ANeuralNetworksExecution = ptr::null_mut();
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksExecution_create(
-                compilation,
-                &mut execution,
-            ))?;
+            nnapi_result(ANeuralNetworksExecution_create(compilation, &mut execution))?;
         }
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksExecution_setOutput(
+            nnapi_result(ANeuralNetworksExecution_setOutput(
                 execution,
                 0,
                 ptr::null(),
@@ -929,21 +924,21 @@ impl NnapiExecutor {
 
         let result;
         unsafe {
-            let rc = ndk::ANeuralNetworksExecution_compute(execution);
-            if rc == ndk::ANEURALNETWORKS_NO_ERROR {
+            let rc = ANeuralNetworksExecution_compute(execution);
+            if rc == ANEURALNETWORKS_NO_ERROR {
                 result = Ok(());
             } else {
                 result = Err(crate::Error::Nnapi(crate::NnapiError::Nnapi(format!(
                     "NNAPI compute failed: {:?}",
-                    ndk::NnapiError::from_code(rc)
+                    NnapiError::from_code(rc)
                 ))));
             }
         }
 
         unsafe {
-            ndk::ANeuralNetworksExecution_free(execution);
-            ndk::ANeuralNetworksCompilation_free(compilation);
-            ndk::ANeuralNetworksModel_free(model);
+            ANeuralNetworksExecution_free(execution);
+            ANeuralNetworksCompilation_free(compilation);
+            ANeuralNetworksModel_free(model);
         }
 
         result
@@ -969,7 +964,7 @@ impl NnapiExecutor {
         let [out_h, out_w, _out_channels] = [output_dims[1], output_dims[2], output_dims[3]];
 
         let input_type = ANeuralNetworksOperandType {
-            type_: ndk::ANEURALNETWORKS_TENSOR_FLOAT32,
+            type_: ANEURALNETWORKS_TENSOR_FLOAT32,
             dimension_count: 4,
             dimensions: [batch as u32, in_h as u32, in_w as u32, in_channels as u32].as_ptr(),
             scale: 0.0,
@@ -977,7 +972,7 @@ impl NnapiExecutor {
         };
 
         let filter_type = ANeuralNetworksOperandType {
-            type_: ndk::ANEURALNETWORKS_TENSOR_FLOAT32,
+            type_: ANEURALNETWORKS_TENSOR_FLOAT32,
             dimension_count: 4,
             dimensions: [
                 filter_h as u32,
@@ -991,7 +986,7 @@ impl NnapiExecutor {
         };
 
         let bias_type = ANeuralNetworksOperandType {
-            type_: ndk::ANEURALNETWORKS_TENSOR_FLOAT32,
+            type_: ANEURALNETWORKS_TENSOR_FLOAT32,
             dimension_count: 1,
             dimensions: [out_channels as u32].as_ptr(),
             scale: 0.0,
@@ -999,7 +994,7 @@ impl NnapiExecutor {
         };
 
         let act_type = ANeuralNetworksOperandType {
-            type_: ndk::ANEURALNETWORKS_INT32,
+            type_: ANEURALNETWORKS_INT32,
             dimension_count: 0,
             dimensions: ptr::null(),
             scale: 0.0,
@@ -1007,7 +1002,7 @@ impl NnapiExecutor {
         };
 
         let output_type = ANeuralNetworksOperandType {
-            type_: ndk::ANEURALNETWORKS_TENSOR_FLOAT32,
+            type_: ANEURALNETWORKS_TENSOR_FLOAT32,
             dimension_count: 4,
             dimensions: [
                 batch as u32,
@@ -1020,50 +1015,50 @@ impl NnapiExecutor {
             zero_point: 0,
         };
 
-        let mut model: *mut ndk::ANeuralNetworksModel = ptr::null_mut();
+        let mut model: *mut ANeuralNetworksModel = ptr::null_mut();
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_create(
-                &mut model as *mut *mut ndk::ANeuralNetworksModel,
+            nnapi_result(ANeuralNetworksModel_create(
+                &mut model as *mut *mut ANeuralNetworksModel,
             ))?;
         }
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_addOperand(
+            nnapi_result(ANeuralNetworksModel_addOperand(
                 model,
                 &input_type as *const _,
             ))?;
-            nnapi_result(ndk::ANeuralNetworksModel_addOperand(
+            nnapi_result(ANeuralNetworksModel_addOperand(
                 model,
                 &filter_type as *const _,
             ))?;
-            nnapi_result(ndk::ANeuralNetworksModel_addOperand(
+            nnapi_result(ANeuralNetworksModel_addOperand(
                 model,
                 &bias_type as *const _,
             ))?;
-            nnapi_result(ndk::ANeuralNetworksModel_addOperand(
+            nnapi_result(ANeuralNetworksModel_addOperand(
                 model,
                 &act_type as *const _,
             ))?;
-            nnapi_result(ndk::ANeuralNetworksModel_addOperand(
+            nnapi_result(ANeuralNetworksModel_addOperand(
                 model,
                 &output_type as *const _,
             ))?;
         }
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_setOperandValue(
+            nnapi_result(ANeuralNetworksModel_setOperandValue(
                 model,
                 1,
                 filter.as_ptr() as *const std::ffi::c_void,
                 filter.len() * std::mem::size_of::<f32>(),
             ))?;
-            nnapi_result(ndk::ANeuralNetworksModel_setOperandValue(
+            nnapi_result(ANeuralNetworksModel_setOperandValue(
                 model,
                 2,
                 bias.as_ptr() as *const std::ffi::c_void,
                 bias.len() * std::mem::size_of::<f32>(),
             ))?;
-            nnapi_result(ndk::ANeuralNetworksModel_setOperandValue(
+            nnapi_result(ANeuralNetworksModel_setOperandValue(
                 model,
                 3,
                 &fused_activation as *const i32 as *const std::ffi::c_void,
@@ -1073,9 +1068,9 @@ impl NnapiExecutor {
 
         let op_inputs: [u32; 5] = [0, 1, 2, 3, 4];
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_addOperation(
+            nnapi_result(ANeuralNetworksModel_addOperation(
                 model,
-                ndk::ANEURALNETWORKS_CONV_2D,
+                ANEURALNETWORKS_CONV_2D,
                 5,
                 op_inputs.as_ptr(),
                 1,
@@ -1084,7 +1079,7 @@ impl NnapiExecutor {
         }
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_identifyInputsAndOutputs(
+            nnapi_result(ANeuralNetworksModel_identifyInputsAndOutputs(
                 model,
                 1,
                 [0u32].as_ptr(),
@@ -1094,39 +1089,39 @@ impl NnapiExecutor {
         }
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksModel_finish(model))?;
+            nnapi_result(ANeuralNetworksModel_finish(model))?;
         }
 
-        let mut compilation: *mut ndk::ANeuralNetworksCompilation = ptr::null_mut();
+        let mut compilation: *mut ANeuralNetworksCompilation = ptr::null_mut();
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksCompilation_create(
+            nnapi_result(ANeuralNetworksCompilation_create(
                 model,
-                &mut compilation as *mut *mut ndk::ANeuralNetworksCompilation,
+                &mut compilation as *mut *mut ANeuralNetworksCompilation,
             ))?;
-            nnapi_result(ndk::ANeuralNetworksCompilation_setPreference(
+            nnapi_result(ANeuralNetworksCompilation_setPreference(
                 compilation,
-                ndk::ANEURALNETWORKS_PREFER_SUSTAINED_SPEED,
+                ANEURALNETWORKS_PREFER_SUSTAINED_SPEED,
             ))?;
-            nnapi_result(ndk::ANeuralNetworksCompilation_finish(compilation))?;
+            nnapi_result(ANeuralNetworksCompilation_finish(compilation))?;
         }
 
         let mut execution: *mut ANeuralNetworksExecution = ptr::null_mut();
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksExecution_create(
+            nnapi_result(ANeuralNetworksExecution_create(
                 compilation,
                 &mut execution as *mut *mut ANeuralNetworksExecution,
             ))?;
         }
 
         unsafe {
-            nnapi_result(ndk::ANeuralNetworksExecution_setInput(
+            nnapi_result(ANeuralNetworksExecution_setInput(
                 execution,
                 0,
                 ptr::null(),
                 input.as_ptr() as *const std::ffi::c_void,
                 input.len() * std::mem::size_of::<f32>(),
             ))?;
-            nnapi_result(ndk::ANeuralNetworksExecution_setOutput(
+            nnapi_result(ANeuralNetworksExecution_setOutput(
                 execution,
                 0,
                 ptr::null(),
@@ -1137,21 +1132,21 @@ impl NnapiExecutor {
 
         let result;
         unsafe {
-            let rc = ndk::ANeuralNetworksExecution_compute(execution);
-            if rc == ndk::ANEURALNETWORKS_NO_ERROR {
+            let rc = ANeuralNetworksExecution_compute(execution);
+            if rc == ANEURALNETWORKS_NO_ERROR {
                 result = Ok(());
             } else {
                 result = Err(crate::Error::Nnapi(crate::NnapiError::Nnapi(format!(
                     "NNAPI conv2d compute failed: {:?}",
-                    ndk::NnapiError::from_code(rc)
+                    NnapiError::from_code(rc)
                 ))));
             }
         }
 
         unsafe {
-            ndk::ANeuralNetworksExecution_free(execution);
-            ndk::ANeuralNetworksCompilation_free(compilation);
-            ndk::ANeuralNetworksModel_free(model);
+            ANeuralNetworksExecution_free(execution);
+            ANeuralNetworksCompilation_free(compilation);
+            ANeuralNetworksModel_free(model);
         }
 
         result
