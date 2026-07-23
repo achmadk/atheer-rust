@@ -10,6 +10,7 @@ macro_rules! device_location_enum {
             Cuda { gpu_id: usize },
             Metal { gpu_id: usize },
             Vulkan { gpu_id: usize },
+            Nnapi { gpu_id: usize },
         }
     };
     (other) => {
@@ -30,6 +31,7 @@ macro_rules! device_enum {
             Cuda(crate::CudaDevice),
             Metal(crate::MetalDevice),
             Vulkan(crate::VulkanDevice),
+            Nnapi(crate::NnapiDevice),
         }
     };
     (other) => {
@@ -277,6 +279,7 @@ impl Device {
             Self::Cpu => crate::bail!("expected a cuda device, got cpu"),
             Self::Metal(_) => crate::bail!("expected a cuda device, got Metal"),
             Self::Vulkan(_) => crate::bail!("expected a cuda device, got vulkan"),
+            Self::Nnapi(_) => crate::bail!("expected a cuda device, got nnapi"),
         }
     }
 
@@ -286,6 +289,7 @@ impl Device {
             Self::Cpu => crate::bail!("expected a metal device, got cpu"),
             Self::Metal(d) => Ok(d),
             Self::Vulkan(_) => crate::bail!("expected a metal device, got vulkan"),
+            Self::Nnapi(_) => crate::bail!("expected a metal device, got nnapi"),
         }
     }
 
@@ -295,6 +299,17 @@ impl Device {
             Self::Cpu => crate::bail!("expected a vulkan device, got cpu"),
             Self::Metal(_) => crate::bail!("expected a vulkan device, got metal"),
             Self::Vulkan(d) => Ok(d),
+            Self::Nnapi(_) => crate::bail!("expected a vulkan device, got nnapi"),
+        }
+    }
+
+    pub fn as_nnapi_device(&self) -> Result<&crate::NnapiDevice> {
+        match self {
+            Self::Cuda(_) => crate::bail!("expected a nnapi device, got cuda"),
+            Self::Cpu => crate::bail!("expected a nnapi device, got cpu"),
+            Self::Metal(_) => crate::bail!("expected a nnapi device, got metal"),
+            Self::Vulkan(_) => crate::bail!("expected a nnapi device, got vulkan"),
+            Self::Nnapi(d) => Ok(d),
         }
     }
 
@@ -310,12 +325,17 @@ impl Device {
         Ok(Self::Vulkan(crate::VulkanDevice::new(ordinal)?))
     }
 
+    pub fn new_nnapi(ordinal: usize) -> Result<Self> {
+        Ok(Self::Nnapi(crate::NnapiDevice::new(ordinal)?))
+    }
+
     pub fn set_seed(&self, seed: u64) -> Result<()> {
         match self {
             Self::Cpu => CpuDevice.set_seed(seed),
             Self::Cuda(c) => c.set_seed(seed),
             Self::Metal(m) => m.set_seed(seed),
             Self::Vulkan(v) => v.set_seed(seed),
+            Self::Nnapi(n) => n.set_seed(seed),
         }
     }
 
@@ -325,6 +345,7 @@ impl Device {
             Self::Cuda(c) => c.get_current_seed(),
             Self::Metal(m) => m.get_current_seed(),
             Self::Vulkan(v) => v.get_current_seed(),
+            Self::Nnapi(n) => n.get_current_seed(),
         }
     }
 
@@ -334,6 +355,7 @@ impl Device {
             (Self::Cuda(lhs), Self::Cuda(rhs)) => lhs.same_device(rhs),
             (Self::Metal(lhs), Self::Metal(rhs)) => lhs.same_device(rhs),
             (Self::Vulkan(lhs), Self::Vulkan(rhs)) => lhs.same_device(rhs),
+            (Self::Nnapi(lhs), Self::Nnapi(rhs)) => lhs.same_device(rhs),
             _ => false,
         }
     }
@@ -344,6 +366,7 @@ impl Device {
             Self::Cuda(device) => device.location(),
             Device::Metal(device) => device.location(),
             Device::Vulkan(device) => device.location(),
+            Device::Nnapi(device) => device.location(),
         }
     }
 
@@ -363,11 +386,16 @@ impl Device {
         matches!(self, Self::Vulkan(_))
     }
 
+    pub fn is_nnapi(&self) -> bool {
+        matches!(self, Self::Nnapi(_))
+    }
+
     pub fn supports_bf16(&self) -> bool {
         match self {
             Self::Cuda(_) | Self::Metal(_) => true,
             Self::Cpu => false,
             Self::Vulkan(_) => false,
+            Self::Nnapi(_) => false,
         }
     }
 
@@ -432,6 +460,10 @@ impl Device {
                 let storage = device.rand_uniform(shape, dtype, lo, up)?;
                 Ok(Storage::Vulkan(storage))
             }
+            Device::Nnapi(device) => {
+                let storage = device.rand_uniform_impl(shape, dtype, lo, up)?;
+                Ok(Storage::Nnapi(storage))
+            }
         }
     }
 
@@ -473,6 +505,10 @@ impl Device {
                 let storage = device.rand_normal(shape, dtype, mean, std)?;
                 Ok(Storage::Vulkan(storage))
             }
+            Device::Nnapi(device) => {
+                let storage = device.rand_normal_impl(shape, dtype, mean, std)?;
+                Ok(Storage::Nnapi(storage))
+            }
         }
     }
 
@@ -503,6 +539,10 @@ impl Device {
                 let storage = device.zeros_impl(shape, dtype)?;
                 Ok(Storage::Vulkan(storage))
             }
+            Device::Nnapi(device) => {
+                let storage = device.zeros_impl(shape, dtype)?;
+                Ok(Storage::Nnapi(storage))
+            }
         }
     }
 
@@ -524,6 +564,10 @@ impl Device {
                 let storage = device.alloc_uninit(shape, dtype)?;
                 Ok(Storage::Vulkan(storage))
             }
+            Device::Nnapi(device) => {
+                let storage = device.alloc_uninit(shape, dtype)?;
+                Ok(Storage::Nnapi(storage))
+            }
         }
     }
 
@@ -541,6 +585,10 @@ impl Device {
             Device::Vulkan(device) => {
                 let storage = device.storage_from_slice(data)?;
                 Ok(Storage::Vulkan(storage))
+            }
+            Device::Nnapi(device) => {
+                let storage = device.storage_from_slice(data)?;
+                Ok(Storage::Nnapi(storage))
             }
         }
     }
@@ -563,6 +611,11 @@ impl Device {
                 let storage = device.storage_from_cpu_storage_owned(storage)?;
                 Ok(Storage::Vulkan(storage))
             }
+            Device::Nnapi(device) => {
+                let storage = array.to_cpu_storage();
+                let storage = device.storage_from_cpu_storage_owned(storage)?;
+                Ok(Storage::Nnapi(storage))
+            }
         }
     }
 
@@ -584,6 +637,11 @@ impl Device {
                 let storage = device.storage_from_cpu_storage_owned(storage)?;
                 Ok(Storage::Vulkan(storage))
             }
+            Device::Nnapi(device) => {
+                let storage = S::to_cpu_storage_owned(data);
+                let storage = device.storage_from_cpu_storage_owned(storage)?;
+                Ok(Storage::Nnapi(storage))
+            }
         }
     }
 
@@ -593,6 +651,7 @@ impl Device {
             Self::Cuda(d) => d.synchronize(),
             Self::Metal(d) => d.synchronize(),
             Self::Vulkan(d) => d.synchronize(),
+            Self::Nnapi(d) => d.synchronize(),
         }
     }
 }

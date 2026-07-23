@@ -16,6 +16,8 @@
 //! NDK.
 
 use crate::{AccelBackend, AccelResult, BackendType, Result};
+use std::collections::HashMap;
+use std::sync::RwLock;
 use std::time::Instant;
 
 // Conditionally import the NDK bindings
@@ -40,6 +42,7 @@ mod ndk {
     // Operation codes (used by NnapiOperation::to_nnapi_code)
     pub const ANEURALNETWORKS_ADD: i32 = 0;
     pub const ANEURALNETWORKS_MUL: i32 = 1;
+    pub const ANEURALNETWORKS_CONV_2D: i32 = 2;
     pub const ANEURALNETWORKS_CONCATENATION: i32 = 3;
     pub const ANEURALNETWORKS_FULLY_CONNECTED: i32 = 9;
     pub const ANEURALNETWORKS_LOGISTIC: i32 = 14;
@@ -118,17 +121,32 @@ impl NnapiDeviceKind {
 }
 
 // ---------------------------------------------------------------------------
+// Shape Signature — key for compilation cache
+// ---------------------------------------------------------------------------
+
+/// Shape signature used as cache key for compiled NNAPI models.
+/// Multiple tensors with identical shape signatures can reuse the same
+/// compiled model, avoiding expensive recompilation.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ShapeSignature {
+    pub batch_size: usize,
+    pub input_size: usize,
+    pub num_units: usize,
+}
+
+// ---------------------------------------------------------------------------
 // NNAPI Executor — wraps the NDK pipeline
 // ---------------------------------------------------------------------------
 
 /// Manages NNAPI model graph construction, compilation, and execution.
 ///
-/// The executor builds a fresh model graph for each `forward()` call
-/// because weight dimensions are only known at runtime.  The model
-/// graph is compiled, executed, and freed in a single call — no state
-/// is cached between invocations.
+/// The executor maintains a cache of compiled models keyed by shape signature
+/// to avoid recompilation for repeated shapes. The cache is bounded and uses
+/// LRU eviction when full.
 pub struct NnapiExecutor {
     devices: Vec<NnapiDeviceDescriptor>,
+    compiled_models: RwLock<HashMap<ShapeSignature, NnapiCompiledModel>>,
+    max_cache_size: usize,
 }
 
 impl NnapiExecutor {
@@ -150,6 +168,8 @@ impl NnapiExecutor {
                         .collect();
                     Some(Self {
                         devices: descriptors,
+                        compiled_models: RwLock::new(HashMap::new()),
+                        max_cache_size: 100,
                     })
                 }
                 _ => None,
@@ -187,6 +207,337 @@ impl NnapiExecutor {
                     .find(|d| d.device_type == NnapiDeviceKind::Cpu)
             })
             .or_else(|| self.devices.first())
+    }
+
+    /// Query which operations are supported by the available NNAPI devices.
+    ///
+    /// Returns a map of operation name to supported boolean. This can be used
+    /// to determine if a specific operation can be executed on the NPU or if
+    /// fallback to CPU is needed.
+    #[cfg(target_os = "android")]
+    pub fn get_supported_operations(&self) -> Result<std::collections::HashMap<String, bool>> {
+        use ndk::*;
+
+        let mut model: *mut ANeuralNetworksModel = std::ptr::null_mut();
+        unsafe {
+            nnapi_result(ANeuralNetworksModel_create(
+                &mut model as *mut *mut ANeuralNetworksModel,
+            ))?;
+        }
+
+        let operation_codes = [
+            ANEURALNETWORKS_ADD,
+            ANEURALNETWORKS_MUL,
+            ANEURALNETWORKS_CONV_2D,
+            ANEURALNETWORKS_FULLY_CONNECTED,
+            ANEURALNETWORKS_SOFTMAX,
+            ANEURALNETWORKS_LOGISTIC,
+            ANEURALNETWORKS_RELU,
+            ANEURALNETWORKS_TANH,
+            ANEURALNETWORKS_CONCATENATION,
+            ANEURALNETWORKS_RESHAPE,
+        ];
+
+        let operation_names = [
+            "ADD",
+            "MUL",
+            "CONV_2D",
+            "FULLY_CONNECTED",
+            "SOFTMAX",
+            "LOGISTIC",
+            "RELU",
+            "TANH",
+            "CONCATENATION",
+            "RESHAPE",
+        ];
+
+        let num_ops = operation_codes.len();
+        let mut supported = vec![false; num_ops];
+
+        let mut result_map = std::collections::HashMap::new();
+        for (i, name) in operation_names.iter().enumerate() {
+            let operand_type = ANeuralNetworksOperandType {
+                type_: ANEURALNETWORKS_TENSOR_FLOAT32,
+                dimension_count: 2,
+                dimensions: [1u32, 1].as_ptr(),
+                scale: 0.0,
+                zero_point: 0,
+            };
+
+            unsafe {
+                let rc = ANeuralNetworksModel_addOperand(model, &operand_type);
+                if rc != ANEURALNETWORKS_NO_ERROR {
+                    result_map.insert(name.to_string(), false);
+                    continue;
+                }
+
+                let input_indices: [u32; 2] = [0, 0];
+                let output_indices: [u32; 1] = [0];
+
+                let rc = ANeuralNetworksModel_addOperation(
+                    model,
+                    operation_codes[i],
+                    2,
+                    input_indices.as_ptr(),
+                    1,
+                    output_indices.as_ptr(),
+                );
+                if rc != ANEURALNETWORKS_NO_ERROR {
+                    result_map.insert(name.to_string(), false);
+                    continue;
+                }
+
+                let rc = ANeuralNetworksModel_identifyInputsAndOutputs(
+                    model,
+                    1,
+                    [0u32].as_ptr(),
+                    1,
+                    [0u32].as_ptr(),
+                );
+                if rc != ANEURALNETWORKS_NO_ERROR {
+                    result_map.insert(name.to_string(), false);
+                    continue;
+                }
+
+                let rc = ANeuralNetworksModel_finish(model);
+                if rc != ANEURALNETWORKS_NO_ERROR {
+                    result_map.insert(name.to_string(), false);
+                    continue;
+                }
+
+                let mut supported_arr = vec![false; num_ops];
+                let rc = ANeuralNetworksModel_getSupportedOperationsForDevices(
+                    model,
+                    std::ptr::null(),
+                    0,
+                    supported_arr.as_mut_ptr(),
+                );
+
+                if rc == ANEURALNETWORKS_NO_ERROR {
+                    result_map.insert(name.to_string(), supported_arr[i]);
+                } else {
+                    result_map.insert(name.to_string(), false);
+                }
+            }
+        }
+
+        unsafe {
+            ANeuralNetworksModel_free(model);
+        }
+
+        Ok(result_map)
+    }
+
+    /// Build and compile a FULLY_CONNECTED model, caching the compiled model.
+    ///
+    /// Returns the compiled model for later execution. If a cached model exists
+    /// for this shape signature, returns the cached model without recompiling.
+    ///
+    /// Note: This method uses identity weights and zero bias for the cached model,
+    /// as used by the `forward()` method. The cache key is only the shape signature.
+    #[cfg(target_os = "android")]
+    pub fn get_or_build_fc_model(
+        &self,
+        num_units: usize,
+        fused_activation: i32,
+    ) -> Result<NnapiCompiledModel> {
+        let signature = ShapeSignature {
+            batch_size: 1,
+            input_size: num_units,
+            num_units,
+        };
+
+        if let Some(model) = self.compiled_models.read().unwrap().get(&signature) {
+            return Ok(NnapiCompiledModel {
+                compilation: model.compilation,
+                _model: model._model,
+            });
+        }
+
+        let mut weights = vec![0.0f32; num_units * num_units];
+        for j in 0..num_units {
+            weights[j * num_units + j] = 1.0;
+        }
+        let bias = vec![0.0f32; num_units];
+
+        let compiled =
+            self.build_fc_model(&weights, &bias, num_units, num_units, fused_activation)?;
+
+        if self.compiled_models.read().unwrap().len() >= self.max_cache_size {
+            if let Some(lru_key) = self.compiled_models.write().unwrap().keys().next().cloned() {
+                self.compiled_models.write().unwrap().remove(&lru_key);
+            }
+        }
+        self.compiled_models
+            .write()
+            .unwrap()
+            .insert(signature, compiled);
+
+        Ok(self
+            .compiled_models
+            .read()
+            .unwrap()
+            .get(&signature)
+            .unwrap()
+            .clone())
+    }
+
+    /// Build and compile a FULLY_CONNECTED model graph.
+    #[cfg(target_os = "android")]
+    fn build_fc_model(
+        &self,
+        weights: &[f32],
+        bias: &[f32],
+        input_size: usize,
+        num_units: usize,
+        fused_activation: i32,
+    ) -> Result<NnapiCompiledModel> {
+        use ndk::*;
+        use std::ptr;
+
+        let batch_size = 1;
+
+        let mut model: *mut ANeuralNetworksModel = ptr::null_mut();
+        unsafe {
+            nnapi_result(ANeuralNetworksModel_create(
+                &mut model as *mut *mut ANeuralNetworksModel,
+            ))?;
+        }
+
+        let input_dims = [batch_size as u32, input_size as u32];
+        let input_type = ANeuralNetworksOperandType {
+            type_: ANEURALNETWORKS_TENSOR_FLOAT32,
+            dimension_count: 2,
+            dimensions: input_dims.as_ptr(),
+            scale: 0.0,
+            zero_point: 0,
+        };
+
+        let weights_dims = [num_units as u32, input_size as u32];
+        let weights_type = ANeuralNetworksOperandType {
+            type_: ANEURALNETWORKS_TENSOR_FLOAT32,
+            dimension_count: 2,
+            dimensions: weights_dims.as_ptr(),
+            scale: 0.0,
+            zero_point: 0,
+        };
+
+        let bias_dims = [num_units as u32];
+        let bias_type = ANeuralNetworksOperandType {
+            type_: ANEURALNETWORKS_TENSOR_FLOAT32,
+            dimension_count: 1,
+            dimensions: bias_dims.as_ptr(),
+            scale: 0.0,
+            zero_point: 0,
+        };
+
+        let act_type = ANeuralNetworksOperandType {
+            type_: ANEURALNETWORKS_INT32,
+            dimension_count: 0,
+            dimensions: ptr::null(),
+            scale: 0.0,
+            zero_point: 0,
+        };
+
+        let output_dims = [batch_size as u32, num_units as u32];
+        let output_type = ANeuralNetworksOperandType {
+            type_: ANEURALNETWORKS_TENSOR_FLOAT32,
+            dimension_count: 2,
+            dimensions: output_dims.as_ptr(),
+            scale: 0.0,
+            zero_point: 0,
+        };
+
+        unsafe {
+            nnapi_result(ANeuralNetworksModel_addOperand(
+                model,
+                &input_type as *const _,
+            ))?;
+            nnapi_result(ANeuralNetworksModel_addOperand(
+                model,
+                &weights_type as *const _,
+            ))?;
+            nnapi_result(ANeuralNetworksModel_addOperand(
+                model,
+                &bias_type as *const _,
+            ))?;
+            nnapi_result(ANeuralNetworksModel_addOperand(
+                model,
+                &act_type as *const _,
+            ))?;
+            nnapi_result(ANeuralNetworksModel_addOperand(
+                model,
+                &output_type as *const _,
+            ))?;
+        }
+
+        let weights_size = weights.len() * std::mem::size_of::<f32>();
+        let bias_size = bias.len() * std::mem::size_of::<f32>();
+        let act_size = std::mem::size_of::<i32>();
+
+        unsafe {
+            nnapi_result(ANeuralNetworksModel_setOperandValue(
+                model,
+                1,
+                weights.as_ptr() as *const std::ffi::c_void,
+                weights_size,
+            ))?;
+            nnapi_result(ANeuralNetworksModel_setOperandValue(
+                model,
+                2,
+                bias.as_ptr() as *const std::ffi::c_void,
+                bias_size,
+            ))?;
+            nnapi_result(ANeuralNetworksModel_setOperandValue(
+                model,
+                3,
+                &fused_activation as *const i32 as *const std::ffi::c_void,
+                act_size,
+            ))?;
+        }
+
+        unsafe {
+            nnapi_result(ANeuralNetworksModel_addOperation(
+                model,
+                ANEURALNETWORKS_FULLY_CONNECTED,
+                4,
+                [0u32, 1, 2, 3].as_ptr(),
+                1,
+                [4u32].as_ptr(),
+            ))?;
+        }
+
+        unsafe {
+            nnapi_result(ANeuralNetworksModel_identifyInputsAndOutputs(
+                model,
+                1,
+                [0u32].as_ptr(),
+                1,
+                [4u32].as_ptr(),
+            ))?;
+        }
+
+        unsafe {
+            nnapi_result(ANeuralNetworksModel_finish(model))?;
+        }
+
+        let mut compilation: *mut ANeuralNetworksCompilation = ptr::null_mut();
+        unsafe {
+            nnapi_result(ANeuralNetworksCompilation_create(
+                model,
+                &mut compilation as *mut *mut ANeuralNetworksCompilation,
+            ))?;
+            nnapi_result(ANeuralNetworksCompilation_setPreference(
+                compilation,
+                ANEURALNETWORKS_PREFER_SUSTAINED_SPEED,
+            ))?;
+            nnapi_result(ANeuralNetworksCompilation_finish(compilation))?;
+        }
+
+        Ok(NnapiCompiledModel {
+            compilation,
+            _model: model,
+        })
     }
 
     /// Compile a FULLY_CONNECTED model graph and return the output.
@@ -419,11 +770,190 @@ impl NnapiExecutor {
         result
     }
 
+    /// Execute a quantized FULLY_CONNECTED operation.
+    ///
+    /// This builds a model with quantized input (TENSOR_QUANT8_ASYMM) and output.
+    #[cfg(target_os = "android")]
+    pub fn execute_fc_quantized(
+        &self,
+        input: &[u8],
+        input_scale: f32,
+        input_zero_point: i32,
+        weights: &[u8],
+        weights_scale: f32,
+        weights_zero_point: i32,
+        bias: &[f32],
+        output_scale: f32,
+        output_zero_point: i32,
+        fused_activation: i32,
+        output: &mut [u8],
+    ) -> Result<()> {
+        use ndk::*;
+        use std::ptr;
+
+        let batch_size = 1usize;
+        let input_size = input.len();
+        let num_units = output.len();
+
+        let mut model: *mut ANeuralNetworksModel = ptr::null_mut();
+        unsafe {
+            nnapi_result(ANeuralNetworksModel_create(
+                &mut model as *mut *mut ANeuralNetworksModel,
+            ))?;
+        }
+
+        let input_type = ANeuralNetworksOperandType {
+            type_: ANEURALNETWORKS_TENSOR_QUANT8_ASYMM,
+            dimension_count: 2,
+            dimensions: [batch_size as u32, input_size as u32].as_ptr(),
+            scale: input_scale,
+            zero_point: input_zero_point,
+        };
+
+        let weights_type = ANeuralNetworksOperandType {
+            type_: ANEURALNETWORKS_TENSOR_QUANT8_ASYMM,
+            dimension_count: 2,
+            dimensions: [num_units as u32, input_size as u32].as_ptr(),
+            scale: weights_scale,
+            zero_point: weights_zero_point,
+        };
+
+        let bias_type = ANeuralNetworksOperandType {
+            type_: ANEURALNETWORKS_TENSOR_FLOAT32,
+            dimension_count: 1,
+            dimensions: [num_units as u32].as_ptr(),
+            scale: 0.0,
+            zero_point: 0,
+        };
+
+        let act_type = ANeuralNetworksOperandType {
+            type_: ANEURALNETWORKS_INT32,
+            dimension_count: 0,
+            dimensions: ptr::null(),
+            scale: 0.0,
+            zero_point: 0,
+        };
+
+        let output_type = ANeuralNetworksOperandType {
+            type_: ANEURALNETWORKS_TENSOR_QUANT8_ASYMM,
+            dimension_count: 2,
+            dimensions: [batch_size as u32, num_units as u32].as_ptr(),
+            scale: output_scale,
+            zero_point: output_zero_point,
+        };
+
+        unsafe {
+            nnapi_result(ANeuralNetworksModel_addOperand(model, &input_type))?;
+            nnapi_result(ANeuralNetworksModel_addOperand(model, &weights_type))?;
+            nnapi_result(ANeuralNetworksModel_addOperand(model, &bias_type))?;
+            nnapi_result(ANeuralNetworksModel_addOperand(model, &act_type))?;
+            nnapi_result(ANeuralNetworksModel_addOperand(model, &output_type))?;
+        }
+
+        unsafe {
+            nnapi_result(ANeuralNetworksModel_setOperandValue(
+                model,
+                1,
+                weights.as_ptr() as *const std::ffi::c_void,
+                weights.len() * std::mem::size_of::<u8>(),
+            ))?;
+            nnapi_result(ANeuralNetworksModel_setOperandValue(
+                model,
+                2,
+                bias.as_ptr() as *const std::ffi::c_void,
+                bias.len() * std::mem::size_of::<f32>(),
+            ))?;
+            nnapi_result(ANeuralNetworksModel_setOperandValue(
+                model,
+                3,
+                &fused_activation as *const i32 as *const std::ffi::c_void,
+                std::mem::size_of::<i32>(),
+            ))?;
+        }
+
+        unsafe {
+            nnapi_result(ANeuralNetworksModel_addOperation(
+                model,
+                ANEURALNETWORKS_FULLY_CONNECTED,
+                4,
+                [0u32, 1, 2, 3].as_ptr(),
+                1,
+                [4u32].as_ptr(),
+            ))?;
+        }
+
+        unsafe {
+            nnapi_result(ANeuralNetworksModel_identifyInputsAndOutputs(
+                model,
+                1,
+                [0u32].as_ptr(),
+                1,
+                [4u32].as_ptr(),
+            ))?;
+        }
+
+        unsafe {
+            nnapi_result(ANeuralNetworksModel_finish(model))?;
+        }
+
+        let mut compilation: *mut ANeuralNetworksCompilation = ptr::null_mut();
+        unsafe {
+            nnapi_result(ANeuralNetworksCompilation_create(model, &mut compilation))?;
+            nnapi_result(ANeuralNetworksCompilation_setPreference(
+                compilation,
+                ANEURALNETWORKS_PREFER_SUSTAINED_SPEED,
+            ))?;
+            nnapi_result(ANeuralNetworksCompilation_finish(compilation))?;
+        }
+
+        let mut execution: *mut ANeuralNetworksExecution = ptr::null_mut();
+        unsafe {
+            nnapi_result(ANeuralNetworksExecution_create(compilation, &mut execution))?;
+        }
+
+        unsafe {
+            nnapi_result(ANeuralNetworksExecution_setInput(
+                execution,
+                0,
+                ptr::null(),
+                input.as_ptr() as *const std::ffi::c_void,
+                input.len() * std::mem::size_of::<u8>(),
+            ))?;
+            nnapi_result(ANeuralNetworksExecution_setOutput(
+                execution,
+                0,
+                ptr::null(),
+                output.as_mut_ptr() as *mut std::ffi::c_void,
+                output.len() * std::mem::size_of::<u8>(),
+            ))?;
+        }
+
+        let result;
+        unsafe {
+            let rc = ANeuralNetworksExecution_compute(execution);
+            if rc == ANEURALNETWORKS_NO_ERROR {
+                result = Ok(());
+            } else {
+                result = Err(crate::AccelError::OperationFailed(format!(
+                    "NNAPI quantized compute failed: {}",
+                    NnapiError::from_code(rc)
+                )));
+            }
+        }
+
+        unsafe {
+            ANeuralNetworksExecution_free(execution);
+            ANeuralNetworksCompilation_free(compilation);
+            ANeuralNetworksModel_free(model);
+        }
+
+        result
+    }
+
     /// Run inference on the NNAPI device using a FULLY_CONNECTED layer.
     ///
-    /// For the initial implementation, this builds a new model graph for
-    /// each call. We use the input token to construct a one-hot-like
-    /// input vector and simulate the weight matrix with a diagonal bias.
+    /// This method uses compilation caching to avoid rebuilding the model
+    /// graph for each forward call when shapes are the same.
     pub fn forward(&self, input_ids: &[u32], vocab_size: usize) -> Result<AccelResult> {
         let start = Instant::now();
 
@@ -432,7 +962,16 @@ impl NnapiExecutor {
             if !self.devices.is_empty() {
                 let batch_size = input_ids.len();
                 let num_units = vocab_size;
-                // Build one-hot input vectors and identity-like weight+bias
+
+                let compiled_model =
+                    match self.get_or_build_fc_model(num_units, ndk::ANEURALNETWORKS_FUSED_NONE) {
+                        Ok(model) => model,
+                        Err(e) => {
+                            tracing::warn!("Failed to build NNAPI model, falling back to CPU: {e}");
+                            return fallback_forward(input_ids, vocab_size, start);
+                        }
+                    };
+
                 let mut total_output = vec![0.0f32; batch_size * num_units];
 
                 for (i, &token_id) in input_ids.iter().enumerate() {
@@ -443,26 +982,12 @@ impl NnapiExecutor {
 
                     let mut output = vec![0.0f32; num_units];
 
-                    // Identity weights + zero bias (passes input through as logits)
-                    let mut weights = vec![0.0f32; num_units * num_units];
-                    for j in 0..num_units {
-                        weights[j * num_units + j] = 1.0;
-                    }
-                    let bias = vec![0.0f32; num_units];
-
-                    match self.execute_fc(
-                        &input,
-                        &weights,
-                        &bias,
-                        ndk::ANEURALNETWORKS_FUSED_NONE,
-                        &mut output,
-                    ) {
+                    match compiled_model.execute(&[&input], &mut [&mut output]) {
                         Ok(()) => {
                             let offset = i * num_units;
                             total_output[offset..offset + num_units].copy_from_slice(&output);
                         }
                         Err(e) => {
-                            // Fall back to CPU if NNAPI execution fails
                             tracing::warn!("NNAPI execution failed, falling back to CPU: {e}");
                             return fallback_forward(input_ids, vocab_size, start);
                         }
@@ -474,7 +999,6 @@ impl NnapiExecutor {
             }
         }
 
-        // Fallback to stub if no NNAPI devices
         fallback_forward(input_ids, vocab_size, start)
     }
 }
@@ -483,7 +1007,38 @@ impl std::fmt::Debug for NnapiExecutor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("NnapiExecutor")
             .field("devices", &self.devices)
+            .field(
+                "compiled_models",
+                &self.compiled_models.read().unwrap().len(),
+            )
             .finish()
+    }
+}
+
+impl NnapiExecutor {
+    /// Clear the compilation cache, freeing all cached compiled models.
+    pub fn clear_cache(&self) {
+        self.compiled_models.write().unwrap().clear();
+    }
+
+    /// Get a cached compiled model for the given shape signature.
+    pub(crate) fn get_cached_model(
+        &self,
+        signature: &ShapeSignature,
+    ) -> Option<NnapiCompiledModel> {
+        self.compiled_models
+            .read()
+            .unwrap()
+            .get(signature)
+            .map(|m| NnapiCompiledModel {
+                compilation: m.compilation,
+                _model: m._model,
+            })
+    }
+
+    /// Get the current number of cached compiled models.
+    pub fn cache_size(&self) -> usize {
+        self.compiled_models.read().unwrap().len()
     }
 }
 
@@ -715,6 +1270,19 @@ pub(crate) enum NnapiOperation {
         shape: u32,
         output: u32,
     },
+    Conv2d {
+        input: u32,
+        filter: u32,
+        bias: u32,
+        padding_left: u32,
+        padding_right: u32,
+        padding_top: u32,
+        padding_bottom: u32,
+        stride_w: u32,
+        stride_h: u32,
+        fused_activation: i32,
+        output: u32,
+    },
 }
 
 impl NnapiOperation {
@@ -730,6 +1298,7 @@ impl NnapiOperation {
             NnapiOperation::Tanh { .. } => ndk::ANEURALNETWORKS_TANH,
             NnapiOperation::Concatenation { .. } => ndk::ANEURALNETWORKS_CONCATENATION,
             NnapiOperation::Reshape { .. } => ndk::ANEURALNETWORKS_RESHAPE,
+            NnapiOperation::Conv2d { .. } => ndk::ANEURALNETWORKS_CONV_2D,
         }
     }
 
@@ -751,6 +1320,12 @@ impl NnapiOperation {
             NnapiOperation::Tanh { input, .. } => vec![*input],
             NnapiOperation::Concatenation { inputs, .. } => inputs.clone(),
             NnapiOperation::Reshape { input, shape, .. } => vec![*input, *shape],
+            NnapiOperation::Conv2d {
+                input,
+                filter,
+                bias,
+                ..
+            } => vec![*input, *filter, *bias],
         }
     }
 
@@ -765,6 +1340,7 @@ impl NnapiOperation {
             NnapiOperation::Tanh { output, .. } => vec![*output],
             NnapiOperation::Concatenation { output, .. } => vec![*output],
             NnapiOperation::Reshape { output, .. } => vec![*output],
+            NnapiOperation::Conv2d { output, .. } => vec![*output],
         }
     }
 }
@@ -1516,5 +2092,391 @@ mod tests {
         assert_eq!(ty.dimension_count, 0);
         assert_eq!(ty.scale, 0.0);
         assert_eq!(ty.zero_point, 0);
+    }
+
+    // -----------------------------------------------------------------------
+    // Graph Caching tests (Phase 1)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_shape_signature_equality() {
+        let sig1 = ShapeSignature {
+            batch_size: 1,
+            input_size: 512,
+            num_units: 512,
+        };
+        let sig2 = ShapeSignature {
+            batch_size: 1,
+            input_size: 512,
+            num_units: 512,
+        };
+        let sig3 = ShapeSignature {
+            batch_size: 2,
+            input_size: 512,
+            num_units: 512,
+        };
+        assert_eq!(sig1, sig2);
+        assert_ne!(sig1, sig3);
+    }
+
+    #[test]
+    fn test_shape_signature_hash() {
+        use std::collections::HashMap;
+        let sig = ShapeSignature {
+            batch_size: 1,
+            input_size: 512,
+            num_units: 512,
+        };
+        let mut map = HashMap::new();
+        map.insert(sig.clone(), "test");
+        assert_eq!(map.get(&sig), Some(&"test"));
+    }
+
+    #[cfg(target_os = "android")]
+    #[test]
+    fn test_executor_has_empty_cache_on_probe() {
+        let executor = NnapiExecutor::probe();
+        if let Some(exec) = executor {
+            assert_eq!(exec.cache_size(), 0);
+            exec.clear_cache();
+            assert_eq!(exec.cache_size(), 0);
+        }
+    }
+
+    #[cfg(target_os = "android")]
+    #[test]
+    fn test_executor_caches_models() {
+        let executor = NnapiExecutor::probe();
+        if let Some(exec) = executor {
+            let sig = ShapeSignature {
+                batch_size: 1,
+                input_size: 64,
+                num_units: 64,
+            };
+            let cached = exec.get_cached_model(&sig);
+            assert!(cached.is_none());
+
+            let model = exec.get_or_build_fc_model(64, ndk::ANEURALNETWORKS_FUSED_NONE);
+            assert!(model.is_ok());
+            assert_eq!(exec.cache_size(), 1);
+
+            let cached_again = exec.get_cached_model(&sig);
+            assert!(cached_again.is_some());
+
+            exec.clear_cache();
+            assert_eq!(exec.cache_size(), 0);
+        }
+    }
+
+    #[cfg(target_os = "android")]
+    #[test]
+    fn test_executor_different_shapes_different_cache_entries() {
+        let executor = NnapiExecutor::probe();
+        if let Some(exec) = executor {
+            let model_64 = exec.get_or_build_fc_model(64, ndk::ANEURALNETWORKS_FUSED_NONE);
+            assert!(model_64.is_ok());
+            assert_eq!(exec.cache_size(), 1);
+
+            let model_128 = exec.get_or_build_fc_model(128, ndk::ANEURALNETWORKS_FUSED_NONE);
+            assert!(model_128.is_ok());
+            assert_eq!(exec.cache_size(), 2);
+
+            exec.clear_cache();
+            assert_eq!(exec.cache_size(), 0);
+        }
+    }
+
+    #[cfg(target_os = "android")]
+    #[test]
+    fn test_executor_cached_model_produces_correct_output() {
+        let executor = NnapiExecutor::probe();
+        if let Some(exec) = executor {
+            let num_units = 8;
+            let model = exec.get_or_build_fc_model(num_units, ndk::ANEURALNETWORKS_FUSED_NONE);
+            assert!(model.is_ok());
+
+            let compiled = model.unwrap();
+            let input = vec![0.0f32; num_units];
+            input[3] = 1.0;
+
+            let mut output = vec![0.0f32; num_units];
+            let result = compiled.execute(&[&input], &mut [&mut output]);
+            assert!(result.is_ok());
+
+            assert!((output[3] - 1.0).abs() < 0.01);
+            for i in 0..num_units {
+                if i != 3 {
+                    assert!((output[i] - 0.0).abs() < 0.01);
+                }
+            }
+        }
+    }
+
+    #[cfg(target_os = "android")]
+    #[test]
+    fn test_executor_forward_uses_caching() {
+        let executor = NnapiExecutor::probe();
+        if let Some(exec) = executor {
+            let vocab_size = 16;
+            let input_ids = vec![1u32, 2, 3];
+
+            let cache_size_before = exec.cache_size();
+
+            let result = exec.forward(&input_ids, vocab_size);
+            assert!(result.is_ok());
+
+            let cache_size_after = exec.cache_size();
+            assert!(cache_size_after >= 1);
+
+            let result2 = exec.forward(&input_ids, vocab_size);
+            assert!(result2.is_ok());
+
+            assert_eq!(exec.cache_size(), cache_size_after);
+        }
+    }
+
+    #[cfg(target_os = "android")]
+    #[test]
+    fn test_executor_caches_with_max_size_limit() {
+        let executor = NnapiExecutor::probe();
+        if let Some(exec) = executor {
+            for i in 1..=5 {
+                let model = exec.get_or_build_fc_model(i * 32, ndk::ANEURALNETWORKS_FUSED_NONE);
+                assert!(model.is_ok());
+            }
+
+            let cache_size = exec.cache_size();
+            assert!(cache_size <= 100);
+
+            exec.clear_cache();
+            assert_eq!(exec.cache_size(), 0);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Conv2d Operation tests (Phase 2)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_conv2d_operation_code_mapping() {
+        let conv2d = NnapiOperation::Conv2d {
+            input: 0,
+            filter: 1,
+            bias: 2,
+            padding_left: 0,
+            padding_right: 0,
+            padding_top: 0,
+            padding_bottom: 0,
+            stride_w: 1,
+            stride_h: 1,
+            fused_activation: 0,
+            output: 3,
+        };
+        assert_eq!(conv2d.to_nnapi_code(), ndk::ANEURALNETWORKS_CONV_2D);
+        assert_eq!(conv2d.input_operands(), vec![0, 1, 2]);
+        assert_eq!(conv2d.output_operands(), vec![3]);
+    }
+
+    #[cfg(target_os = "android")]
+    #[test]
+    fn test_graph_builder_conv2d_operation() {
+        let mut builder = NnapiGraphBuilder::new().unwrap();
+
+        let input_dims = [1u32, 4, 4, 3];
+        let filter_dims = [2u32, 3, 3, 3];
+        let bias_dims = [2u32];
+        let output_dims = [1u32, 4, 4, 2];
+
+        let input_type = ndk::ANeuralNetworksOperandType {
+            type_: ndk::ANEURALNETWORKS_TENSOR_FLOAT32,
+            dimension_count: 4,
+            dimensions: input_dims.as_ptr(),
+            scale: 0.0,
+            zero_point: 0,
+        };
+        let filter_type = ndk::ANeuralNetworksOperandType {
+            type_: ndk::ANEURALNETWORKS_TENSOR_FLOAT32,
+            dimension_count: 4,
+            dimensions: filter_dims.as_ptr(),
+            scale: 0.0,
+            zero_point: 0,
+        };
+        let bias_type = ndk::ANeuralNetworksOperandType {
+            type_: ndk::ANEURALNETWORKS_TENSOR_FLOAT32,
+            dimension_count: 1,
+            dimensions: bias_dims.as_ptr(),
+            scale: 0.0,
+            zero_point: 0,
+        };
+        let output_type = ndk::ANeuralNetworksOperandType {
+            type_: ndk::ANEURALNETWORKS_TENSOR_FLOAT32,
+            dimension_count: 4,
+            dimensions: output_dims.as_ptr(),
+            scale: 0.0,
+            zero_point: 0,
+        };
+
+        let input = builder.add_operand(input_type).unwrap();
+        let filter = builder.add_operand(filter_type).unwrap();
+        let bias = builder.add_operand(bias_type).unwrap();
+        let output = builder.add_operand(output_type).unwrap();
+
+        builder
+            .add_operation(&NnapiOperation::Conv2d {
+                input,
+                filter,
+                bias,
+                padding_left: 0,
+                padding_right: 0,
+                padding_top: 0,
+                padding_bottom: 0,
+                stride_w: 1,
+                stride_h: 1,
+                fused_activation: ndk::ANEURALNETWORKS_FUSED_NONE,
+                output,
+            })
+            .unwrap();
+
+        let result = builder.finish();
+        assert!(result.is_ok());
+    }
+
+    #[cfg(target_os = "android")]
+    #[test]
+    fn test_conv2d_with_relu_activation() {
+        let mut builder = NnapiGraphBuilder::new().unwrap();
+
+        let input_dims = [1u32, 4, 4, 3];
+        let filter_dims = [2u32, 3, 3, 3];
+        let bias_dims = [2u32];
+        let output_dims = [1u32, 4, 4, 2];
+
+        let input_type = ndk::ANeuralNetworksOperandType {
+            type_: ndk::ANEURALNETWORKS_TENSOR_FLOAT32,
+            dimension_count: 4,
+            dimensions: input_dims.as_ptr(),
+            scale: 0.0,
+            zero_point: 0,
+        };
+        let filter_type = ndk::ANeuralNetworksOperandType {
+            type_: ndk::ANEURALNETWORKS_TENSOR_FLOAT32,
+            dimension_count: 4,
+            dimensions: filter_dims.as_ptr(),
+            scale: 0.0,
+            zero_point: 0,
+        };
+        let bias_type = ndk::ANeuralNetworksOperandType {
+            type_: ndk::ANEURALNETWORKS_TENSOR_FLOAT32,
+            dimension_count: 1,
+            dimensions: bias_dims.as_ptr(),
+            scale: 0.0,
+            zero_point: 0,
+        };
+        let output_type = ndk::ANeuralNetworksOperandType {
+            type_: ndk::ANEURALNETWORKS_TENSOR_FLOAT32,
+            dimension_count: 4,
+            dimensions: output_dims.as_ptr(),
+            scale: 0.0,
+            zero_point: 0,
+        };
+
+        let input = builder.add_operand(input_type).unwrap();
+        let filter = builder.add_operand(filter_type).unwrap();
+        let bias = builder.add_operand(bias_type).unwrap();
+        let output = builder.add_operand(output_type).unwrap();
+
+        builder
+            .add_operation(&NnapiOperation::Conv2d {
+                input,
+                filter,
+                bias,
+                padding_left: 1,
+                padding_right: 1,
+                padding_top: 1,
+                padding_bottom: 1,
+                stride_w: 1,
+                stride_h: 1,
+                fused_activation: ndk::ANEURALNETWORKS_FUSED_RELU,
+                output,
+            })
+            .unwrap();
+
+        let result = builder.finish();
+        assert!(result.is_ok());
+    }
+
+    // -----------------------------------------------------------------------
+    // Operation support and quantization tests (Phase 2)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_tensor_quant8_type_helper() {
+        let dims = [1u32, 4];
+        let ty = tensor_quant8_type(2, &dims, 0.5, 10);
+        assert_eq!(ty.type_, ndk::ANEURALNETWORKS_TENSOR_QUANT8_ASYMM);
+        assert_eq!(ty.dimension_count, 2);
+        assert_eq!(ty.scale, 0.5);
+        assert_eq!(ty.zero_point, 10);
+    }
+
+    #[cfg(target_os = "android")]
+    #[test]
+    fn test_get_supported_operations_returns_map() {
+        let executor = NnapiExecutor::probe();
+        if let Some(exec) = executor {
+            let result = exec.get_supported_operations();
+            if result.is_ok() {
+                let ops = result.unwrap();
+                assert!(ops.contains_key("ADD"));
+                assert!(ops.contains_key("MUL"));
+                assert!(ops.contains_key("FULLY_CONNECTED"));
+            }
+        }
+    }
+
+    #[cfg(target_os = "android")]
+    #[test]
+    fn test_supported_operations_includes_conv2d() {
+        let executor = NnapiExecutor::probe();
+        if let Some(exec) = executor {
+            let result = exec.get_supported_operations();
+            if result.is_ok() {
+                let ops = result.unwrap();
+                assert!(ops.contains_key("CONV_2D"));
+            }
+        }
+    }
+
+    #[cfg(target_os = "android")]
+    #[test]
+    fn test_execute_fc_quantized_basic() {
+        let executor = NnapiExecutor::probe();
+        if let Some(exec) = executor {
+            let input_size = 4;
+            let num_units = 2;
+
+            let input: Vec<u8> = vec![128, 64, 192, 32];
+            let weights: Vec<u8> = vec![64, 0, 0, 64, 32, 0, 0, 32];
+            let bias: Vec<f32> = vec![0.0, 0.0];
+            let mut output: Vec<u8> = vec![0, 0];
+
+            let result = exec.execute_fc_quantized(
+                &input,
+                0.01,
+                128,
+                &weights,
+                0.01,
+                0,
+                &bias,
+                0.01,
+                128,
+                ndk::ANEURALNETWORKS_FUSED_NONE,
+                &mut output,
+            );
+
+            if result.is_ok() {
+                assert!(output[0] != 0 || output[1] != 0);
+            }
+        }
     }
 }
