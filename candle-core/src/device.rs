@@ -293,6 +293,7 @@ impl Device {
         }
     }
 
+    #[cfg(all(feature = "vulkan", target_os = "android"))]
     pub fn as_vulkan_device(&self) -> Result<&crate::VulkanDevice> {
         match self {
             Self::Cuda(_) => crate::bail!("expected a vulkan device, got cuda"),
@@ -303,6 +304,7 @@ impl Device {
         }
     }
 
+    #[cfg(all(feature = "nnapi", target_os = "android"))]
     pub fn as_nnapi_device(&self) -> Result<&crate::NnapiDevice> {
         match self {
             Self::Cuda(_) => crate::bail!("expected a nnapi device, got cuda"),
@@ -321,10 +323,12 @@ impl Device {
         Ok(Self::Metal(crate::MetalDevice::new(ordinal)?))
     }
 
+    #[cfg(all(feature = "vulkan", target_os = "android"))]
     pub fn new_vulkan(ordinal: usize) -> Result<Self> {
         Ok(Self::Vulkan(crate::VulkanDevice::new(ordinal)?))
     }
 
+    #[cfg(all(feature = "nnapi", target_os = "android"))]
     pub fn new_nnapi(ordinal: usize) -> Result<Self> {
         Ok(Self::Nnapi(crate::NnapiDevice::new(ordinal)?))
     }
@@ -334,7 +338,9 @@ impl Device {
             Self::Cpu => CpuDevice.set_seed(seed),
             Self::Cuda(c) => c.set_seed(seed),
             Self::Metal(m) => m.set_seed(seed),
+            #[cfg(all(feature = "vulkan", target_os = "android"))]
             Self::Vulkan(v) => v.set_seed(seed),
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
             Self::Nnapi(n) => n.set_seed(seed),
         }
     }
@@ -344,7 +350,9 @@ impl Device {
             Self::Cpu => CpuDevice.get_current_seed(),
             Self::Cuda(c) => c.get_current_seed(),
             Self::Metal(m) => m.get_current_seed(),
+            #[cfg(all(feature = "vulkan", target_os = "android"))]
             Self::Vulkan(v) => v.get_current_seed(),
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
             Self::Nnapi(n) => n.get_current_seed(),
         }
     }
@@ -354,7 +362,9 @@ impl Device {
             (Self::Cpu, Self::Cpu) => true,
             (Self::Cuda(lhs), Self::Cuda(rhs)) => lhs.same_device(rhs),
             (Self::Metal(lhs), Self::Metal(rhs)) => lhs.same_device(rhs),
+            #[cfg(all(feature = "vulkan", target_os = "android"))]
             (Self::Vulkan(lhs), Self::Vulkan(rhs)) => lhs.same_device(rhs),
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
             (Self::Nnapi(lhs), Self::Nnapi(rhs)) => lhs.same_device(rhs),
             _ => false,
         }
@@ -364,9 +374,11 @@ impl Device {
         match self {
             Self::Cpu => DeviceLocation::Cpu,
             Self::Cuda(device) => device.location(),
-            Device::Metal(device) => device.location(),
-            Device::Vulkan(device) => device.location(),
-            Device::Nnapi(device) => device.location(),
+            Self::Metal(device) => device.location(),
+            #[cfg(all(feature = "vulkan", target_os = "android"))]
+            Self::Vulkan(device) => device.location(),
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            Self::Nnapi(device) => device.location(),
         }
     }
 
@@ -382,10 +394,12 @@ impl Device {
         matches!(self, Self::Metal(_))
     }
 
+    #[cfg(all(feature = "vulkan", target_os = "android"))]
     pub fn is_vulkan(&self) -> bool {
         matches!(self, Self::Vulkan(_))
     }
 
+    #[cfg(all(feature = "nnapi", target_os = "android"))]
     pub fn is_nnapi(&self) -> bool {
         matches!(self, Self::Nnapi(_))
     }
@@ -394,7 +408,9 @@ impl Device {
         match self {
             Self::Cuda(_) | Self::Metal(_) => true,
             Self::Cpu => false,
+            #[cfg(all(feature = "vulkan", target_os = "android"))]
             Self::Vulkan(_) => false,
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
             Self::Nnapi(_) => false,
         }
     }
@@ -423,6 +439,7 @@ impl Device {
         }
     }
 
+    #[cfg(all(feature = "vulkan", target_os = "android"))]
     pub fn vulkan_if_available(ordinal: usize) -> Result<Self> {
         if crate::utils::vulkan_is_available() {
             Self::new_vulkan(ordinal)
@@ -650,7 +667,9 @@ impl Device {
             Self::Cpu => Ok(()),
             Self::Cuda(d) => d.synchronize(),
             Self::Metal(d) => d.synchronize(),
+            #[cfg(all(feature = "vulkan", target_os = "android"))]
             Self::Vulkan(d) => d.synchronize(),
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
             Self::Nnapi(d) => d.synchronize(),
         }
     }

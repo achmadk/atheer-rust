@@ -373,13 +373,16 @@ impl NnapiExecutor {
             .unwrap()
             .insert(signature, compiled);
 
-        Ok(self
+        let model = self
             .compiled_models
             .read()
             .unwrap()
             .get(&signature)
-            .unwrap()
-            .clone())
+            .unwrap();
+        Ok(NnapiCompiledModel {
+            compilation: model.compilation,
+            _model: model._model,
+        })
     }
 
     /// Build and compile a FULLY_CONNECTED model graph.

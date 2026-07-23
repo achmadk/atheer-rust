@@ -6,6 +6,8 @@ edition.workspace = true
 [features]
 default = []
 coreml = []
+vulkan = []
+nnapi = []
 
 [dependencies]
 serde = { workspace = true }
@@ -23,6 +25,7 @@ sysctl = "0.6"
 candle-coreml = { path = "../candle-coreml" }
 
 [target.'cfg(target_os = "android")'.dependencies]
+candle-core = { version = "0.10.2", features = ["vulkan", "nnapi"] }
 ash = { workspace = true }
 gpu-allocator = { workspace = true }
 bytemuck = "1.25"
