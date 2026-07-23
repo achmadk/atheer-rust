@@ -34,6 +34,32 @@ macro_rules! device_enum {
             Nnapi(crate::NnapiDevice),
         }
     };
+    (android_vulkan_only) => {
+        #[derive(Debug, Clone)]
+        pub enum Device {
+            Cpu,
+            Cuda(crate::CudaDevice),
+            Metal(crate::MetalDevice),
+            Vulkan(crate::VulkanDevice),
+        }
+    };
+    (android_nnapi_only) => {
+        #[derive(Debug, Clone)]
+        pub enum Device {
+            Cpu,
+            Cuda(crate::CudaDevice),
+            Metal(crate::MetalDevice),
+            Nnapi(crate::NnapiDevice),
+        }
+    };
+    (android_base) => {
+        #[derive(Debug, Clone)]
+        pub enum Device {
+            Cpu,
+            Cuda(crate::CudaDevice),
+            Metal(crate::MetalDevice),
+        }
+    };
     (other) => {
         #[derive(Debug, Clone)]
         pub enum Device {
@@ -44,16 +70,25 @@ macro_rules! device_enum {
     };
 }
 
-#[cfg(all(feature = "vulkan", target_os = "android"))]
+#[cfg(target_os = "android")]
 device_location_enum!(android);
 
-#[cfg(not(all(feature = "vulkan", target_os = "android")))]
+#[cfg(not(target_os = "android"))]
 device_location_enum!(other);
 
-#[cfg(all(feature = "vulkan", target_os = "android"))]
+#[cfg(all(feature = "vulkan", feature = "nnapi", target_os = "android"))]
 device_enum!(android);
 
-#[cfg(not(all(feature = "vulkan", target_os = "android")))]
+#[cfg(all(feature = "vulkan", not(feature = "nnapi"), target_os = "android"))]
+device_enum!(android_vulkan_only);
+
+#[cfg(all(not(feature = "vulkan"), feature = "nnapi", target_os = "android"))]
+device_enum!(android_nnapi_only);
+
+#[cfg(all(not(any(feature = "vulkan", feature = "nnapi")), target_os = "android"))]
+device_enum!(android_base);
+
+#[cfg(not(target_os = "android"))]
 device_enum!(other);
 
 pub trait NdArray {
