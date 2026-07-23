@@ -285,7 +285,30 @@ pub enum NnapiError {
     Unmappable,
     OutputInsufficientSize,
     UnavailableDevice,
-    Unknown(i32),
+    Code(i32),
+    Nnapi(String),
+}
+
+impl std::error::Error for NnapiError {}
+
+impl std::fmt::Display for NnapiError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NnapiError::Message(s) => write!(f, "NNAPI: {}", s),
+            NnapiError::NoError => write!(f, "NNAPI: no error"),
+            NnapiError::OutOfMemory => write!(f, "NNAPI: out of memory"),
+            NnapiError::Incomplete => write!(f, "NNAPI: incomplete"),
+            NnapiError::UnexpectedNull => write!(f, "NNAPI: unexpected null"),
+            NnapiError::BadData => write!(f, "NNAPI: bad data"),
+            NnapiError::OperationFailed => write!(f, "NNAPI: operation failed"),
+            NnapiError::BadState => write!(f, "NNAPI: bad state"),
+            NnapiError::Unmappable => write!(f, "NNAPI: unmappable"),
+            NnapiError::OutputInsufficientSize => write!(f, "NNAPI: output insufficient size"),
+            NnapiError::UnavailableDevice => write!(f, "NNAPI: unavailable device"),
+            NnapiError::Code(c) => write!(f, "NNAPI error code: {}", c),
+            NnapiError::Nnapi(s) => write!(f, "NNAPI: {}", s),
+        }
+    }
 }
 
 #[cfg(all(feature = "nnapi", target_os = "android"))]
@@ -302,7 +325,7 @@ impl NnapiError {
             7 => NnapiError::Unmappable,
             8 => NnapiError::OutputInsufficientSize,
             9 => NnapiError::UnavailableDevice,
-            other => NnapiError::Unknown(other),
+            other => NnapiError::Code(other),
         }
     }
 }
@@ -310,7 +333,7 @@ impl NnapiError {
 #[cfg(not(all(feature = "nnapi", target_os = "android")))]
 impl NnapiError {
     pub fn from_code(_code: i32) -> Self {
-        NnapiError::Unknown(-1)
+        NnapiError::Code(-1)
     }
 }
 
@@ -325,7 +348,7 @@ pub fn nnapi_result(code: i32) -> Result<(), NnapiError> {
 
 #[cfg(not(all(feature = "nnapi", target_os = "android")))]
 pub fn nnapi_result(_code: i32) -> Result<(), NnapiError> {
-    Err(NnapiError::Unknown(-1))
+    Err(NnapiError::Code(-1))
 }
 
 #[cfg(all(feature = "nnapi", target_os = "android"))]
