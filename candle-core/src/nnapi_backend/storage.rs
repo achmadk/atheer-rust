@@ -177,14 +177,13 @@ impl NnapiStorage {
     ) -> Result<(*mut ANeuralNetworksMemory, *mut AHardwareBuffer)> {
         use std::ptr;
 
-        let desc = AHardwareBuffer_Desc {
-            width: size as u64,
-            height: 1,
-            layers: 1,
-            format: AHARDWAREBUFFER_FORMAT_BLOB,
-            usage: AHARDWAREBUFFER_USAGE_CPU_READ_OFTEN | AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN,
-            stride: 0,
-        };
+        let mut desc = AHardwareBuffer_Desc::new();
+        desc.width = size as u32;
+        desc.height = 1;
+        desc.layers = 1;
+        desc.format = AHARDWAREBUFFER_FORMAT_BLOB;
+        desc.usage = AHARDWAREBUFFER_USAGE_CPU_READ_OFTEN | AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN;
+        desc.stride = 0;
 
         let mut hw_buffer: *mut AHardwareBuffer = ptr::null_mut();
         let rc =

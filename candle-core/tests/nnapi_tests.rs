@@ -223,6 +223,7 @@ fn test_nnapi_storage_allocate() -> Result<()> {
 #[cfg(all(feature = "nnapi", target_os = "android"))]
 fn test_nnapi_zero_copy_alignment() -> Result<()> {
     use candle_core::nnapi_backend::NnapiStorage;
+    use candle_core::Shape;
 
     let device = Device::new_nnapi(0)?;
 
