@@ -252,7 +252,7 @@ impl NnapiGraphBuilder {
     }
 
     pub fn compile(
-        self,
+        mut self,
         preference: crate::nnapi_backend::ExecutionPreference,
     ) -> Result<NnapiCompiledModel> {
         #[cfg(target_os = "android")]

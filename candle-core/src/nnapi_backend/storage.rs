@@ -151,7 +151,7 @@ impl NnapiStorage {
                 (Some(mem), Some(buf), data)
             }
             Err(_) => {
-                let (mem, fd) = Self::allocate_from_fd(aligned_size)?;
+                let (mem, _fd) = Self::allocate_from_fd(aligned_size)?;
                 let data = vec![0u8; aligned_size];
                 (Some(mem), None, data)
             }

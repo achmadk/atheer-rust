@@ -314,6 +314,7 @@ impl Device {
             Self::Cpu => crate::bail!("expected a cuda device, got cpu"),
             Self::Metal(_) => crate::bail!("expected a cuda device, got Metal"),
             Self::Vulkan(_) => crate::bail!("expected a cuda device, got vulkan"),
+            #[cfg(feature = "nnapi")]
             Self::Nnapi(_) => crate::bail!("expected a cuda device, got nnapi"),
         }
     }
@@ -324,6 +325,7 @@ impl Device {
             Self::Cpu => crate::bail!("expected a metal device, got cpu"),
             Self::Metal(d) => Ok(d),
             Self::Vulkan(_) => crate::bail!("expected a metal device, got vulkan"),
+            #[cfg(feature = "nnapi")]
             Self::Nnapi(_) => crate::bail!("expected a metal device, got nnapi"),
         }
     }
@@ -335,6 +337,7 @@ impl Device {
             Self::Cpu => crate::bail!("expected a vulkan device, got cpu"),
             Self::Metal(_) => crate::bail!("expected a vulkan device, got metal"),
             Self::Vulkan(d) => Ok(d),
+            #[cfg(feature = "nnapi")]
             Self::Nnapi(_) => crate::bail!("expected a vulkan device, got nnapi"),
         }
     }
@@ -512,6 +515,7 @@ impl Device {
                 let storage = device.rand_uniform(shape, dtype, lo, up)?;
                 Ok(Storage::Vulkan(storage))
             }
+            #[cfg(feature = "nnapi")]
             Device::Nnapi(device) => {
                 let storage = device.rand_uniform_impl(shape, dtype, lo, up)?;
                 Ok(Storage::Nnapi(storage))
@@ -557,6 +561,7 @@ impl Device {
                 let storage = device.rand_normal(shape, dtype, mean, std)?;
                 Ok(Storage::Vulkan(storage))
             }
+            #[cfg(feature = "nnapi")]
             Device::Nnapi(device) => {
                 let storage = device.rand_normal_impl(shape, dtype, mean, std)?;
                 Ok(Storage::Nnapi(storage))
@@ -591,6 +596,7 @@ impl Device {
                 let storage = device.zeros_impl(shape, dtype)?;
                 Ok(Storage::Vulkan(storage))
             }
+            #[cfg(feature = "nnapi")]
             Device::Nnapi(device) => {
                 let storage = device.zeros_impl(shape, dtype)?;
                 Ok(Storage::Nnapi(storage))
@@ -616,6 +622,7 @@ impl Device {
                 let storage = device.alloc_uninit(shape, dtype)?;
                 Ok(Storage::Vulkan(storage))
             }
+            #[cfg(feature = "nnapi")]
             Device::Nnapi(device) => {
                 let storage = device.alloc_uninit(shape, dtype)?;
                 Ok(Storage::Nnapi(storage))
@@ -638,6 +645,7 @@ impl Device {
                 let storage = device.storage_from_slice(data)?;
                 Ok(Storage::Vulkan(storage))
             }
+            #[cfg(feature = "nnapi")]
             Device::Nnapi(device) => {
                 let storage = device.storage_from_slice(data)?;
                 Ok(Storage::Nnapi(storage))
@@ -663,6 +671,7 @@ impl Device {
                 let storage = device.storage_from_cpu_storage_owned(storage)?;
                 Ok(Storage::Vulkan(storage))
             }
+            #[cfg(feature = "nnapi")]
             Device::Nnapi(device) => {
                 let storage = array.to_cpu_storage();
                 let storage = device.storage_from_cpu_storage_owned(storage)?;
@@ -689,6 +698,7 @@ impl Device {
                 let storage = device.storage_from_cpu_storage_owned(storage)?;
                 Ok(Storage::Vulkan(storage))
             }
+            #[cfg(feature = "nnapi")]
             Device::Nnapi(device) => {
                 let storage = S::to_cpu_storage_owned(data);
                 let storage = device.storage_from_cpu_storage_owned(storage)?;
