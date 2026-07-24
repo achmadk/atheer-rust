@@ -81,6 +81,7 @@ impl VulkanStorage {
         &self.buffer
     }
 
+    #[allow(dead_code)]
     fn alloc_result_storage(&self, elem_count: usize) -> Result<VulkanStorage> {
         let size = elem_count * self.dtype.size_in_bytes();
         let buffer = self
@@ -173,7 +174,7 @@ impl VulkanStorage {
 
     fn read_to_bytes(&self) -> Result<Vec<u8>> {
         self.device.sync()?;
-        let size = self.count * self.dtype.size_in_bytes();
+        let _size = self.count * self.dtype.size_in_bytes();
         let slice = self.buffer.slice(..);
         let (tx, rx) = std::sync::mpsc::channel();
         slice.map_async(wgpu::MapMode::Read, move |result| {

@@ -68,6 +68,7 @@ pub enum ExecutionPreference {
 }
 
 impl ExecutionPreference {
+    #[allow(dead_code)]
     #[cfg(target_os = "android")]
     fn to_ndk_preference(&self) -> i32 {
         match self {
@@ -252,7 +253,6 @@ impl NnapiExecutor {
         ];
 
         let num_ops = operation_codes.len();
-        let mut supported = vec![false; num_ops];
 
         let mut result_map = std::collections::HashMap::new();
         for (i, name) in operation_names.iter().enumerate() {
@@ -335,6 +335,7 @@ impl NnapiExecutor {
     ///
     /// Note: This method uses identity weights and zero bias for the cached model,
     /// as used by the `forward()` method. The cache key is only the shape signature.
+    #[allow(private_interfaces)]
     #[cfg(target_os = "android")]
     pub fn get_or_build_fc_model(
         &self,
@@ -371,12 +372,13 @@ impl NnapiExecutor {
         self.compiled_models
             .write()
             .unwrap()
-            .insert(signature, compiled);
+            .insert(signature.clone(), compiled);
 
-        let model = self
+        let binding = self
             .compiled_models
             .read()
-            .unwrap()
+            .unwrap();
+        let model = binding
             .get(&signature)
             .unwrap();
         Ok(NnapiCompiledModel {
@@ -548,6 +550,7 @@ impl NnapiExecutor {
     /// This naively rebuilds the model for each call because weights
     /// are provided at runtime. In production, the model graph would
     /// be pre-compiled once during model load with known weight shapes.
+    #[allow(dead_code)]
     #[cfg(target_os = "android")]
     fn execute_fc(
         &self,
@@ -1025,6 +1028,7 @@ impl NnapiExecutor {
     }
 
     /// Get a cached compiled model for the given shape signature.
+    #[allow(dead_code)]
     pub(crate) fn get_cached_model(
         &self,
         signature: &ShapeSignature,
@@ -1225,6 +1229,7 @@ impl Default for NnapiBackend {
 ///
 /// Each variant holds the operand indices and any operation-specific
 /// parameters (e.g. activation function, axis, beta value).
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub(crate) enum NnapiOperation {
     Add {
@@ -1289,6 +1294,7 @@ pub(crate) enum NnapiOperation {
 }
 
 impl NnapiOperation {
+    #[allow(dead_code)]
     /// Map this operation to its `ANEURALNETWORKS_*` constant.
     fn to_nnapi_code(&self) -> i32 {
         match self {
@@ -1307,6 +1313,7 @@ impl NnapiOperation {
 
     /// Collect all operand indices referenced by this operation
     /// (for wiring into ANeuralNetworksModel_addOperation).
+    #[allow(dead_code)]
     fn input_operands(&self) -> Vec<u32> {
         match self {
             NnapiOperation::Add { input0, input1, .. } => vec![*input0, *input1],
@@ -1332,6 +1339,7 @@ impl NnapiOperation {
         }
     }
 
+    #[allow(dead_code)]
     fn output_operands(&self) -> Vec<u32> {
         match self {
             NnapiOperation::Add { output, .. } => vec![*output],
@@ -1366,6 +1374,7 @@ impl NnapiOperation {
 /// builder.finish()?;
 /// let compiled = builder.compile(ExecutionPreference::SustainedSpeed)?;
 /// ```
+#[allow(dead_code)]
 pub(crate) struct NnapiGraphBuilder {
     model: *mut ndk::ANeuralNetworksModel,
     operand_count: u32,
@@ -1379,6 +1388,7 @@ unsafe impl Sync for NnapiGraphBuilder {}
 
 impl NnapiGraphBuilder {
     /// Create a new graph builder with an empty `ANeuralNetworksModel`.
+    #[allow(dead_code)]
     #[cfg(target_os = "android")]
     pub fn new() -> Result<Self> {
         let mut model: *mut ndk::ANeuralNetworksModel = std::ptr::null_mut();
@@ -1407,6 +1417,7 @@ impl NnapiGraphBuilder {
     /// Add an operand to the model graph.
     ///
     /// Returns the operand index (used when wiring operations).
+    #[allow(dead_code)]
     pub fn add_operand(&mut self, _operand_type: ndk::ANeuralNetworksOperandType) -> Result<u32> {
         let index = self.operand_count;
         #[cfg(target_os = "android")]
@@ -1426,6 +1437,7 @@ impl NnapiGraphBuilder {
     }
 
     /// Set a constant value for an operand (weights, bias, scalars).
+    #[allow(dead_code)]
     pub fn set_operand_value(&mut self, index: u32, data: &[u8]) -> Result<()> {
         #[cfg(target_os = "android")]
         {
@@ -1454,6 +1466,7 @@ impl NnapiGraphBuilder {
     /// Add an operation to the model graph.
     ///
     /// Validates that referenced operand indices exist before calling the NDK.
+    #[allow(dead_code)]
     pub fn add_operation(&mut self, operation: &NnapiOperation) -> Result<()> {
         let inputs = operation.input_operands();
         let outputs = operation.output_operands();
@@ -1524,6 +1537,7 @@ impl NnapiGraphBuilder {
     /// Finalise the model graph.
     ///
     /// After calling `finish()`, no more operands or operations may be added.
+    #[allow(dead_code)]
     pub fn finish(&mut self) -> Result<()> {
         #[cfg(target_os = "android")]
         {
@@ -1543,6 +1557,7 @@ impl NnapiGraphBuilder {
     /// # Panics
     ///
     /// Panics if `finish()` has not been called first (caught in debug builds).
+    #[allow(dead_code)]
     #[allow(unused_mut)]
     pub fn compile(mut self, preference: ExecutionPreference) -> Result<NnapiCompiledModel> {
         #[cfg(target_os = "android")]
@@ -1736,6 +1751,7 @@ impl Drop for NnapiCompiledModel {
 // ---------------------------------------------------------------------------
 
 /// Create a `TENSOR_FLOAT32` operand type with the given dimensions.
+#[allow(dead_code)]
 pub(crate) fn tensor_f32_type(rank: usize, dims: &[u32]) -> ndk::ANeuralNetworksOperandType {
     ndk::ANeuralNetworksOperandType {
         type_: ndk::ANEURALNETWORKS_TENSOR_FLOAT32,
@@ -1764,6 +1780,7 @@ pub(crate) fn tensor_quant8_type(
 }
 
 /// Create a scalar INT32 operand type.
+#[allow(dead_code)]
 pub(crate) fn scalar_i32_type() -> ndk::ANeuralNetworksOperandType {
     ndk::ANeuralNetworksOperandType {
         type_: ndk::ANEURALNETWORKS_INT32,

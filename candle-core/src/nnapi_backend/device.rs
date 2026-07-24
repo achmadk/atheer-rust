@@ -24,7 +24,7 @@
 
 use crate::backend::BackendDevice;
 use crate::nnapi_backend::storage::NnapiStorage;
-use crate::{CpuStorage, DType, DeviceLocation, Layout, Result, Shape};
+use crate::{CpuStorage, DType, DeviceLocation, Result, Shape};
 use std::sync::Arc;
 
 #[cfg(all(feature = "nnapi", target_os = "android"))]
@@ -82,8 +82,8 @@ impl NnapiDevice {
         Ok(0)
     }
 
-    pub fn zeros_impl(&self, shape: &Shape, dtype: DType) -> Result<crate::Storage> {
-        crate::Storage::zeros_nnapi(self, shape, dtype)
+    pub fn zeros_impl(&self, shape: &Shape, dtype: DType) -> Result<NnapiStorage> {
+        NnapiStorage::zeros_impl(self, shape, dtype)
     }
 
     pub fn rand_uniform_impl(
@@ -92,8 +92,8 @@ impl NnapiDevice {
         dtype: DType,
         lo: f64,
         up: f64,
-    ) -> Result<crate::Storage> {
-        crate::Storage::rand_uniform_nnapi(self, shape, dtype, lo, up)
+    ) -> Result<NnapiStorage> {
+        NnapiStorage::rand_uniform_impl(self, shape, dtype, lo, up)
     }
 
     pub fn rand_normal_impl(
@@ -102,16 +102,16 @@ impl NnapiDevice {
         dtype: DType,
         mean: f64,
         std: f64,
-    ) -> Result<crate::Storage> {
-        crate::Storage::rand_normal_nnapi(self, shape, dtype, mean, std)
+    ) -> Result<NnapiStorage> {
+        NnapiStorage::rand_normal_impl(self, shape, dtype, mean, std)
     }
 
-    pub fn storage_from_slice<D: crate::WithDType>(&self, data: &[D]) -> Result<crate::Storage> {
-        crate::Storage::from_slice_nnapi(self, data)
+    pub fn storage_from_slice<D: crate::WithDType>(&self, data: &[D]) -> Result<NnapiStorage> {
+        NnapiStorage::from_slice_impl(self, data)
     }
 
-    pub fn storage_from_cpu_storage_owned(&self, cpu: crate::CpuStorage) -> Result<crate::Storage> {
-        crate::Storage::from_cpu_storage_nnapi(self, cpu)
+    pub fn storage_from_cpu_storage_owned(&self, cpu: crate::CpuStorage) -> Result<NnapiStorage> {
+        NnapiStorage::from_cpu_storage_impl(&cpu, self)
     }
 
     pub fn synchronize(&self) -> Result<()> {
@@ -154,11 +154,11 @@ impl BackendDevice for NnapiDevice {
     }
 
     fn storage_from_cpu_storage(&self, cpu: &CpuStorage) -> Result<Self::Storage> {
-        NnapiStorage::from_cpu_storage_impl(self, cpu)
+        NnapiStorage::from_cpu_storage_impl(cpu, self)
     }
 
     fn storage_from_cpu_storage_owned(&self, cpu: CpuStorage) -> Result<Self::Storage> {
-        NnapiStorage::from_cpu_storage_impl(self, &cpu)
+        NnapiStorage::from_cpu_storage_impl(&cpu, self)
     }
 
     fn rand_uniform(&self, shape: &Shape, dtype: DType, lo: f64, up: f64) -> Result<Self::Storage> {

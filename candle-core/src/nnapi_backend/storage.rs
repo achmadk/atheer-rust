@@ -17,16 +17,20 @@
 
 use crate::backend::BackendStorage;
 use crate::nnapi_backend::executor::{BinaryOp, SharedExecutor, UnaryOp};
-use crate::nnapi_backend::{create_shared_executor, NnapiDevice, NnapiError};
+use crate::nnapi_backend::{create_shared_executor, NnapiDevice};
+use crate::nnapi_backend::NnapiError;
 use crate::{CpuStorage, DType, Layout, Result, Shape};
-use std::os::unix::io::{AsRawFd, IntoRawFd};
-use std::sync::Arc;
+use std::fs;
+use std::io::Write;
+use std::os::unix::io::IntoRawFd;
+use std::ptr;
 
 #[cfg(all(feature = "nnapi", target_os = "android"))]
 use crate::nnapi_backend::nnapi_ndk::{
     nnapi_result, AHardwareBuffer, AHardwareBuffer_Desc, AHardwareBuffer_allocate,
     AHardwareBuffer_release, ANeuralNetworksMemory, ANeuralNetworksMemory_createFromFd,
-    ANeuralNetworksMemory_createFromHardwareBuffer, ANeuralNetworksMemory_free, NnapiError,
+    ANeuralNetworksMemory_createFromHardwareBuffer, ANeuralNetworksMemory_free,
+    ANEURALNETWORKS_FUSED_NONE,
     AHARDWAREBUFFER_FORMAT_BLOB, AHARDWAREBUFFER_USAGE_CPU_READ_OFTEN,
     AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN,
 };
@@ -47,15 +51,16 @@ pub struct NnapiStorage;
 static SHARED_EXECUTOR: std::sync::OnceLock<SharedExecutor> = std::sync::OnceLock::new();
 
 fn get_or_create_executor() -> Result<SharedExecutor> {
-    SHARED_EXECUTOR
-        .get_or_try_init(|| {
-            create_shared_executor().ok_or_else(|| {
-                crate::Error::Nnapi(NnapiError::Message(
-                    "NNAPI executor not available".to_string(),
-                ))
-            })
-        })
-        .cloned()
+    if let Some(executor) = SHARED_EXECUTOR.get() {
+        return Ok(executor.clone());
+    }
+    let executor = create_shared_executor().ok_or_else(|| {
+        crate::Error::Nnapi(NnapiError::Message(
+            "NNAPI executor not available".to_string(),
+        ))
+    })?;
+    let _ = SHARED_EXECUTOR.set(executor);
+    Ok(SHARED_EXECUTOR.get().unwrap().clone())
 }
 
 #[cfg(all(feature = "nnapi", target_os = "android"))]
@@ -135,11 +140,6 @@ impl NnapiStorage {
     /// }
     /// ```
     pub fn allocate(shape: &Shape, dtype: DType, device: &crate::NnapiDevice) -> Result<Self> {
-        use std::fs;
-        use std::io::Write;
-        use std::os::unix::io::FromRawFd;
-        use std::ptr;
-
         let executor = get_or_create_executor()?;
         let count = shape.elem_count();
         let size = count * dtype.size_in_bytes();
@@ -214,11 +214,6 @@ impl NnapiStorage {
     }
 
     fn allocate_from_fd(size: usize) -> Result<(*mut ANeuralNetworksMemory, i32)> {
-        use std::fs;
-        use std::io::Write;
-        use std::os::unix::io::FromRawFd;
-        use std::ptr;
-
         let mut tmpfile = fs::OpenOptions::new()
             .read(true)
             .write(true)
@@ -363,18 +358,18 @@ impl NnapiStorage {
                 let values = unsafe { std::slice::from_raw_parts(ptr, len).to_vec() };
                 Ok(CpuStorage::F32(values))
             }
-            DType::F16 => {
+DType::F16 => {
                 let ptr = self.data.as_ptr() as *const u16;
                 let len = self.data.len() / 2;
-                let values: Vec<half::f16> =
-                    unsafe { std::slice::from_raw_parts(ptr, len).to_vec() };
+                let tmp: Vec<u16> = unsafe { std::slice::from_raw_parts(ptr, len).to_vec() };
+                let values: Vec<half::f16> = tmp.iter().map(|&x| half::f16::from_bits(x)).collect();
                 Ok(CpuStorage::F16(values))
             }
             DType::BF16 => {
                 let ptr = self.data.as_ptr() as *const u16;
                 let len = self.data.len() / 2;
-                let values: Vec<half::bf16> =
-                    unsafe { std::slice::from_raw_parts(ptr, len).to_vec() };
+                let tmp: Vec<u16> = unsafe { std::slice::from_raw_parts(ptr, len).to_vec() };
+                let values: Vec<half::bf16> = tmp.iter().map(|&x| half::bf16::from_bits(x)).collect();
                 Ok(CpuStorage::BF16(values))
             }
             _ => Err(crate::Error::Nnapi(NnapiError::Message(format!(
@@ -426,6 +421,7 @@ impl NnapiStorage {
         Ok(unsafe { std::slice::from_raw_parts(ptr, len) })
     }
 
+    #[allow(dead_code)]
     fn as_f32_slice_mut(&mut self) -> Result<&mut [f32]> {
         if self.dtype != DType::F32 {
             return Err(crate::Error::Nnapi(NnapiError::Message(format!(
@@ -562,15 +558,15 @@ impl BackendStorage for NnapiStorage {
             DType::F16 => {
                 let ptr = self.data.as_ptr() as *const u16;
                 let len = self.data.len() / 2;
-                let values: Vec<half::f16> =
-                    unsafe { std::slice::from_raw_parts(ptr, len).to_vec() };
+                let tmp: Vec<u16> = unsafe { std::slice::from_raw_parts(ptr, len).to_vec() };
+                let values: Vec<half::f16> = tmp.iter().map(|&x| half::f16::from_bits(x)).collect();
                 Ok(CpuStorage::F16(values))
             }
             DType::BF16 => {
                 let ptr = self.data.as_ptr() as *const u16;
                 let len = self.data.len() / 2;
-                let values: Vec<half::bf16> =
-                    unsafe { std::slice::from_raw_parts(ptr, len).to_vec() };
+                let tmp: Vec<u16> = unsafe { std::slice::from_raw_parts(ptr, len).to_vec() };
+                let values: Vec<half::bf16> = tmp.iter().map(|&x| half::bf16::from_bits(x)).collect();
                 Ok(CpuStorage::BF16(values))
             }
             _ => Err(crate::Error::Nnapi(NnapiError::Message(format!(
@@ -617,7 +613,7 @@ impl BackendStorage for NnapiStorage {
             output[i] = if val > 0.0 {
                 val
             } else {
-                alpha * (val.exp() - 1.0)
+                alpha as f32 * (val.exp() - 1.0f32)
             };
         }
         let bytes: Vec<u8> = output.iter().flat_map(|&x| x.to_le_bytes()).collect();
@@ -755,9 +751,9 @@ impl BackendStorage for NnapiStorage {
 
     fn conv2d(
         &self,
-        layout: &Layout,
+        _layout: &Layout,
         kernel: &Self,
-        kernel_l: &Layout,
+        _kernel_l: &Layout,
         params: &crate::conv::ParamsConv2D,
     ) -> Result<Self> {
         if self.dtype != DType::F32 || kernel.dtype() != DType::F32 {
@@ -925,7 +921,8 @@ impl BackendStorage for NnapiStorage {
 
         let mut output = vec![0.0f32; m * n];
 
-        self.executor.execute_fc(lhs, rhs, &mut output)?;
+        let bias = vec![0.0f32; n];
+        self.executor.execute_fc(lhs, rhs, &bias, &mut output)?;
 
         let bytes: Vec<u8> = output.iter().flat_map(|&x| x.to_le_bytes()).collect();
         Ok(NnapiStorage::with_executor(

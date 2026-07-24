@@ -1,4 +1,5 @@
 //! Raw FFI bindings to the Android NNAPI NDK (NeuralNetworks.h).
+#![allow(dead_code)]
 
 use std::os::raw::{c_char, c_void};
 

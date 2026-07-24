@@ -38,6 +38,7 @@ pub struct ShapeSignature {
 }
 
 impl ShapeSignature {
+    #[allow(dead_code)]
     fn from_shape(shape: &Shape, dtype: DType) -> Self {
         Self {
             dims: shape.dims().to_vec(),
@@ -45,6 +46,8 @@ impl ShapeSignature {
         }
     }
 }
+
+use std::ptr;
 
 #[cfg(all(feature = "nnapi", target_os = "android"))]
 use super::nnapi_ndk::{
@@ -56,17 +59,20 @@ use super::nnapi_ndk::{
     ANeuralNetworksExecution_setInputFromMemory, ANeuralNetworksExecution_setOutput,
     ANeuralNetworksExecution_setOutputFromMemory, ANeuralNetworksMemory, ANeuralNetworksModel,
     ANeuralNetworksModel_addOperand, ANeuralNetworksModel_addOperation,
-    ANeuralNetworksModel_create, ANeuralNetworksModel_finish,
+    ANeuralNetworksModel_create, ANeuralNetworksModel_finish, ANeuralNetworksModel_free,
     ANeuralNetworksModel_identifyInputsAndOutputs, ANeuralNetworksModel_setOperandValue,
-    ANeuralNetworksOperandType, NnapiError, ANEURALNETWORKS_DEVICE_ACCELERATOR,
-    ANEURALNETWORKS_DEVICE_CPU, ANEURALNETWORKS_DEVICE_GPU, ANEURALNETWORKS_DEVICE_OTHER,
-    ANEURALNETWORKS_FULLY_CONNECTED, ANEURALNETWORKS_FUSED_NONE, ANEURALNETWORKS_INT32,
-    ANEURALNETWORKS_LOGISTIC, ANEURALNETWORKS_NO_ERROR, ANEURALNETWORKS_PREFER_SUSTAINED_SPEED,
-    ANEURALNETWORKS_RELU, ANEURALNETWORKS_TANH, ANEURALNETWORKS_TENSOR_FLOAT32,
+    ANeuralNetworksOperandType, NnapiError, ANEURALNETWORKS_ADD, ANEURALNETWORKS_CONV_2D,
+    ANEURALNETWORKS_DEVICE_ACCELERATOR, ANEURALNETWORKS_DEVICE_CPU, ANEURALNETWORKS_DEVICE_GPU,
+    ANEURALNETWORKS_DEVICE_OTHER, ANEURALNETWORKS_FULLY_CONNECTED, ANEURALNETWORKS_FUSED_NONE,
+    ANEURALNETWORKS_INT32, ANEURALNETWORKS_LOGISTIC, ANEURALNETWORKS_MUL,
+    ANEURALNETWORKS_NO_ERROR, ANEURALNETWORKS_PREFER_SUSTAINED_SPEED, ANEURALNETWORKS_RELU,
+    ANEURALNETWORKS_SOFTMAX, ANEURALNETWORKS_TANH, ANEURALNETWORKS_TENSOR_FLOAT32,
 };
 
 #[cfg(all(feature = "nnapi", target_os = "android"))]
+#[allow(dead_code)]
 struct CompiledModel {
+    #[allow(dead_code)]
     compilation: *mut ANeuralNetworksCompilation,
     _model: *mut ANeuralNetworksModel,
 }
@@ -82,6 +88,7 @@ pub struct NnapiExecutor {
     #[cfg(all(feature = "nnapi", target_os = "android"))]
     compiled_models: RwLock<HashMap<ShapeSignature, CompiledModel>>,
     #[cfg(all(feature = "nnapi", target_os = "android"))]
+    #[allow(dead_code)]
     max_cache_size: usize,
 }
 
@@ -953,11 +960,10 @@ impl NnapiExecutor {
         input_dims: [usize; 4],
         filter_dims: [usize; 4],
         output_dims: [usize; 4],
-        padding: [i32; 4],
-        stride: [i32; 2],
+        _padding: [i32; 4],
+        _stride: [i32; 2],
         fused_activation: i32,
     ) -> Result<()> {
-        use std::ptr;
 
         let [batch, in_h, in_w, in_channels] = input_dims;
         let [filter_h, filter_w, _, out_channels] = filter_dims;

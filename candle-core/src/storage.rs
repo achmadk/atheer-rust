@@ -1,8 +1,6 @@
 use crate::backend::BackendStorage;
 use crate::op::{self, CmpOp, ReduceOp};
 use crate::scalar::Scalar;
-#[cfg(all(feature = "nnapi", target_os = "android"))]
-use crate::NnapiStorage;
 use crate::{
     CpuStorage, CudaStorage, DType, Device, Error, Layout, MetalStorage, Result, Shape,
     VulkanStorage,
@@ -1086,11 +1084,11 @@ impl Storage {
     ) -> Result<Self> {
         use rand::Rng;
         let count = shape.elem_count();
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         match dtype {
             DType::F32 => {
                 let data: Vec<f32> = (0..count)
-                    .map(|_| rng.gen_range(lo as f32..up as f32))
+                    .map(|_| rng.random_range(lo as f32..up as f32))
                     .collect();
                 let bytes: Vec<u8> = data.iter().flat_map(|&x| x.to_le_bytes()).collect();
                 let storage = crate::NnapiStorage::new(bytes, dtype, device.clone())?;
@@ -1098,7 +1096,7 @@ impl Storage {
             }
             DType::F16 => {
                 let data: Vec<half::f16> = (0..count)
-                    .map(|_| half::f16::from_f32(rng.gen_range(lo as f32..up as f32)))
+                    .map(|_| half::f16::from_f32(rng.random_range(lo as f32..up as f32)))
                     .collect();
                 let bytes: Vec<u8> = data
                     .iter()
@@ -1122,11 +1120,12 @@ impl Storage {
         mean: f64,
         std: f64,
     ) -> Result<Self> {
-        use rand::Rng;
         use rand_distr::{Distribution, Normal};
         let count = shape.elem_count();
-        let mut rng = rand::thread_rng();
-        let normal = Normal::new(mean, std)?;
+        let mut rng = rand::rng();
+        let normal = Normal::new(mean, std).map_err(|e| {
+            Error::Nnapi(crate::NnapiError::Message(format!("Normal init failed: {e}")))
+        })?;
         match dtype {
             DType::F32 => {
                 let data: Vec<f32> = (0..count).map(|_| normal.sample(&mut rng) as f32).collect();
@@ -1158,13 +1157,13 @@ impl Storage {
         data: &[D],
     ) -> Result<Self> {
         let dtype = D::DTYPE;
-        let bytes: Vec<u8> = data
-            .iter()
-            .flat_map(|&x| {
-                let bytes = x.to_bytes();
-                bytes.iter().copied()
-            })
-            .collect();
+        let bytes: Vec<u8> = unsafe {
+            std::slice::from_raw_parts(
+                data.as_ptr() as *const u8,
+                data.len() * std::mem::size_of::<D>(),
+            )
+        }
+        .to_vec();
         let storage = crate::NnapiStorage::new(bytes, dtype, device.clone())?;
         Ok(Self::Nnapi(storage))
     }

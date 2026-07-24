@@ -33,7 +33,7 @@
 //! let compiled = builder.compile(ExecutionPreference::SustainedSpeed)?;
 //! ```
 
-use crate::{DType, Layout, Result, Shape};
+use crate::Result;
 
 #[cfg(all(feature = "nnapi", target_os = "android"))]
 use crate::nnapi_backend::nnapi_ndk as ndk;
