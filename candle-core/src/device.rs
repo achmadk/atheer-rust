@@ -731,6 +731,8 @@ impl Device {
             Self::Cuda(d) => Ok(d),
             Self::Cpu => crate::bail!("expected a cuda device, got cpu"),
             Self::Metal(_) => crate::bail!("expected a cuda device, got Metal"),
+            #[cfg(feature = "nnapi")]
+            Self::Nnapi(_) => crate::bail!("expected a cuda device, got NNAPI"),
         }
     }
 
@@ -739,6 +741,8 @@ impl Device {
             Self::Cuda(_) => crate::bail!("expected a metal device, got cuda"),
             Self::Cpu => crate::bail!("expected a metal device, got cpu"),
             Self::Metal(d) => Ok(d),
+            #[cfg(feature = "nnapi")]
+            Self::Nnapi(_) => crate::bail!("expected a metal device, got NNAPI"),
         }
     }
 
@@ -755,6 +759,8 @@ impl Device {
             Self::Cpu => CpuDevice.set_seed(seed),
             Self::Cuda(c) => c.set_seed(seed),
             Self::Metal(m) => m.set_seed(seed),
+            #[cfg(feature = "nnapi")]
+            Self::Nnapi(d) => d.set_seed(seed),
         }
     }
 
@@ -763,6 +769,8 @@ impl Device {
             Self::Cpu => CpuDevice.get_current_seed(),
             Self::Cuda(c) => c.get_current_seed(),
             Self::Metal(m) => m.get_current_seed(),
+            #[cfg(feature = "nnapi")]
+            Self::Nnapi(d) => d.get_current_seed(),
         }
     }
 
@@ -780,6 +788,8 @@ impl Device {
             Self::Cpu => DeviceLocation::Cpu,
             Self::Cuda(device) => device.location(),
             Device::Metal(device) => device.location(),
+            #[cfg(feature = "nnapi")]
+            Device::Nnapi(device) => device.location(),
         }
     }
 
@@ -799,6 +809,8 @@ impl Device {
         match self {
             Self::Cuda(_) | Self::Metal(_) => true,
             Self::Cpu => false,
+            #[cfg(feature = "nnapi")]
+            Self::Nnapi(_) => false,
         }
     }
 
@@ -851,6 +863,11 @@ impl Device {
                 let storage = device.rand_uniform(shape, dtype, lo, up)?;
                 Ok(Storage::Metal(storage))
             }
+            #[cfg(feature = "nnapi")]
+            Device::Nnapi(device) => {
+                let storage = device.rand_uniform_impl(shape, dtype, lo, up)?;
+                Ok(Storage::Nnapi(storage))
+            }
         }
     }
 
@@ -888,6 +905,11 @@ impl Device {
                 let storage = device.rand_normal(shape, dtype, mean, std)?;
                 Ok(Storage::Metal(storage))
             }
+            #[cfg(feature = "nnapi")]
+            Device::Nnapi(device) => {
+                let storage = device.rand_normal_impl(shape, dtype, mean, std)?;
+                Ok(Storage::Nnapi(storage))
+            }
         }
     }
 
@@ -914,6 +936,11 @@ impl Device {
                 let storage = device.zeros_impl(shape, dtype)?;
                 Ok(Storage::Metal(storage))
             }
+            #[cfg(feature = "nnapi")]
+            Device::Nnapi(device) => {
+                let storage = device.zeros_impl(shape, dtype)?;
+                Ok(Storage::Nnapi(storage))
+            }
         }
     }
 
@@ -931,6 +958,11 @@ impl Device {
                 let storage = device.alloc_uninit(shape, dtype)?;
                 Ok(Storage::Metal(storage))
             }
+            #[cfg(feature = "nnapi")]
+            Device::Nnapi(device) => {
+                let storage = device.alloc_uninit(shape, dtype)?;
+                Ok(Storage::Nnapi(storage))
+            }
         }
     }
 
@@ -944,6 +976,11 @@ impl Device {
             Device::Metal(device) => {
                 let storage = device.storage_from_slice(data)?;
                 Ok(Storage::Metal(storage))
+            }
+            #[cfg(feature = "nnapi")]
+            Device::Nnapi(device) => {
+                let storage = device.storage_from_slice(data)?;
+                Ok(Storage::Nnapi(storage))
             }
         }
     }
@@ -961,6 +998,12 @@ impl Device {
                 let storage = device.storage_from_cpu_storage_owned(storage)?;
                 Ok(Storage::Metal(storage))
             }
+            #[cfg(feature = "nnapi")]
+            Device::Nnapi(device) => {
+                let storage = array.to_cpu_storage();
+                let storage = device.storage_from_cpu_storage_owned(storage)?;
+                Ok(Storage::Nnapi(storage))
+            }
         }
     }
 
@@ -977,6 +1020,12 @@ impl Device {
                 let storage = device.storage_from_cpu_storage_owned(storage)?;
                 Ok(Storage::Metal(storage))
             }
+            #[cfg(feature = "nnapi")]
+            Device::Nnapi(device) => {
+                let storage = S::to_cpu_storage_owned(data);
+                let storage = device.storage_from_cpu_storage_owned(storage)?;
+                Ok(Storage::Nnapi(storage))
+            }
         }
     }
 
@@ -985,6 +1034,8 @@ impl Device {
             Self::Cpu => Ok(()),
             Self::Cuda(d) => d.synchronize(),
             Self::Metal(d) => d.synchronize(),
+            #[cfg(feature = "nnapi")]
+            Self::Nnapi(d) => d.synchronize(),
         }
     }
 }
