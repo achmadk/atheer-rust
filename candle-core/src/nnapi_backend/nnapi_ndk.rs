@@ -129,6 +129,7 @@ pub const ANEURALNETWORKS_FEATURE_LEVEL_4: i32 = 30;
 pub const ANEURALNETWORKS_FEATURE_LEVEL_5: i32 = 31;
 
 #[cfg(all(feature = "nnapi", target_os = "android"))]
+#[link(name = "neuralnetworks", kind = "dylib")]
 extern "C" {
     pub fn ANeuralNetworks_getDeviceCount(numDevices: *mut u32) -> i32;
     pub fn ANeuralNetworks_getDevice(devIndex: u32, device: *mut *mut ANeuralNetworksDevice)
