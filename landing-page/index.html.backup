@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Atheer-Rust — Mobile Inference Engine for LLMs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* ─── Reset & Base ─── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #0B1120;
+    color: #E2E8F0;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  a { color: #38BDF8; text-decoration: none; transition: color .2s; }
+  a:hover { color: #7DD3FC; }
+  img { max-width: 100%; display: block; }
+  code, pre { font-family: 'JetBrains Mono', monospace; }
+  ::selection { background: #38BDF8; color: #0B1120; }
+
+  /* ─── Loading Screen ─── */
+  #loading-screen {
+    position: fixed; inset: 0; z-index: 9999;
+    background: #0B1120;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    transition: opacity .6s ease, visibility .6s ease;
+  }
+  #loading-screen.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
+  .loading-logo {
+    font-size: 2rem; font-weight: 800; letter-spacing: -.03em;
+    background: linear-gradient(135deg, #38BDF8, #06B6D4);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 1.75rem;
+  }
+  .loading-bar-track {
+    width: 220px; height: 3px; background: #1E293B; border-radius: 4px;
+    overflow: hidden;
+  }
+  .loading-bar-fill {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, #38BDF8, #06B6D4);
+    border-radius: 4px;
+    transition: width .3s ease;
+  }
+  .loading-text {
+    margin-top: .75rem; font-size: .8rem; color: #64748B;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ─── Navigation ─── */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+    padding: 1rem 2rem;
+    background: rgba(11,17,32,.85);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(56,189,248,.08);
+    display: flex; align-items: center; justify-content: space-between;
+    transition: border-color .3s;
+  }
+  nav.scrolled { border-color: rgba(56,189,248,.18); }
+  .nav-brand {
+    font-weight: 700; font-size: 1.1rem;
+    background: linear-gradient(135deg, #38BDF8, #06B6D4);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+    cursor: pointer;
+  }
+  .nav-links { display: flex; gap: 1.75rem; align-items: center; }
+  .nav-links a {
+    font-size: .875rem; font-weight: 500; color: #94A3B8;
+    cursor: pointer;
+  }
+  .nav-links a:hover { color: #E2E8F0; }
+  .nav-links a.nav-active { color: #38BDF8; }
+  .nav-cta {
+    padding: .45rem 1.1rem; border-radius: 6px;
+    background: #38BDF8; color: #0B1120 !important;
+    font-weight: 600; font-size: .8rem; cursor: pointer;
+    transition: background .2s, transform .15s;
+  }
+  .nav-cta:hover { background: #7DD3FC; transform: translateY(-1px); }
+  .nav-mobile-toggle {
+    display: none; background: none; border: none; color: #E2E8F0;
+    font-size: 1.5rem; cursor: pointer; padding: .25rem;
+  }
+
+  /* ─── Hero ─── */
+  .hero {
+    min-height: 100vh;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    text-align: center;
+    padding: 6rem 2rem 4rem;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero-bg-grid {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(56,189,248,.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(56,189,248,.04) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse 60% 50% at 50% 50%, black 20%, transparent 70%);
+    -webkit-mask-image: radial-gradient(ellipse 60% 50% at 50% 50%, black 20%, transparent 70%);
+  }
+  .hero-glow {
+    position: absolute; width: 600px; height: 600px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(56,189,248,.08), transparent 70%);
+    top: -20%; left: 50%; transform: translateX(-50%);
+    pointer-events: none;
+  }
+  .hero-content { position: relative; z-index: 1; max-width: 800px; }
+  .hero-badge {
+    display: inline-block;
+    padding: .35rem 1rem;
+    border-radius: 100px;
+    border: 1px solid rgba(56,189,248,.2);
+    background: rgba(56,189,248,.06);
+    font-size: .75rem; font-weight: 600; color: #7DD3FC;
+    letter-spacing: .04em; text-transform: uppercase;
+    margin-bottom: 1.5rem;
+    cursor: pointer;
+    transition: background .2s;
+  }
+  .hero-badge:hover { background: rgba(56,189,248,.12); }
+  .hero h1 {
+    font-size: clamp(2.5rem, 6vw, 4.5rem);
+    font-weight: 800; line-height: 1.1; letter-spacing: -.04em;
+    margin-bottom: 1.25rem;
+  }
+  .hero h1 span {
+    background: linear-gradient(135deg, #38BDF8 0%, #06B6D4 50%, #2DD4BF 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .hero-sub {
+    font-size: clamp(1rem, 2vw, 1.2rem);
+    color: #94A3B8; max-width: 580px; margin: 0 auto 2rem;
+    line-height: 1.7;
+  }
+  .hero-actions { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; gap: .5rem;
+    padding: .75rem 1.75rem; border-radius: 8px;
+    font-size: .95rem; font-weight: 600; border: none;
+    cursor: pointer;
+    transition: background .2s, transform .15s, box-shadow .2s;
+  }
+  .btn:hover { transform: translateY(-2px); }
+  .btn-primary {
+    background: linear-gradient(135deg, #38BDF8, #06B6D4);
+    color: #0B1120;
+    box-shadow: 0 4px 20px rgba(56,189,248,.25);
+  }
+  .btn-primary:hover { box-shadow: 0 6px 28px rgba(56,189,248,.35); }
+  .btn-secondary {
+    background: rgba(56,189,248,.08);
+    color: #E2E8F0;
+    border: 1px solid rgba(56,189,248,.2);
+  }
+  .btn-secondary:hover { background: rgba(56,189,248,.15); border-color: rgba(56,189,248,.35); }
+  .hero-scroll {
+    position: absolute; bottom: 2rem;
+    display: flex; flex-direction: column; align-items: center; gap: .5rem;
+    color: #475569; font-size: .7rem; letter-spacing: .1em; text-transform: uppercase;
+    cursor: pointer;
+    transition: color .2s;
+  }
+  .hero-scroll:hover { color: #94A3B8; }
+  .scroll-arrow {
+    width: 20px; height: 20px;
+    border-right: 2px solid #475569; border-bottom: 2px solid #475569;
+    transform: rotate(45deg);
+    animation: scrollBounce 2s infinite;
+  }
+  @keyframes scrollBounce { 0%,100%{transform:rotate(45deg) translateY(0)} 50%{transform:rotate(45deg) translateY(6px)} }
+
+  /* ─── Section Common ─── */
+  section { padding: 5rem 2rem; }
+  .section-inner {
+    max-width: 1100px; margin: 0 auto;
+  }
+  .section-label {
+    font-size: .7rem; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .12em; color: #38BDF8; margin-bottom: .75rem;
+  }
+  .section-title {
+    font-size: clamp(1.75rem, 3.5vw, 2.5rem);
+    font-weight: 700; letter-spacing: -.03em; line-height: 1.2;
+    margin-bottom: 1rem;
+  }
+  .section-desc {
+    color: #94A3B8; max-width: 600px; font-size: 1.05rem;
+    line-height: 1.7;
+  }
+  .section-desc-wide { max-width: 700px; }
+
+  /* ─── Stats Bar ─── */
+  .stats-bar {
+    padding: 2rem 2rem;
+    background: #0F172A;
+    border-top: 1px solid rgba(56,189,248,.06);
+    border-bottom: 1px solid rgba(56,189,248,.06);
+  }
+  .stats-grid {
+    max-width: 1100px; margin: 0 auto;
+    display: grid; grid-template-columns: repeat(4,1fr); gap: 1rem;
+  }
+  .stat-item { text-align: center; }
+  .stat-number {
+    font-size: 2.25rem; font-weight: 800; letter-spacing: -.03em;
+    background: linear-gradient(135deg, #38BDF8, #06B6D4);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1.2;
+  }
+  .stat-label { font-size: .8rem; color: #64748B; margin-top: .2rem; }
+
+  /* ─── Features ─── */
+  .features-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 1.25rem; margin-top: 2.5rem;
+  }
+  .feature-card {
+    background: #0F172A;
+    border: 1px solid rgba(56,189,248,.08);
+    border-radius: 12px; padding: 1.75rem;
+    transition: border-color .25s, transform .2s, box-shadow .2s;
+    cursor: default;
+  }
+  .feature-card:hover {
+    border-color: rgba(56,189,248,.2);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0,0,0,.3);
+  }
+  .feature-icon {
+    width: 40px; height: 40px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+  }
+  .feature-icon-blue { background: rgba(56,189,248,.12); color: #38BDF8; }
+  .feature-icon-cyan { background: rgba(6,182,212,.12); color: #06B6D4; }
+  .feature-icon-amber { background: rgba(245,158,11,.12); color: #F59E0B; }
+  .feature-icon-green { background: rgba(34,197,94,.12); color: #22C55E; }
+  .feature-icon-purple { background: rgba(168,85,247,.12); color: #A855F7; }
+  .feature-icon-pink { background: rgba(236,72,153,.12); color: #EC4899; }
+  .feature-card h3 { font-size: 1rem; font-weight: 600; margin-bottom: .5rem; }
+  .feature-card p { font-size: .875rem; color: #94A3B8; line-height: 1.65; }
+
+  /* ─── Architecture ─── */
+  .arch-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1rem; margin-top: 2.5rem;
+  }
+  .arch-card {
+    background: rgba(15,23,42,.6);
+    border: 1px solid rgba(56,189,248,.08);
+    border-radius: 10px; padding: 1.25rem 1.5rem;
+    text-align: center;
+    position: relative;
+    cursor: default;
+    transition: border-color .25s, transform .2s;
+  }
+  .arch-card:hover { border-color: rgba(56,189,248,.2); transform: translateY(-1px); }
+  .arch-card.l1 { border-color: rgba(56,189,248,.15); }
+  .arch-card.l2 { border-color: rgba(6,182,212,.12); }
+  .arch-card.l3 { border-color: rgba(245,158,11,.1); }
+  .arch-card h4 { font-size: .8rem; font-weight: 600; margin-bottom: .2rem; }
+  .arch-card p { font-size: .7rem; color: #64748B; }
+  .arch-arrow {
+    display: none;
+    position: absolute; bottom: -1.2rem; left: 50%; transform: translateX(-50%);
+    color: #334155; font-size: .8rem;
+  }
+  .arch-row {
+    display: flex; flex-wrap: wrap; gap: .75rem; justify-content: center;
+    margin-top: 2rem;
+  }
+  .arch-pill {
+    padding: .35rem 1rem; border-radius: 100px;
+    font-size: .75rem; font-weight: 500;
+    background: rgba(56,189,248,.06);
+    border: 1px solid rgba(56,189,248,.1);
+    cursor: pointer;
+    transition: background .2s, border-color .2s;
+  }
+  .arch-pill:hover { background: rgba(56,189,248,.12); border-color: rgba(56,189,248,.25); }
+
+  /* ─── Backend Support ─── */
+  .backend-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 1rem; margin-top: 2.5rem;
+  }
+  .backend-card {
+    background: #0F172A;
+    border: 1px solid rgba(56,189,248,.08);
+    border-radius: 10px; padding: 1.5rem;
+    cursor: default;
+    transition: border-color .25s, transform .2s;
+  }
+  .backend-card:hover { border-color: rgba(56,189,248,.18); transform: translateY(-2px); }
+  .backend-card h4 { font-size: .95rem; font-weight: 600; margin-bottom: .25rem; }
+  .backend-card .backend-platform {
+    font-size: .7rem; text-transform: uppercase; letter-spacing: .08em;
+    color: #38BDF8; font-weight: 600; margin-bottom: .5rem;
+  }
+  .backend-card p { font-size: .8rem; color: #94A3B8; line-height: 1.6; }
+  .backend-card .backend-priority {
+    display: inline-block; margin-top: .75rem;
+    font-size: .65rem; font-weight: 600; color: #475569;
+    background: rgba(71,85,105,.2); padding: .15rem .6rem; border-radius: 4px;
+  }
+
+  /* ─── Quick Start ─── */
+  .code-block-wrap {
+    background: #0F172A;
+    border: 1px solid rgba(56,189,248,.08);
+    border-radius: 10px; overflow: hidden;
+    margin-top: 2rem;
+  }
+  .code-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: .6rem 1.25rem;
+    background: rgba(56,189,248,.04);
+    border-bottom: 1px solid rgba(56,189,248,.06);
+  }
+  .code-header span { font-size: .75rem; color: #64748B; font-weight: 500; }
+  .code-copy-btn {
+    background: none; border: 1px solid rgba(56,189,248,.15);
+    color: #94A3B8; font-size: .7rem; padding: .25rem .75rem;
+    border-radius: 4px; cursor: pointer;
+    transition: background .2s, color .2s;
+    font-family: inherit;
+  }
+  .code-copy-btn:hover { background: rgba(56,189,248,.1); color: #E2E8F0; }
+  .code-copy-btn.copied { background: rgba(34,197,94,.15); color: #22C55E; border-color: rgba(34,197,94,.3); }
+  .code-block {
+    padding: 1.25rem; overflow-x: auto;
+    font-size: .8rem; line-height: 1.7;
+    color: #CBD5E1;
+  }
+  .code-block .comment { color: #475569; }
+  .code-block .keyword { color: #38BDF8; }
+  .code-block .string { color: #A5D4FF; }
+  .code-block .type { color: #2DD4BF; }
+  .code-block .fn { color: #F59E0B; }
+  .code-block .number { color: #F472B6; }
+
+  /* ─── Benchmarks ─── */
+  .bench-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem; margin-top: 2.5rem;
+  }
+  .bench-card {
+    background: #0F172A;
+    border: 1px solid rgba(56,189,248,.08);
+    border-radius: 10px; padding: 1.5rem;
+    cursor: default;
+  }
+  .bench-card h4 { font-size: .9rem; font-weight: 600; margin-bottom: .25rem; }
+  .bench-card .bench-cat { font-size: .7rem; color: #64748B; margin-bottom: 1rem; }
+  .bench-row { margin-bottom: 1rem; }
+  .bench-row:last-child { margin-bottom: 0; }
+  .bench-label {
+    display: flex; justify-content: space-between;
+    font-size: .8rem; margin-bottom: .35rem;
+  }
+  .bench-label span:last-child { color: #38BDF8; font-weight: 600; font-family: 'JetBrains Mono', monospace; }
+  .bench-track {
+    height: 5px; background: #1E293B; border-radius: 4px; overflow: hidden;
+  }
+  .bench-fill {
+    height: 100%; width: 0%;
+    border-radius: 4px;
+    transition: width 1.2s cubic-bezier(.25,.46,.45,.94);
+  }
+  .bench-fill.blue { background: linear-gradient(90deg, #38BDF8, #60A5FA); }
+  .bench-fill.cyan { background: linear-gradient(90deg, #06B6D4, #22D3EE); }
+  .bench-fill.amber { background: linear-gradient(90deg, #F59E0B, #FBBF24); }
+  .bench-fill.green { background: linear-gradient(90deg, #22C55E, #4ADE80); }
+
+  /* ─── Roadmap ─── */
+  .roadmap-wrap { background: #0A0F1C; }
+  .roadmap-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 1.25rem; margin-top: 2.5rem;
+  }
+  .phase-card {
+    background: #0F172A;
+    border: 1px solid rgba(56,189,248,.08);
+    border-radius: 12px; padding: 1.5rem;
+    transition: border-color .25s, transform .2s, box-shadow .2s;
+    cursor: default;
+    display: flex; flex-direction: column;
+  }
+  .phase-card:hover {
+    border-color: rgba(56,189,248,.2);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0,0,0,.3);
+  }
+  .phase-header {
+    display: flex; align-items: center; gap: .75rem;
+    margin-bottom: 1rem;
+  }
+  .phase-icon {
+    width: 36px; height: 36px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1rem; flex-shrink: 0;
+  }
+  .phase-icon-lock { background: rgba(56,189,248,.12); color: #38BDF8; }
+  .phase-icon-shield { background: rgba(6,182,212,.12); color: #06B6D4; }
+  .phase-icon-bolt { background: rgba(245,158,11,.12); color: #F59E0B; }
+  .phase-icon-globe { background: rgba(168,85,247,.12); color: #A855F7; }
+  .phase-title-group { flex: 1; }
+  .phase-title {
+    font-size: .9rem; font-weight: 600; line-height: 1.3;
+  }
+  .phase-timeline {
+    display: inline-block;
+    font-size: .65rem; font-weight: 600; color: #64748B;
+    background: rgba(71,85,105,.2);
+    padding: .15rem .55rem; border-radius: 4px;
+    margin-top: .2rem;
+    letter-spacing: .02em;
+  }
+  .phase-list {
+    list-style: none; padding: 0; margin: 0;
+    flex: 1;
+  }
+  .phase-item {
+    display: flex; align-items: flex-start; gap: .5rem;
+    font-size: .78rem; line-height: 1.5;
+    padding: .35rem 0;
+    border-bottom: 1px solid rgba(56,189,248,.04);
+    color: #94A3B8;
+  }
+  .phase-item:last-child { border-bottom: none; }
+  .phase-item .status-icon { flex-shrink: 0; font-size: .7rem; line-height: 1.6; }
+  .phase-item.done { color: #22C55E; }
+  .phase-item.in-progress { color: #F59E0B; }
+  .phase-item.planned { color: #94A3B8; }
+  .roadmap-cta-row {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 1rem; margin-top: 2.5rem; text-align: center;
+  }
+  .roadmap-note {
+    font-size: .85rem; color: #64748B;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .roadmap-note strong { color: #38BDF8; font-weight: 600; }
+
+  /* ─── Footer ─── */
+  footer {
+    border-top: 1px solid rgba(56,189,248,.06);
+    padding: 3rem 2rem 2rem;
+  }
+  .footer-inner {
+    max-width: 1100px; margin: 0 auto;
+    display: flex; flex-wrap: wrap; justify-content: space-between; gap: 2rem;
+  }
+  .footer-brand {
+    font-weight: 700; font-size: 1rem;
+    background: linear-gradient(135deg, #38BDF8, #06B6D4);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: .5rem;
+  }
+  .footer-desc { font-size: .8rem; color: #64748B; max-width: 300px; line-height: 1.6; }
+  .footer-links { display: flex; gap: 2rem; }
+  .footer-col h5 { font-size: .75rem; font-weight: 600; color: #94A3B8; margin-bottom: .75rem; text-transform: uppercase; letter-spacing: .08em; }
+  .footer-col a {
+    display: block; font-size: .8rem; color: #64748B;
+    margin-bottom: .5rem; cursor: pointer;
+    transition: color .2s;
+  }
+  .footer-col a:hover { color: #E2E8F0; }
+  .footer-bottom {
+    max-width: 1100px; margin: 2rem auto 0;
+    padding-top: 1.5rem;
+    border-top: 1px solid rgba(56,189,248,.06);
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;
+  }
+  .footer-bottom p { font-size: .75rem; color: #475569; }
+  .footer-bottom-links { display: flex; gap: 1rem; }
+  .footer-bottom-links a { font-size: .75rem; color: #475569; cursor: pointer; }
+  .footer-bottom-links a:hover { color: #94A3B8; }
+
+  /* ─── Scroll Reveal ─── */
+  .reveal {
+    opacity: 0; transform: translateY(24px);
+    transition: opacity .6s ease, transform .6s ease;
+  }
+  .reveal.visible { opacity: 1; transform: translateY(0); }
+
+  /* ─── Responsive ─── */
+  @media (max-width: 768px) {
+    .nav-links { display: none; }
+    .nav-mobile-toggle { display: block; }
+    .nav-links.open {
+      display: flex; flex-direction: column;
+      position: absolute; top: 100%; left: 0; right: 0;
+      background: rgba(11,17,32,.96);
+      backdrop-filter: blur(12px);
+      padding: 1rem 2rem; gap: 1rem;
+      border-bottom: 1px solid rgba(56,189,248,.1);
+    }
+    .stats-grid { grid-template-columns: repeat(2,1fr); gap: 1.5rem; }
+    .features-grid { grid-template-columns: 1fr; }
+    .roadmap-grid { grid-template-columns: repeat(2,1fr); }
+    .footer-inner { flex-direction: column; }
+    .footer-bottom { flex-direction: column; text-align: center; }
+  }
+  @media (max-width: 480px) {
+    section { padding: 3rem 1.25rem; }
+    .hero { padding: 5rem 1.25rem 3rem; }
+    .hero-actions { flex-direction: column; align-items: center; }
+    .btn { width: 100%; justify-content: center; }
+    .stats-grid { grid-template-columns: repeat(2,1fr); }
+    .roadmap-grid { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+    .hero-bg-grid { display: none; }
+    .stat-number { transition: none; }
+    .bench-fill { transition: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ─── Loading Screen ─── -->
+<div id="loading-screen" role="status" aria-label="Loading">
+  <div class="loading-logo">Atheer</div>
+  <div class="loading-bar-track"><div class="loading-bar-fill" id="loading-fill"></div></div>
+  <div class="loading-text" id="loading-text">Initializing engine...</div>
+</div>
+
+<!-- ─── Navigation ─── -->
+<nav id="navbar" role="navigation" aria-label="Main navigation">
+  <div class="nav-brand">Atheer-Rust</div>
+  <div class="nav-links" id="nav-links">
+    <a href="#features" onclick="closeNav()">Features</a>
+    <a href="#why-atheer" onclick="closeNav()">Why Atheer</a>
+    <a href="#architecture" onclick="closeNav()">Architecture</a>
+    <a href="#backends" onclick="closeNav()">Backends</a>
+    <a href="#quickstart" onclick="closeNav()">Quick Start</a>
+    <a href="#benchmarks" onclick="closeNav()">Benchmarks</a>
+    <a href="#roadmap" onclick="closeNav()">Roadmap</a>
+    <a href="https://github.com/achmadk/atheer-rust" class="nav-cta" target="_blank" rel="noopener">GitHub →</a>
+  </div>
+  <button class="nav-mobile-toggle" id="nav-toggle" aria-label="Toggle navigation menu" aria-expanded="false">☰</button>
+</nav>
+
+<!-- ─── Hero ─── -->
+<section class="hero" id="hero">
+  <div class="hero-bg-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-badge">v0.1.0 — MIT / Apache 2.0</div>
+    <h1>Rust inference engine for <span>on-device LLMs</span></h1>
+    <p class="hero-sub">
+      Atheer is a safe-Rust inference engine that runs LLMs locally on iOS and Android — 
+      with custom Vulkan compute shaders, raw NNAPI NDK bindings, grammar-constrained 
+      decoding, and real-time adaptive performance across 5 hardware backends.
+    </p>
+    <div class="hero-actions">
+      <button class="btn btn-primary" onclick="document.getElementById('quickstart').scrollIntoView({behavior:'smooth'})">
+        Get Started →
+      </button>
+      <button class="btn btn-secondary" onclick="document.getElementById('architecture').scrollIntoView({behavior:'smooth'})">
+        View Architecture
+      </button>
+    </div>
+  </div>
+  <div class="hero-scroll" onclick="document.getElementById('features').scrollIntoView({behavior:'smooth'})" role="button" tabindex="0" aria-label="Scroll to features">
+    <span>Scroll</span>
+    <div class="scroll-arrow"></div>
+  </div>
+</section>
+
+<!-- ─── Stats ─── -->
+<section class="stats-bar" id="stats">
+  <div class="stats-grid">
+    <div class="stat-item reveal"><div class="stat-number" data-target="390">0</div><div class="stat-label">Tests</div></div>
+    <div class="stat-item reveal"><div class="stat-number" data-target="7">0</div><div class="stat-label">Platform Crates</div></div>
+    <div class="stat-item reveal"><div class="stat-number" data-target="5">0</div><div class="stat-label">GPU/NPU + CPU Backends</div></div>
+    <div class="stat-item reveal"><div class="stat-number" data-target="100" data-suffix="%">0</div><div class="stat-label">Safe Rust</div></div>
+  </div>
+</section>
+
+<!-- ─── 7 Reasons Atheer Is Different ─── -->
+<section id="why-atheer" style="background: #0A0F1C;">
+  <div class="section-inner reveal">
+    <div class="section-label">Why Atheer</div>
+    <h2 class="section-title">7 Reasons Atheer Is Different</h2>
+    <p class="section-desc section-desc-wide">
+      Every mobile inference engine runs LLMs. Here&rsquo;s why Atheer is the only one built for the NPU era &mdash; with predictive thermal management, hierarchical memory, structured output, and autonomous agents, all in safe Rust.
+    </p>
+    <div class="features-grid" id="reasons-grid">
+
+      <div class="feature-card reveal">
+        <div class="feature-icon feature-icon-blue">⚡</div>
+        <h3>#1 &mdash; NPU-First Multi-Backend</h3>
+        <p>Atheer auto-probes NPU &rarr; GPU &rarr; CPU on both iOS and Android &mdash; CoreML/ANE, Metal, NNAPI, Vulkan &mdash; and selects the fastest available accelerator. Per-operation routing even sends decode to CPU in Eco mode to conserve GPU memory.</p>
+        <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> No other engine probes NPU before GPU before CPU on both platforms. llama.cpp has no NPU path. MLC LLM has none. ExecuTorch has Qualcomm-only. MLX Swift has none.</p>
+      </div>
+
+      <div class="feature-card reveal">
+        <div class="feature-icon feature-icon-cyan">▦</div>
+        <h3>#2 &mdash; Predictive Thermal Orchestration</h3>
+        <p>Least-squares regression on live 1&thinsp;Hz telemetry predicts temperature trajectory and pre-emptively downgrades inference mode <em>before</em> the OS thermal throttle hits &mdash; replacing the sudden 60% performance cliff with graceful degradation.</p>
+        <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> No mobile inference engine has thermal-aware operation. Every competitor runs flat-out until the OS forcibly throttles.</p>
+      </div>
+
+      <div class="feature-card reveal">
+        <div class="feature-icon feature-icon-amber">⊞</div>
+        <h3>#3 &mdash; L1/L2/L3 KV Cache Hierarchy</h3>
+        <p>A three-tier cache with promotion scoring and explicit handoff protocols. L1 holds the active session, L2 retains recent sessions for fast recall, and L3 stores compressed/archived context &mdash; designed for multi-turn agent sessions on memory-constrained devices.</p>
+        <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> Every other engine uses a single flat KV cache with no tiering, no promotion, and no cross-session handoff.</p>
+      </div>
+
+      <div class="feature-card reveal">
+        <div class="feature-icon feature-icon-green">◆</div>
+        <h3>#4 &mdash; Grammar-Constrained Decoding</h3>
+        <p>A first-class <code>GrammarConstraint</code> trait implements a pushdown automaton that guarantees valid JSON output at every decode step &mdash; not a post-processing bolt-on, but a native part of the generation loop with thread-safe <code>Send + Sync</code> semantics.</p>
+        <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> Only llama.cpp has comparable GBNF grammar support, but it&rsquo;s a C API bolt-on, not a first-class trait in a safe language.</p>
+      </div>
+
+      <div class="feature-card reveal">
+        <div class="feature-icon feature-icon-purple">⟳</div>
+        <h3>#5 &mdash; Built-in Agent Loop</h3>
+        <p>An autonomous <code>Agent</code> struct with configurable <code>max_steps</code> handles the generate &rarr; parse &rarr; tool-call &rarr; continue cycle natively. No need to build orchestration logic in the host app &mdash; Atheer ships the loop.</p>
+        <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> Every other mobile engine is a text-in-text-out API. You must build agent orchestration, context management, and tool-calling yourself.</p>
+      </div>
+
+      <div class="feature-card reveal">
+        <div class="feature-icon feature-icon-pink">◉</div>
+        <h3>#6 &mdash; UniFFI Cross-Platform Bindings</h3>
+        <p>One UniFFI definition generates idiomatic Swift packages for iOS and Kotlin packages for Android &mdash; from the same Rust codebase, with no platform-specific wrapper code or duplicate SDK maintenance.</p>
+        <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> llama.cpp exposes a raw C API requiring per-platform wrappers. ExecuTorch is C++-only. MLX Swift is Apple-exclusive.</p>
+      </div>
+
+      <div class="feature-card reveal">
+        <div class="feature-icon feature-icon-blue">◈</div>
+        <h3>#7 &mdash; Safe Rust, Not C/C++</h3>
+        <p>Rust&rsquo;s ownership model guarantees no use-after-free, no data races, and no GC pauses. <code>catch_unwind</code> wraps ANE forward calls so accelerator panics don&rsquo;t crash the host app. Memory safety at the FFI boundary, zero-cost abstractions everywhere.</p>
+        <p style="margin-top:0.75rem;font-size:0.8rem;color:#64748B;"><strong style="color:#F59E0B;">Competitors don&rsquo;t:</strong> Most mobile inference engines are written in C/C++ with manual memory management. Only MLX Swift shares Rust&rsquo;s safety guarantees &mdash; but it&rsquo;s Apple-only.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ─── Features ─── -->
+<section id="features">
+  <div class="section-inner reveal">
+    <div class="section-label">Features</div>
+    <h2 class="section-title">Designed for on-device AI</h2>
+    <p class="section-desc section-desc-wide">
+      Atheer combines hardware-accelerated inference with agentic capabilities — all in safe Rust, all running locally on mobile. Every feature maps to actual code in the workspace.
+    </p>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon feature-icon-blue">⚡</div>
+        <h3>Multi-Backend GPU/NPU</h3>
+        <p>Metal (iOS GPU via Candle), custom GLSL compute shaders compiled via <strong>naga</strong> for Android Vulkan, raw NDK FFI bindings for NNAPI (NPU/DSP), CoreML ANE compatibility detection — automatic probe with graceful CPU fallback via <code>atheer-accel</code>.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon feature-icon-cyan">◆</div>
+        <h3>Structured Output</h3>
+        <p>Character-level grammar-constrained decoding via a 38-state Pushdown Automaton in <code>atheer-orchestrator/src/grammar/</code> — guarantees valid JSON at every token, zero external dependencies, no post-processing.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon feature-icon-amber">⟳</div>
+        <h3>Agentic Workflows</h3>
+        <p>Built-in speculative decoding (NGram cache), tool-calling definitions with JsonGrammar integration, and autonomous agent loops — bring your own tools via the <code>Agent</code> trait in <code>atheer-orchestrator</code>.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon feature-icon-green">▦</div>
+        <h3>Adaptive Mode Switching</h3>
+        <p>Turbo / Balanced / Eco modes switch in real-time using a predictive moving-average thermal model with trend detection — 1 Hz hardware telemetry from <code>atheer-hardware</code> feeds the <code>Orchestrator</code> for preemptive downgrades.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon feature-icon-purple">⊞</div>
+        <h3>Memory Hierarchy</h3>
+        <p>L1/L2/L3 KV cache with INT8/INT4 quantization and adaptive depth by context length. PagedAttention block manager (16-token blocks) eliminates fragmentation. Incremental checkpoint deltas enable sub-100ms save/restore.</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon feature-icon-pink">◉</div>
+        <h3>Performance-per-Watt</h3>
+        <p>Criterion microbenchmarks (model-free) + <code>perf-bench</code> binary with model-dependent suites for throughput, latency, checkpoint, memory, energy, and thermal throttling. All in <code>perf-bench/</code> and <code>tests/benches/</code>.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Architecture ─── -->
+<section id="architecture" style="background: #0A0F1C;">
+  <div class="section-inner reveal">
+    <div class="section-label">Architecture</div>
+    <h2 class="section-title">Stack from silicon to inference</h2>
+    <p class="section-desc">A layered architecture across 7 Rust crates — hardware telemetry flows up, acceleration dispatches down, and the orchestrator ties them together.</p>
+    <div class="arch-grid">
+      <div class="arch-card l1"><h4>iOS / Android App</h4><p>Swift · Kotlin · uniffi FFI</p></div>
+      <div class="arch-card l2"><h4>atheer-ffi</h4><p>uniffi-generated bindings with streaming callback support</p></div>
+      <div class="arch-card l2"><h4>atheer-core</h4><p>Candle inference · session mgmt · KV quantizer · lifecycle</p></div>
+      <div class="arch-card l3"><h4>atheer-accel</h4><p>Metal · Vulkan (custom GLSL) · NNAPI NDK FFI · CoreML · CPU</p></div>
+      <div class="arch-card l3"><h4>atheer-orchestrator</h4><p>Predictive mode selection · PDA grammar sampler · agent loop</p></div>
+      <div class="arch-card l3"><h4>atheer-memory-bank</h4><p>L1/L2/L3 KV cache · PagedAttention blocks · handoff protocol</p></div>
+      <div class="arch-card l3"><h4>atheer-hardware</h4><p>1 Hz telemetry · Android JNI bridge · iOS objc2 FFI</p></div>
+    </div>
+    <div class="arch-row">
+      <span class="arch-pill">⟳ 1 Hz health → mode selection</span>
+      <span class="arch-pill">⚡ Metal / Vulkan compute shaders</span>
+      <span class="arch-pill">⊞ NNAPI NDK FFI (9 ops)</span>
+      <span class="arch-pill">▦ Character-level PDA grammar</span>
+      <span class="arch-pill">◉ PagedAttention 16-token blocks</span>
+      <span class="arch-pill">◆ INT8/INT4 KV cache quant</span>
+    </div>
+    <p style="text-align:center;margin-top:1.5rem;font-size:.8rem;color:#475569;font-family:'JetBrains Mono',monospace;">
+      atheer-hardware ─1 Hz→ orchestrator ─mode→ atheer-core ─tensor→ atheer-accel
+    </p>
+  </div>
+</section>
+
+<!-- ─── Backend Support ─── -->
+<section id="backends">
+  <div class="section-inner reveal">
+    <div class="section-label">Platform Support</div>
+    <h2 class="section-title">iOS &amp; Android, every accelerator</h2>
+    <p class="section-desc section-desc-wide">
+      Atheer auto-probes the best available backend in platform-specific priority order. NPU → GPU → CPU. 
+      Each backend is implemented as a Rust crate module — no black boxes.
+    </p>
+    <div class="backend-grid">
+      <div class="backend-card">
+        <div class="backend-platform">iOS — Priority 1</div>
+        <h4>CoreML / ANE</h4>
+        <p>Apple Neural Engine via <code>candle-coreml</code> integration. <code>ANECompatibility</code> struct with per-layer heuristics, model size ceiling, and quantization whitelist. Falls back to Metal for incompatible architectures. <code>catch_unwind</code> protected.</p>
+        <span class="backend-priority">ANE detection · macOS build</span>
+      </div>
+      <div class="backend-card">
+        <div class="backend-platform">iOS — Priority 2</div>
+        <h4>Metal GPU</h4>
+        <p>GPU acceleration via <code>candle_core::Device::Metal</code>. Full tensor ops for prefill and decode in <code>atheer-accel/src/metal.rs</code>.</p>
+        <span class="backend-priority">iOS 15+ · Candle Metal backend</span>
+      </div>
+      <div class="backend-card">
+        <div class="backend-platform">Android — Priority 1</div>
+        <h4>NNAPI NPU/DSP</h4>
+        <p>Raw NDK FFI bindings with ~20 extern functions covering device discovery, graph construction (9 ops), compilation, and execution. Full pipeline in <code>atheer-accel/src/nnapi_ndk.rs</code>.</p>
+        <span class="backend-priority">API 24+ · NDK r29+</span>
+      </div>
+      <div class="backend-card">
+        <div class="backend-platform">Android — Priority 2</div>
+        <h4>Vulkan GPU</h4>
+        <p>Custom GLSL compute shaders (gemv.glsl, attention.glsl) compiled to SPIR-V via <code>naga</code> at build time. DP4A-style int8 matrix-vector multiply and flash attention in <code>atheer-accel/src/vulkan.rs</code> (~1120 lines).</p>
+        <span class="backend-priority">API 26+ · custom compute shaders</span>
+      </div>
+      <div class="backend-card">
+        <div class="backend-platform">Fallback</div>
+        <h4>CPU</h4>
+        <p>Always available fallback using Candle CPU backend. Graceful degradation when no accelerator is available — graceful, tested, documented.</p>
+        <span class="backend-priority">Any platform · zero acceleration</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Quick Start ─── -->
+<section id="quickstart" style="background: #0A0F1C;">
+  <div class="section-inner reveal">
+    <div class="section-label">Quick Start</div>
+    <h2 class="section-title">From zero to inference</h2>
+    <p class="section-desc">Build the workspace, run tests, and integrate into your iOS or Android app.</p>
+    <div class="code-block-wrap">
+      <div class="code-header">
+        <span>bash</span>
+        <button class="code-copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+      </div>
+      <pre class="code-block"><code><span class="comment"># Build the entire workspace</span>
+cargo build --workspace
+
+<span class="comment"># Run all ~390 tests</span>
+cargo test --workspace
+
+<span class="comment"># Download a test model (~350 MB)</span>
+scripts/download-test-model.sh
+
+<span class="comment"># Run integration tests with a real model</span>
+ATHEER_TEST_MODEL=./models/LFM2-700M-Q4_0.gguf \
+  cargo test -p atheer-core -- --ignored
+
+<span class="comment"># Benchmark throughput</span>
+cargo run -p perf-bench -- \
+  --model-path model.gguf \
+  --batch-sizes 1,4,8</code></pre>
+    </div>
+    <div class="code-block-wrap" style="margin-top:1rem;">
+      <div class="code-header"><span>swift</span><span style="font-size:.7rem;color:#475569;">iOS integration</span></div>
+      <pre class="code-block"><code><span class="keyword">import</span> <span class="type">AtheerFFI</span>
+
+<span class="keyword">var</span> config = <span class="type">AtheerConfig</span>()
+config.modelPath = <span class="string">"/models/llama.gguf"</span>
+config.adaptive = <span class="keyword">true</span>
+
+<span class="keyword">let</span> engine = <span class="type">AtheerEngine</span>(config: config)
+<span class="keyword">try</span> engine.initialize()
+
+<span class="keyword">var</span> request = <span class="type">GenerationRequest</span>(prompt: <span class="string">"Hello"</span>)
+<span class="keyword">let</span> response = <span class="keyword">try</span> engine.generateSync(request: request)
+<span class="built_in">print</span>(response.text)</code></pre>
+    </div>
+    <div class="code-block-wrap" style="margin-top:1rem;">
+      <div class="code-header"><span>kotlin</span><span style="font-size:.7rem;color:#475569;">Android integration</span></div>
+      <pre class="code-block"><code><span class="keyword">import</span> uniffi.atheer_ffi.*
+
+<span class="keyword">val</span> config = <span class="type">AtheerConfig</span>(
+    modelPath = <span class="string">"/models/llama.gguf"</span>,
+    modelId = <span class="keyword">null</span>,
+    draftModelPath = <span class="keyword">null</span>,
+    adaptive = <span class="keyword">true</span>,
+    maxTokens = <span class="number">2048u</span>,
+    temperature = <span class="number">0.7f</span>,
+    quantization = <span class="string">"q4_0"</span>,
+    adaptiveHandoff = <span class="keyword">true</span>,
+    memoryBankSizeMb = <span class="number">256u</span>,
+    standbyDraftPath = <span class="keyword">null</span>
+)
+
+<span class="keyword">val</span> engine = <span class="type">AtheerEngine</span>(config)
+engine.initialize()
+
+<span class="keyword">val</span> request = <span class="type">GenerationRequest</span>(
+    prompt = <span class="string">"Hello"</span>,
+    maxTokens = <span class="number">512u</span>,
+    temperature = <span class="number">0.7f</span>
+)
+<span class="keyword">val</span> response = engine.generateSync(request)
+<span class="built_in">println</span>(response.text)</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Benchmarks ─── -->
+<section id="benchmarks">
+  <div class="section-inner reveal">
+    <div class="section-label">Benchmarks</div>
+    <h2 class="section-title">Benchmarking infrastructure</h2>
+    <p class="section-desc section-desc-wide">
+      Atheer ships with Criterion microbenchmarks and a dedicated <code>perf-bench</code> binary for measuring throughput, energy, and thermal behavior. No fabricated numbers — results depend on your device and model.
+    </p>
+    <div class="bench-grid">
+      <div class="bench-card">
+        <h4>Criterion Bench Harnesses</h4>
+        <div class="bench-cat">atheer-benches (model-free)</div>
+        <div class="bench-row">
+          <div class="bench-label"><span>kv_cache bench</span><span>read/write/evict latency</span></div>
+        </div>
+        <div class="bench-row">
+          <div class="bench-label"><span>ngram_cache bench</span><span>match/miss throughput</span></div>
+        </div>
+        <div class="bench-row">
+          <div class="bench-label"><span>orchestrator bench</span><span>mode switch overhead</span></div>
+        </div>
+      </div>
+      <div class="bench-card">
+        <h4>perf-bench Binary</h4>
+        <div class="bench-cat">model-dependent suites</div>
+        <div class="bench-row">
+          <div class="bench-label"><span>--batch-sizes 1,4,8</span><span>throughput scan</span></div>
+        </div>
+        <div class="bench-row">
+          <div class="bench-label"><span>--duration-secs 300</span><span>sustained thermal</span></div>
+        </div>
+        <div class="bench-row">
+          <div class="bench-label"><span>JSON report output</span><span>per-batch samples</span></div>
+        </div>
+      </div>
+      <div class="bench-card">
+        <h4>What gets measured</h4>
+        <div class="bench-cat">per commit / per release</div>
+        <div class="bench-row">
+          <div class="bench-label"><span>Token throughput</span><span>tok/s (prefill + decode)</span></div>
+        </div>
+        <div class="bench-row">
+          <div class="bench-label"><span>Thermal throttling</span><span>mode degradation curve</span></div>
+        </div>
+        <div class="bench-row">
+          <div class="bench-label"><span>Energy per token</span><span>power draw samples</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Roadmap ─── -->
+<section id="roadmap" class="roadmap-wrap">
+  <div class="section-inner reveal">
+    <div class="section-label">Roadmap</div>
+    <h2 class="section-title">What&rsquo;s Next</h2>
+    <p class="section-desc section-desc-wide">
+      Atheer is shipping incrementally. Here&rsquo;s what&rsquo;s built, what&rsquo;s in progress,
+      and what&rsquo;s planned for the next milestones.
+    </p>
+    <div class="roadmap-grid">
+
+      <div class="phase-card">
+        <div class="phase-header">
+          <div class="phase-icon phase-icon-lock">🔒</div>
+          <div class="phase-title-group">
+            <div class="phase-title">Security &amp; Reliability</div>
+            <span class="phase-timeline">2–3 weeks</span>
+          </div>
+        </div>
+        <ul class="phase-list">
+          <li class="phase-item done"><span class="status-icon">✅</span> PII redactor infinite loop fix</li>
+          <li class="phase-item in-progress"><span class="status-icon">🟡</span> Fix 14 test failures &amp; 40+ warnings</li>
+          <li class="phase-item planned"><span class="status-icon">🔵</span> Model signature verification (Ed25519)</li>
+          <li class="phase-item planned"><span class="status-icon">🔵</span> Hash verification at model load time</li>
+          <li class="phase-item planned"><span class="status-icon">🔵</span> GGUF format validation</li>
+          <li class="phase-item planned"><span class="status-icon">🔵</span> Encrypt L2/L3 cache at rest</li>
+          <li class="phase-item in-progress"><span class="status-icon">🟡</span> CI env var fix + macOS runner</li>
+        </ul>
+      </div>
+
+      <div class="phase-card">
+        <div class="phase-header">
+          <div class="phase-icon phase-icon-shield">🔐</div>
+          <div class="phase-title-group">
+            <div class="phase-title">Privacy Hardening</div>
+            <span class="phase-timeline">2–3 weeks</span>
+          </div>
+        </div>
+        <ul class="phase-list">
+          <li class="phase-item planned"><span class="status-icon">🔵</span> AES-256-GCM for cache / checkpoints</li>
+          <li class="phase-item planned"><span class="status-icon">🔵</span> Secure memory wiping with <code>zeroize</code></li>
+          <li class="phase-item planned"><span class="status-icon">🔵</span> Time-based cache expiry with secure deletion</li>
+          <li class="phase-item planned"><span class="status-icon">🔵</span> Audit logging</li>
+          <li class="phase-item planned"><span class="status-icon">🔵</span> <code>delete_all_user_data()</code> API</li>
+        </ul>
+      </div>
+
+      <div class="phase-card">
+        <div class="phase-header">
+          <div class="phase-icon phase-icon-bolt">⚡</div>
+          <div class="phase-title-group">
+            <div class="phase-title">Performance Validation</div>
+            <span class="phase-timeline">2–3 weeks</span>
+          </div>
+        </div>
+        <ul class="phase-list">
+          <li class="phase-item planned"><span class="status-icon">🔵</span> Real benchmarks &amp; populate BENCHMARKS.md</li>
+          <li class="phase-item planned"><span class="status-icon">🔵</span> Competitive benchmarks vs llama.cpp, MLC LLM</li>
+          <li class="phase-item planned"><span class="status-icon">🔵</span> Mode switching benchmark (wire orchestrator)</li>
+          <li class="phase-item planned"><span class="status-icon">🔵</span> Grammar overhead benchmark suite</li>
+        </ul>
+      </div>
+
+      <div class="phase-card">
+        <div class="phase-header">
+          <div class="phase-icon phase-icon-globe">🌍</div>
+          <div class="phase-title-group">
+            <div class="phase-title">Market Readiness</div>
+            <span class="phase-timeline">4–6 weeks</span>
+          </div>
+        </div>
+        <ul class="phase-list">
+          <li class="phase-item planned"><span class="status-icon">🔵</span> Fix binding generation pipeline</li>
+          <li class="phase-item planned"><span class="status-icon">🔵</span> GDPR compliance documentation</li>
+          <li class="phase-item planned"><span class="status-icon">🔵</span> Reference iOS and Android apps</li>
+          <li class="phase-item planned"><span class="status-icon">🔵</span> Structured metrics / telemetry</li>
+          <li class="phase-item planned"><span class="status-icon">🔵</span> API versioning for FFI layer</li>
+        </ul>
+      </div>
+
+    </div>
+    <div class="roadmap-cta-row">
+      <p class="roadmap-note">390+ tests <strong>→</strong> targeting 0 failures</p>
+      <a href="https://github.com/achmadk/atheer-rust/blob/main/improvement_analysis.md" class="btn btn-secondary">View full improvement analysis →</a>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Footer ─── -->
+<footer>
+  <div class="footer-inner">
+    <div>
+      <div class="footer-brand">Atheer-Rust</div>
+      <p class="footer-desc">Mobile inference engine for LLMs on iOS and Android. Built with Rust, Candle, and a lot of type safety.</p>
+    </div>
+    <div class="footer-links">
+      <div class="footer-col">
+        <h5>Docs</h5>
+        <a href="#quickstart">Quick Start</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#backends">Backends</a>
+        <a href="#benchmarks">Benchmarks</a>
+      </div>
+      <div class="footer-col">
+        <h5>Code</h5>
+        <a href="https://github.com/achmadk/atheer-rust" target="_blank" rel="noopener">GitHub</a>
+        <a href="https://github.com/achmadk/atheer-rust" target="_blank" rel="noopener">MIT OR Apache-2.0</a>
+      </div>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <p>&copy; 2026 Atheer-Rust Team. MIT OR Apache-2.0.</p>
+  </div>
+</footer>
+
+<script>
+/* ─── Loading Screen (simple fade-out) ─── */
+(function(){
+  const screen = document.getElementById('loading-screen');
+  if (!screen) return;
+  setTimeout(() => screen.classList.add('hidden'), 600);
+})();
+
+/* ─── Nav scroll effect ─── */
+const nav = document.getElementById('navbar');
+window.addEventListener('scroll', () => {
+  nav.classList.toggle('scrolled', window.scrollY > 20);
+}, { passive: true });
+
+/* ─── Mobile nav toggle ─── */
+const navToggle = document.getElementById('nav-toggle');
+const navLinks = document.getElementById('nav-links');
+navToggle.addEventListener('click', () => {
+  const open = navLinks.classList.toggle('open');
+  navToggle.setAttribute('aria-expanded', open);
+});
+function closeNav() { navLinks.classList.remove('open'); navToggle.setAttribute('aria-expanded','false'); }
+
+/* ─── Scroll Reveal (Intersection Observer) ─── */
+const revealEls = document.querySelectorAll('.reveal');
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      entry.target.classList.add('visible');
+      observer.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+revealEls.forEach(el => observer.observe(el));
+
+/* ─── Animated Counters ─── */
+function animateCounters() {
+  document.querySelectorAll('.stat-number[data-target]').forEach(el => {
+    const target = parseInt(el.getAttribute('data-target'), 10);
+    const suffix = el.getAttribute('data-suffix') || '';
+    const duration = 1500;
+    const start = performance.now();
+    function update(now) {
+      const elapsed = now - start;
+      const progress = Math.min(elapsed / duration, 1);
+      // ease out cubic
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const current = Math.round(eased * target);
+      el.textContent = current.toLocaleString() + suffix;
+      if (progress < 1) requestAnimationFrame(update);
+      else el.textContent = target.toLocaleString() + suffix;
+    }
+    // delay each counter
+    setTimeout(() => requestAnimationFrame(update), parseInt(el.dataset.delay || '0'));
+  });
+}
+// Counters observer (trigger once)
+const statsSection = document.getElementById('stats');
+let countersDone = false;
+const statsObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting && !countersDone) {
+      countersDone = true;
+      animateCounters();
+      statsObserver.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.3 });
+statsObserver.observe(statsSection);
+
+/* ─── Animated Progress Bars ─── */
+function animateBars() {
+  document.querySelectorAll('.bench-fill[data-width]').forEach(el => {
+    const width = parseInt(el.getAttribute('data-width'), 10);
+    el.style.width = width + '%';
+  });
+}
+const benchSection = document.getElementById('benchmarks');
+let barsDone = false;
+const benchObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting && !barsDone) {
+      barsDone = true;
+      animateBars();
+      benchObserver.unobserve(entry.target);
+    }
+  });
+}, { threshold: 0.2 });
+benchObserver.observe(benchSection);
+
+/* ─── Copy button (works per-block) ─── */
+function copyCode(btn) {
+  const codeEl = btn.parentElement.nextElementSibling.querySelector('code');
+  if (!codeEl) return;
+  navigator.clipboard.writeText(codeEl.textContent).then(() => {
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+/* ─── Active nav section highlighting ─── */
+(function(){
+  const sections = document.querySelectorAll('section[id]');
+  const navLinks = document.querySelectorAll('.nav-links a[href^="#"]');
+  if (!sections.length || !navLinks.length) return;
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        navLinks.forEach(link => {
+          link.classList.toggle('nav-active', link.getAttribute('href') === '#' + entry.target.id);
+        });
+      }
+    });
+  }, { threshold: 0.3, rootMargin: '-80px 0px -40% 0px' });
+  sections.forEach(s => observer.observe(s));
+})();
+</script>
+</body>
+</html>

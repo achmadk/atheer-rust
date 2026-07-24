@@ -167,6 +167,9 @@ pub enum Error {
     #[error("the candle crate has not been built with vulkan support")]
     NotCompiledWithVulkanSupport,
 
+    #[error("the candle crate has not been built with nnapi support")]
+    NotCompiledWithNnapiSupport,
+
     #[error("cannot find tensor {path}")]
     CannotFindTensor { path: String },
 
@@ -179,6 +182,14 @@ pub enum Error {
 
     #[error("Vulkan error {0}")]
     Vulkan(#[from] VulkanError),
+
+    #[cfg(all(feature = "nnapi", target_os = "android"))]
+    #[error("NNAPI error {0}")]
+    Nnapi(#[from] crate::nnapi_backend::NnapiError),
+
+    #[cfg(all(not(feature = "nnapi"), not(target_os = "android")))]
+    #[error("NNAPI error {0}")]
+    Nnapi(String),
 
     #[cfg(all(not(target_arch = "wasm32"), not(target_os = "ios"), feature = "ug"))]
     #[error(transparent)]

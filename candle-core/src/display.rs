@@ -22,6 +22,10 @@ impl Tensor {
             crate::DeviceLocation::Vulkan { gpu_id } => {
                 format!(", vulkan:{gpu_id}")
             }
+            #[cfg(target_os = "android")]
+            crate::DeviceLocation::Nnapi { gpu_id } => {
+                format!(", nnapi:{gpu_id}")
+            }
         };
 
         write!(f, "Tensor[")?;
@@ -552,6 +556,10 @@ impl std::fmt::Display for Tensor {
             #[cfg(all(feature = "vulkan", target_os = "android"))]
             crate::DeviceLocation::Vulkan { gpu_id } => {
                 format!(", vulkan:{gpu_id}")
+            }
+            #[cfg(target_os = "android")]
+            crate::DeviceLocation::Nnapi { gpu_id } => {
+                format!(", nnapi:{gpu_id}")
             }
         };
 

@@ -145,6 +145,12 @@ extern crate accelerate_src;
 #[cfg(all(feature = "vulkan", target_os = "android"))]
 pub mod vulkan_backend_wgpu;
 
+// NNAPI: Android Neural Networks API backend
+#[cfg(all(feature = "nnapi", target_os = "android"))]
+pub mod nnapi_backend;
+#[cfg(all(feature = "nnapi", target_os = "android"))]
+pub use nnapi_backend::{NnapiDevice, NnapiError, NnapiStorage};
+
 pub trait ToUsize2 {
     fn to_usize2(self) -> (usize, usize);
 }

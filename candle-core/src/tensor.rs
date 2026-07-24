@@ -677,6 +677,8 @@ impl Tensor {
             Storage::Cuda(storage) => from_cpu_storage(&storage.to_cpu_storage()?),
             Storage::Metal(storage) => from_cpu_storage(&storage.to_cpu_storage()?),
             Storage::Vulkan(storage) => from_cpu_storage(&storage.to_cpu_storage()?),
+            #[cfg(feature = "nnapi")]
+            Storage::Nnapi(storage) => from_cpu_storage(&storage.to_cpu_storage()?),
         }
     }
 
@@ -1950,6 +1952,8 @@ impl Tensor {
             Storage::Cuda(storage) => from_cpu_storage(&storage.to_cpu_storage()?),
             Storage::Metal(storage) => from_cpu_storage(&storage.to_cpu_storage()?),
             Storage::Vulkan(storage) => from_cpu_storage(&storage.to_cpu_storage()?),
+            #[cfg(feature = "nnapi")]
+            Storage::Nnapi(storage) => from_cpu_storage(&storage.to_cpu_storage()?),
         }
     }
 
@@ -1982,6 +1986,8 @@ impl Tensor {
             Storage::Cuda(storage) => from_cpu_storage(&storage.to_cpu_storage()?),
             Storage::Metal(storage) => from_cpu_storage(&storage.to_cpu_storage()?),
             Storage::Vulkan(storage) => from_cpu_storage(&storage.to_cpu_storage()?),
+            #[cfg(feature = "nnapi")]
+            Storage::Nnapi(storage) => from_cpu_storage(&storage.to_cpu_storage()?),
         }
     }
 
@@ -2024,6 +2030,8 @@ impl Tensor {
             Storage::Cuda(storage) => from_cpu_storage(&storage.to_cpu_storage()?),
             Storage::Metal(storage) => from_cpu_storage(&storage.to_cpu_storage()?),
             Storage::Vulkan(storage) => from_cpu_storage(&storage.to_cpu_storage()?),
+            #[cfg(feature = "nnapi")]
+            Storage::Nnapi(storage) => from_cpu_storage(&storage.to_cpu_storage()?),
         }
     }
 

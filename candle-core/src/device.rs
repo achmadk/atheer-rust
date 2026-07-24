@@ -10,6 +10,7 @@ macro_rules! device_location_enum {
             Cuda { gpu_id: usize },
             Metal { gpu_id: usize },
             Vulkan { gpu_id: usize },
+            Nnapi { gpu_id: usize },
         }
     };
     (other) => {
@@ -30,6 +31,33 @@ macro_rules! device_enum {
             Cuda(crate::CudaDevice),
             Metal(crate::MetalDevice),
             Vulkan(crate::VulkanDevice),
+            Nnapi(crate::NnapiDevice),
+        }
+    };
+    (android_vulkan_only) => {
+        #[derive(Debug, Clone)]
+        pub enum Device {
+            Cpu,
+            Cuda(crate::CudaDevice),
+            Metal(crate::MetalDevice),
+            Vulkan(crate::VulkanDevice),
+        }
+    };
+    (android_nnapi_only) => {
+        #[derive(Debug, Clone)]
+        pub enum Device {
+            Cpu,
+            Cuda(crate::CudaDevice),
+            Metal(crate::MetalDevice),
+            Nnapi(crate::NnapiDevice),
+        }
+    };
+    (android_base) => {
+        #[derive(Debug, Clone)]
+        pub enum Device {
+            Cpu,
+            Cuda(crate::CudaDevice),
+            Metal(crate::MetalDevice),
         }
     };
     (other) => {
@@ -42,16 +70,25 @@ macro_rules! device_enum {
     };
 }
 
-#[cfg(all(feature = "vulkan", target_os = "android"))]
+#[cfg(target_os = "android")]
 device_location_enum!(android);
 
-#[cfg(not(all(feature = "vulkan", target_os = "android")))]
+#[cfg(not(target_os = "android"))]
 device_location_enum!(other);
 
-#[cfg(all(feature = "vulkan", target_os = "android"))]
+#[cfg(all(feature = "vulkan", feature = "nnapi", target_os = "android"))]
 device_enum!(android);
 
-#[cfg(not(all(feature = "vulkan", target_os = "android")))]
+#[cfg(all(feature = "vulkan", not(feature = "nnapi"), target_os = "android"))]
+device_enum!(android_vulkan_only);
+
+#[cfg(all(not(feature = "vulkan"), feature = "nnapi", target_os = "android"))]
+device_enum!(android_nnapi_only);
+
+#[cfg(all(not(any(feature = "vulkan", feature = "nnapi")), target_os = "android"))]
+device_enum!(android_base);
+
+#[cfg(not(target_os = "android"))]
 device_enum!(other);
 
 pub trait NdArray {
@@ -277,6 +314,8 @@ impl Device {
             Self::Cpu => crate::bail!("expected a cuda device, got cpu"),
             Self::Metal(_) => crate::bail!("expected a cuda device, got Metal"),
             Self::Vulkan(_) => crate::bail!("expected a cuda device, got vulkan"),
+            #[cfg(feature = "nnapi")]
+            Self::Nnapi(_) => crate::bail!("expected a cuda device, got nnapi"),
         }
     }
 
@@ -286,15 +325,31 @@ impl Device {
             Self::Cpu => crate::bail!("expected a metal device, got cpu"),
             Self::Metal(d) => Ok(d),
             Self::Vulkan(_) => crate::bail!("expected a metal device, got vulkan"),
+            #[cfg(feature = "nnapi")]
+            Self::Nnapi(_) => crate::bail!("expected a metal device, got nnapi"),
         }
     }
 
+    #[cfg(all(feature = "vulkan", target_os = "android"))]
     pub fn as_vulkan_device(&self) -> Result<&crate::VulkanDevice> {
         match self {
             Self::Cuda(_) => crate::bail!("expected a vulkan device, got cuda"),
             Self::Cpu => crate::bail!("expected a vulkan device, got cpu"),
             Self::Metal(_) => crate::bail!("expected a vulkan device, got metal"),
             Self::Vulkan(d) => Ok(d),
+            #[cfg(feature = "nnapi")]
+            Self::Nnapi(_) => crate::bail!("expected a vulkan device, got nnapi"),
+        }
+    }
+
+    #[cfg(all(feature = "nnapi", target_os = "android"))]
+    pub fn as_nnapi_device(&self) -> Result<&crate::NnapiDevice> {
+        match self {
+            Self::Cuda(_) => crate::bail!("expected a nnapi device, got cuda"),
+            Self::Cpu => crate::bail!("expected a nnapi device, got cpu"),
+            Self::Metal(_) => crate::bail!("expected a nnapi device, got metal"),
+            Self::Vulkan(_) => crate::bail!("expected a nnapi device, got vulkan"),
+            Self::Nnapi(d) => Ok(d),
         }
     }
 
@@ -306,8 +361,14 @@ impl Device {
         Ok(Self::Metal(crate::MetalDevice::new(ordinal)?))
     }
 
+    #[cfg(all(feature = "vulkan", target_os = "android"))]
     pub fn new_vulkan(ordinal: usize) -> Result<Self> {
         Ok(Self::Vulkan(crate::VulkanDevice::new(ordinal)?))
+    }
+
+    #[cfg(all(feature = "nnapi", target_os = "android"))]
+    pub fn new_nnapi(ordinal: usize) -> Result<Self> {
+        Ok(Self::Nnapi(crate::NnapiDevice::new(ordinal)?))
     }
 
     pub fn set_seed(&self, seed: u64) -> Result<()> {
@@ -315,7 +376,10 @@ impl Device {
             Self::Cpu => CpuDevice.set_seed(seed),
             Self::Cuda(c) => c.set_seed(seed),
             Self::Metal(m) => m.set_seed(seed),
+            #[cfg(all(feature = "vulkan", target_os = "android"))]
             Self::Vulkan(v) => v.set_seed(seed),
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            Self::Nnapi(n) => n.set_seed(seed),
         }
     }
 
@@ -324,7 +388,10 @@ impl Device {
             Self::Cpu => CpuDevice.get_current_seed(),
             Self::Cuda(c) => c.get_current_seed(),
             Self::Metal(m) => m.get_current_seed(),
+            #[cfg(all(feature = "vulkan", target_os = "android"))]
             Self::Vulkan(v) => v.get_current_seed(),
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            Self::Nnapi(n) => n.get_current_seed(),
         }
     }
 
@@ -333,7 +400,10 @@ impl Device {
             (Self::Cpu, Self::Cpu) => true,
             (Self::Cuda(lhs), Self::Cuda(rhs)) => lhs.same_device(rhs),
             (Self::Metal(lhs), Self::Metal(rhs)) => lhs.same_device(rhs),
+            #[cfg(all(feature = "vulkan", target_os = "android"))]
             (Self::Vulkan(lhs), Self::Vulkan(rhs)) => lhs.same_device(rhs),
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            (Self::Nnapi(lhs), Self::Nnapi(rhs)) => lhs.same_device(rhs),
             _ => false,
         }
     }
@@ -342,8 +412,11 @@ impl Device {
         match self {
             Self::Cpu => DeviceLocation::Cpu,
             Self::Cuda(device) => device.location(),
-            Device::Metal(device) => device.location(),
-            Device::Vulkan(device) => device.location(),
+            Self::Metal(device) => device.location(),
+            #[cfg(all(feature = "vulkan", target_os = "android"))]
+            Self::Vulkan(device) => device.location(),
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            Self::Nnapi(device) => device.location(),
         }
     }
 
@@ -359,15 +432,24 @@ impl Device {
         matches!(self, Self::Metal(_))
     }
 
+    #[cfg(all(feature = "vulkan", target_os = "android"))]
     pub fn is_vulkan(&self) -> bool {
         matches!(self, Self::Vulkan(_))
+    }
+
+    #[cfg(all(feature = "nnapi", target_os = "android"))]
+    pub fn is_nnapi(&self) -> bool {
+        matches!(self, Self::Nnapi(_))
     }
 
     pub fn supports_bf16(&self) -> bool {
         match self {
             Self::Cuda(_) | Self::Metal(_) => true,
             Self::Cpu => false,
+            #[cfg(all(feature = "vulkan", target_os = "android"))]
             Self::Vulkan(_) => false,
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            Self::Nnapi(_) => false,
         }
     }
 
@@ -395,6 +477,7 @@ impl Device {
         }
     }
 
+    #[cfg(all(feature = "vulkan", target_os = "android"))]
     pub fn vulkan_if_available(ordinal: usize) -> Result<Self> {
         if crate::utils::vulkan_is_available() {
             Self::new_vulkan(ordinal)
@@ -431,6 +514,11 @@ impl Device {
             Device::Vulkan(device) => {
                 let storage = device.rand_uniform(shape, dtype, lo, up)?;
                 Ok(Storage::Vulkan(storage))
+            }
+            #[cfg(feature = "nnapi")]
+            Device::Nnapi(device) => {
+                let storage = device.rand_uniform_impl(shape, dtype, lo, up)?;
+                Ok(Storage::Nnapi(storage))
             }
         }
     }
@@ -473,6 +561,11 @@ impl Device {
                 let storage = device.rand_normal(shape, dtype, mean, std)?;
                 Ok(Storage::Vulkan(storage))
             }
+            #[cfg(feature = "nnapi")]
+            Device::Nnapi(device) => {
+                let storage = device.rand_normal_impl(shape, dtype, mean, std)?;
+                Ok(Storage::Nnapi(storage))
+            }
         }
     }
 
@@ -503,6 +596,11 @@ impl Device {
                 let storage = device.zeros_impl(shape, dtype)?;
                 Ok(Storage::Vulkan(storage))
             }
+            #[cfg(feature = "nnapi")]
+            Device::Nnapi(device) => {
+                let storage = device.zeros_impl(shape, dtype)?;
+                Ok(Storage::Nnapi(storage))
+            }
         }
     }
 
@@ -524,6 +622,11 @@ impl Device {
                 let storage = device.alloc_uninit(shape, dtype)?;
                 Ok(Storage::Vulkan(storage))
             }
+            #[cfg(feature = "nnapi")]
+            Device::Nnapi(device) => {
+                let storage = device.alloc_uninit(shape, dtype)?;
+                Ok(Storage::Nnapi(storage))
+            }
         }
     }
 
@@ -541,6 +644,11 @@ impl Device {
             Device::Vulkan(device) => {
                 let storage = device.storage_from_slice(data)?;
                 Ok(Storage::Vulkan(storage))
+            }
+            #[cfg(feature = "nnapi")]
+            Device::Nnapi(device) => {
+                let storage = device.storage_from_slice(data)?;
+                Ok(Storage::Nnapi(storage))
             }
         }
     }
@@ -563,6 +671,12 @@ impl Device {
                 let storage = device.storage_from_cpu_storage_owned(storage)?;
                 Ok(Storage::Vulkan(storage))
             }
+            #[cfg(feature = "nnapi")]
+            Device::Nnapi(device) => {
+                let storage = array.to_cpu_storage();
+                let storage = device.storage_from_cpu_storage_owned(storage)?;
+                Ok(Storage::Nnapi(storage))
+            }
         }
     }
 
@@ -584,6 +698,12 @@ impl Device {
                 let storage = device.storage_from_cpu_storage_owned(storage)?;
                 Ok(Storage::Vulkan(storage))
             }
+            #[cfg(feature = "nnapi")]
+            Device::Nnapi(device) => {
+                let storage = S::to_cpu_storage_owned(data);
+                let storage = device.storage_from_cpu_storage_owned(storage)?;
+                Ok(Storage::Nnapi(storage))
+            }
         }
     }
 
@@ -592,7 +712,10 @@ impl Device {
             Self::Cpu => Ok(()),
             Self::Cuda(d) => d.synchronize(),
             Self::Metal(d) => d.synchronize(),
+            #[cfg(all(feature = "vulkan", target_os = "android"))]
             Self::Vulkan(d) => d.synchronize(),
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            Self::Nnapi(d) => d.synchronize(),
         }
     }
 }

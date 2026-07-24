@@ -15,6 +15,8 @@ pub enum Storage {
     Cuda(CudaStorage),
     Metal(MetalStorage),
     Vulkan(VulkanStorage),
+    #[cfg(all(feature = "nnapi", target_os = "android"))]
+    Nnapi(crate::NnapiStorage),
 }
 
 impl Storage {
@@ -33,6 +35,11 @@ impl Storage {
                 let storage = storage.try_clone(layout)?;
                 Ok(Self::Vulkan(storage))
             }
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            Self::Nnapi(storage) => {
+                let storage = storage.try_clone(layout)?;
+                Ok(Self::Nnapi(storage))
+            }
         }
     }
 
@@ -47,6 +54,8 @@ impl Storage {
             Self::Vulkan(_) => {
                 unreachable!("Storage::Vulkan cannot be created on non-Android platforms")
             }
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            Self::Nnapi(storage) => Device::Nnapi(storage.device().clone()),
         }
     }
 
@@ -61,6 +70,8 @@ impl Storage {
             Self::Vulkan(_) => {
                 unreachable!("Storage::Vulkan cannot be created on non-Android platforms")
             }
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            Self::Nnapi(storage) => storage.dtype(),
         }
     }
 
@@ -102,6 +113,8 @@ impl Storage {
             Storage::Cuda(storage) => storage.const_set(v, l),
             Storage::Metal(storage) => storage.const_set(v, l),
             Storage::Vulkan(storage) => storage.const_set(v, l),
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            Storage::Nnapi(_) => Err(Error::Msg("const_set not supported for NNAPI".to_string())),
         }
     }
 
@@ -123,6 +136,8 @@ impl Storage {
                 let storage = storage.affine(layout, mul, add)?;
                 Ok(Self::Vulkan(storage))
             }
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            Self::Nnapi(_) => Err(Error::NotCompiledWithNnapiSupport),
         }
     }
 
@@ -144,6 +159,8 @@ impl Storage {
                 let storage = storage.powf(layout, alpha)?;
                 Ok(Self::Vulkan(storage))
             }
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            Self::Nnapi(_) => Err(Error::NotCompiledWithNnapiSupport),
         }
     }
 
@@ -165,6 +182,8 @@ impl Storage {
                 let storage = storage.elu(layout, alpha)?;
                 Ok(Self::Vulkan(storage))
             }
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            Self::Nnapi(_) => Err(Error::NotCompiledWithNnapiSupport),
         }
     }
 
@@ -225,6 +244,8 @@ impl Storage {
                 let storage = storage.reduce_op(op, layout, s)?;
                 Ok(Self::Vulkan(storage))
             }
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            Self::Nnapi(_) => Err(Error::NotCompiledWithNnapiSupport),
         }
     }
 
@@ -246,6 +267,8 @@ impl Storage {
                 let storage = storage.to_dtype(layout, dtype)?;
                 Ok(Self::Vulkan(storage))
             }
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            Self::Nnapi(_) => Err(Error::NotCompiledWithNnapiSupport),
         }
     }
 
@@ -267,6 +290,8 @@ impl Storage {
                 let (storage, shape) = c.vulkan_fwd(storage, l)?;
                 Ok((Self::Vulkan(storage), shape))
             }
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            Self::Nnapi(_) => Err(Error::NotCompiledWithNnapiSupport),
         }
     }
 
@@ -295,6 +320,8 @@ impl Storage {
                 let (s, shape) = c.vulkan_fwd(s1, l1, s2, l2)?;
                 Ok((Self::Vulkan(s), shape))
             }
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            (Self::Nnapi(_), Self::Nnapi(_)) => Err(Error::NotCompiledWithNnapiSupport),
             _ => unreachable!(),
         }
     }
@@ -327,6 +354,10 @@ impl Storage {
                 let (s, shape) = c.vulkan_fwd(s1, l1, s2, l2, s3, l3)?;
                 Ok((Self::Vulkan(s), shape))
             }
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            (Self::Nnapi(_), Self::Nnapi(_), Self::Nnapi(_)) => {
+                Err(Error::NotCompiledWithNnapiSupport)
+            }
             _ => unreachable!(),
         }
     }
@@ -337,6 +368,8 @@ impl Storage {
             Self::Cuda(storage) => c.cuda_fwd(storage, l),
             Self::Metal(storage) => c.metal_fwd(storage, l),
             Self::Vulkan(storage) => c.vulkan_fwd(storage, l),
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            Self::Nnapi(_) => Err(Error::NotCompiledWithNnapiSupport),
         }
     }
 
@@ -353,6 +386,8 @@ impl Storage {
             (Self::Cuda(s1), Self::Cuda(s2)) => c.cuda_fwd(s1, l1, s2, l2),
             (Self::Metal(s1), Self::Metal(s2)) => c.metal_fwd(s1, l1, s2, l2),
             (Self::Vulkan(s1), Self::Vulkan(s2)) => c.vulkan_fwd(s1, l1, s2, l2),
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            (Self::Nnapi(_), Self::Nnapi(_)) => Err(Error::NotCompiledWithNnapiSupport),
             _ => unreachable!(),
         }
     }
@@ -377,6 +412,10 @@ impl Storage {
             (Self::Vulkan(s1), Self::Vulkan(s2), Self::Vulkan(s3)) => {
                 c.vulkan_fwd(s1, l1, s2, l2, s3, l3)
             }
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            (Self::Nnapi(_), Self::Nnapi(_), Self::Nnapi(_)) => {
+                Err(Error::NotCompiledWithNnapiSupport)
+            }
             _ => unreachable!(),
         }
     }
@@ -399,6 +438,8 @@ impl Storage {
                 let storage = storage.unary_impl::<B>(layout)?;
                 Ok(Self::Vulkan(storage))
             }
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            Self::Nnapi(_) => Err(Error::NotCompiledWithNnapiSupport),
         }
     }
 
@@ -426,6 +467,11 @@ impl Storage {
             (Self::Vulkan(lhs), Self::Vulkan(rhs)) => {
                 let storage = lhs.binary_impl::<B>(rhs, lhs_layout, rhs_layout)?;
                 Ok(Self::Vulkan(storage))
+            }
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            (Self::Nnapi(lhs), Self::Nnapi(rhs)) => {
+                let storage = lhs.binary_impl::<B>(rhs, lhs_layout, rhs_layout)?;
+                Ok(Self::Nnapi(storage))
             }
             (lhs, rhs) => {
                 // Should not happen because of the same device check above but we're defensive
@@ -536,6 +582,11 @@ impl Storage {
                 let s = inp.conv2d(l, kernel, kernel_l, params)?;
                 Ok(Self::Vulkan(s))
             }
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            (Storage::Nnapi(inp), Storage::Nnapi(kernel)) => {
+                let s = inp.conv2d(l, kernel, kernel_l, params)?;
+                Ok(Self::Nnapi(s))
+            }
             (lhs, rhs) => Err(Error::DeviceMismatchBinaryOp {
                 lhs: lhs.device().location(),
                 rhs: rhs.device().location(),
@@ -603,6 +654,8 @@ impl Storage {
                 let storage = storage.avg_pool2d(layout, kernel_size, stride)?;
                 Ok(Self::Vulkan(storage))
             }
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            Self::Nnapi(_) => Err(Error::NotCompiledWithNnapiSupport),
         }
     }
 
@@ -629,6 +682,8 @@ impl Storage {
                 let storage = storage.max_pool2d(layout, kernel_size, stride)?;
                 Ok(Self::Vulkan(storage))
             }
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            Self::Nnapi(_) => Err(Error::NotCompiledWithNnapiSupport),
         }
     }
 
@@ -650,6 +705,8 @@ impl Storage {
                 let storage = storage.upsample_nearest1d(layout, sz)?;
                 Ok(Self::Vulkan(storage))
             }
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            Self::Nnapi(_) => Err(Error::NotCompiledWithNnapiSupport),
         }
     }
 
@@ -671,6 +728,8 @@ impl Storage {
                 let storage = storage.upsample_nearest2d(layout, h, w)?;
                 Ok(Self::Vulkan(storage))
             }
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            Self::Nnapi(_) => Err(Error::NotCompiledWithNnapiSupport),
         }
     }
 
@@ -704,6 +763,8 @@ impl Storage {
                     storage.upsample_bilinear2d(layout, h, w, align_corners, scale_h, scale_w)?;
                 Ok(Self::Vulkan(storage))
             }
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            Self::Nnapi(_) => Err(Error::NotCompiledWithNnapiSupport),
         }
     }
 
@@ -769,6 +830,8 @@ impl Storage {
                 let storage = s.gather(l, indexes, indexes_l, d)?;
                 Ok(Self::Vulkan(storage))
             }
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            (Self::Nnapi(_), Self::Nnapi(_)) => Err(Error::NotCompiledWithNnapiSupport),
             _ => unreachable!(),
         }
     }
@@ -796,6 +859,10 @@ impl Storage {
             }
             (Self::Vulkan(s), Self::Vulkan(indexes), Self::Vulkan(source)) => {
                 s.scatter_set(l, indexes, indexes_l, source, source_l, d)?;
+            }
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            (Self::Nnapi(_), Self::Nnapi(_), Self::Nnapi(_)) => {
+                return Err(Error::NotCompiledWithNnapiSupport)
             }
             _ => unreachable!(),
         }
@@ -825,6 +892,10 @@ impl Storage {
             }
             (Self::Vulkan(s), Self::Vulkan(indexes), Self::Vulkan(source)) => {
                 s.scatter_add_set(l, indexes, indexes_l, source, source_l, d)?;
+            }
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            (Self::Nnapi(_), Self::Nnapi(_), Self::Nnapi(_)) => {
+                return Err(Error::NotCompiledWithNnapiSupport)
             }
             _ => unreachable!(),
         }
@@ -858,6 +929,10 @@ impl Storage {
             (Self::Vulkan(s), Self::Vulkan(indexes), Self::Vulkan(source)) => {
                 let storage = s.index_add(l, indexes, indexes_l, source, source_l, d)?;
                 Ok(Self::Vulkan(storage))
+            }
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            (Self::Nnapi(_), Self::Nnapi(_), Self::Nnapi(_)) => {
+                Err(Error::NotCompiledWithNnapiSupport)
             }
             _ => unreachable!(),
         }
@@ -923,6 +998,11 @@ impl Storage {
                 let storage = lhs.matmul(rhs, bmnk, lhs_layout, rhs_layout)?;
                 Ok(Self::Vulkan(storage))
             }
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            (Self::Nnapi(lhs), Self::Nnapi(rhs)) => {
+                let storage = lhs.matmul(rhs, bmnk, lhs_layout, rhs_layout)?;
+                Ok(Self::Nnapi(storage))
+            }
             (lhs, rhs) => Err(Error::DeviceMismatchBinaryOp {
                 lhs: lhs.device().location(),
                 rhs: rhs.device().location(),
@@ -986,5 +1066,114 @@ impl Storage {
             }
             .bt()),
         }
+    }
+
+    #[cfg(all(feature = "nnapi", target_os = "android"))]
+    pub fn zeros_nnapi(device: &crate::NnapiDevice, shape: &Shape, dtype: DType) -> Result<Self> {
+        let storage = crate::NnapiStorage::zeros_impl(device, shape, dtype)?;
+        Ok(Self::Nnapi(storage))
+    }
+
+    #[cfg(all(feature = "nnapi", target_os = "android"))]
+    pub fn rand_uniform_nnapi(
+        device: &crate::NnapiDevice,
+        shape: &Shape,
+        dtype: DType,
+        lo: f64,
+        up: f64,
+    ) -> Result<Self> {
+        use rand::Rng;
+        let count = shape.elem_count();
+        let mut rng = rand::rng();
+        match dtype {
+            DType::F32 => {
+                let data: Vec<f32> = (0..count)
+                    .map(|_| rng.random_range(lo as f32..up as f32))
+                    .collect();
+                let bytes: Vec<u8> = data.iter().flat_map(|&x| x.to_le_bytes()).collect();
+                let storage = crate::NnapiStorage::new(bytes, dtype, device.clone())?;
+                Ok(Self::Nnapi(storage))
+            }
+            DType::F16 => {
+                let data: Vec<half::f16> = (0..count)
+                    .map(|_| half::f16::from_f32(rng.random_range(lo as f32..up as f32)))
+                    .collect();
+                let bytes: Vec<u8> = data
+                    .iter()
+                    .flat_map(|&x| x.to_bits().to_le_bytes())
+                    .collect();
+                let storage = crate::NnapiStorage::new(bytes, dtype, device.clone())?;
+                Ok(Self::Nnapi(storage))
+            }
+            _ => Err(Error::Nnapi(crate::NnapiError::Message(format!(
+                "rand_uniform not supported for dtype {:?}",
+                dtype
+            )))),
+        }
+    }
+
+    #[cfg(all(feature = "nnapi", target_os = "android"))]
+    pub fn rand_normal_nnapi(
+        device: &crate::NnapiDevice,
+        shape: &Shape,
+        dtype: DType,
+        mean: f64,
+        std: f64,
+    ) -> Result<Self> {
+        use rand_distr::{Distribution, Normal};
+        let count = shape.elem_count();
+        let mut rng = rand::rng();
+        let normal = Normal::new(mean, std).map_err(|e| {
+            Error::Nnapi(crate::NnapiError::Message(format!("Normal init failed: {e}")))
+        })?;
+        match dtype {
+            DType::F32 => {
+                let data: Vec<f32> = (0..count).map(|_| normal.sample(&mut rng) as f32).collect();
+                let bytes: Vec<u8> = data.iter().flat_map(|&x| x.to_le_bytes()).collect();
+                let storage = crate::NnapiStorage::new(bytes, dtype, device.clone())?;
+                Ok(Self::Nnapi(storage))
+            }
+            DType::F16 => {
+                let data: Vec<half::f16> = (0..count)
+                    .map(|_| half::f16::from_f32(normal.sample(&mut rng) as f32))
+                    .collect();
+                let bytes: Vec<u8> = data
+                    .iter()
+                    .flat_map(|&x| x.to_bits().to_le_bytes())
+                    .collect();
+                let storage = crate::NnapiStorage::new(bytes, dtype, device.clone())?;
+                Ok(Self::Nnapi(storage))
+            }
+            _ => Err(Error::Nnapi(crate::NnapiError::Message(format!(
+                "rand_normal not supported for dtype {:?}",
+                dtype
+            )))),
+        }
+    }
+
+    #[cfg(all(feature = "nnapi", target_os = "android"))]
+    pub fn from_slice_nnapi<D: crate::WithDType>(
+        device: &crate::NnapiDevice,
+        data: &[D],
+    ) -> Result<Self> {
+        let dtype = D::DTYPE;
+        let bytes: Vec<u8> = unsafe {
+            std::slice::from_raw_parts(
+                data.as_ptr() as *const u8,
+                data.len() * std::mem::size_of::<D>(),
+            )
+        }
+        .to_vec();
+        let storage = crate::NnapiStorage::new(bytes, dtype, device.clone())?;
+        Ok(Self::Nnapi(storage))
+    }
+
+    #[cfg(all(feature = "nnapi", target_os = "android"))]
+    pub fn from_cpu_storage_nnapi(
+        device: &crate::NnapiDevice,
+        cpu: crate::CpuStorage,
+    ) -> Result<Self> {
+        let storage = crate::NnapiStorage::from_cpu_storage_impl(&cpu, device)?;
+        Ok(Self::Nnapi(storage))
     }
 }

@@ -357,10 +357,130 @@ jobs:
             /tmp/candle-test-results/
           retention-days: 14
 
+  candle-nnapi-tests:
+    name: Candle NNAPI Build & Compile (Emulator)
+    runs-on: ubuntu-latest
+    # NOTE: candle-core/src/nnapi_backend contains the NNAPI backend for Android.
+    # Unit tests for NNAPI operations are in atheer-accel/src/nnapi.rs (requires
+    # physical device or full instrumentation test setup). This job verifies
+    # compilation on Android target and basic execution on emulator.
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install NDK
+        run: |
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install \
+            "ndk;27.3.13750724" \
+            --sdk_root="$ANDROID_HOME"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-linux-android
+
+      - name: Restore Rust cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry/
+            ~/.cargo/git/
+            target/
+          key: ${{ runner.os }}-android-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-android-cargo-
+            ${{ runner.os }}-cargo-
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - name: Build candle-core with nnapi feature for Android
+        run: |
+          cargo ndk \
+            -t x86_64 \
+            build -p candle-core --features nnapi \
+            --tests --release 2>&1 | tail -30
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.3.13750724
+
+      - name: Find test binary
+        run: |
+          find target/x86_64-linux-android -name "candle_core*" -type f 2>/dev/null | head -20
+
+      - name: Generate emulator test script
+        run: |
+          cat << 'EOF' > run_nnapi_tests.sh
+          #!/usr/bin/env bash
+          set -e
+
+          echo "Waiting for device..."
+          adb wait-for-device
+
+          echo "Creating test data directory..."
+          adb shell mkdir -p /data/local/tmp/candle-test
+          adb shell chmod 777 /data/local/tmp/candle-test
+
+          echo "Pushing test binary..."
+          TESTBIN=$(find target/x86_64-linux-android/release/deps -maxdepth 1 -type f -name "candle_core*" ! -name "*.d" ! -name "*.rlib" ! -name "*.rmeta" ! -name "*.so" | head -1)
+
+          if [ -n "$TESTBIN" ]; then
+            echo "Found binary: $TESTBIN"
+            adb push "$TESTBIN" /data/local/tmp/candle-test/candle_core_test
+            adb shell chmod +x /data/local/tmp/candle-test/candle_core_test
+          else
+            echo "Test binary not found!"
+            exit 1
+          fi
+
+          echo "Running NNAPI tests..."
+          adb shell "cd /data/local/tmp/candle-test && TMPDIR=/data/local/tmp/candle-test ./candle_core_test --test-threads=1"
+
+          echo "Testing ADB connectivity..."
+          adb devices
+          adb shell cat /proc/version 2>/dev/null || echo "proc/version not available"
+          EOF
+          chmod +x run_nnapi_tests.sh
+
+      - uses: reactivecircus/android-emulator-runner@v2
+        id: emulator
+        with:
+          api-level: 34
+          arch: x86_64
+          target: aosp_atd
+          profile: pixel_6
+          avd-name: candle-nnapi-test
+          force-avd-creation: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 4096
+          disable-animations: true
+          disable-spellchecker: true
+          script: ./run_nnapi_tests.sh
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: candle-nnapi-test-results
+          path: |
+            target/x86_64-linux-android/
+            /tmp/candle-test-results/
+          retention-days: 14
+
   instrumented-tests:
     name: Instrumentation Tests (Emulator)
     if: github.event_name == 'workflow_dispatch'
-    needs: [build, candle-vulkan-build, candle-vulkan-tests]
+    needs: [build, candle-vulkan-build, candle-vulkan-tests, candle-nnapi-tests]
     runs-on: ubuntu-latest
     defaults:
       run:
