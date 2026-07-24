@@ -106,6 +106,44 @@ pub enum NnapiOperation {
 }
 
 impl NnapiOperation {
+    pub fn input_operands(&self) -> Vec<u32> {
+        match self {
+            NnapiOperation::Add { input0, input1, .. } => vec![*input0, *input1],
+            NnapiOperation::Mul { input0, input1, .. } => vec![*input0, *input1],
+            NnapiOperation::FullyConnected {
+                input,
+                weights,
+                bias,
+                ..
+            } => {
+                vec![*input, *weights, *bias]
+            }
+            NnapiOperation::Softmax { input, .. } => vec![*input],
+            NnapiOperation::Logistic { input, .. } => vec![*input],
+            NnapiOperation::Relu { input, .. } => vec![*input],
+            NnapiOperation::Tanh { input, .. } => vec![*input],
+            NnapiOperation::Conv2d {
+                input,
+                filter,
+                bias,
+                ..
+            } => vec![*input, *filter, *bias],
+        }
+    }
+
+    pub fn output_operands(&self) -> Vec<u32> {
+        match self {
+            NnapiOperation::Add { output, .. } => vec![*output],
+            NnapiOperation::Mul { output, .. } => vec![*output],
+            NnapiOperation::FullyConnected { output, .. } => vec![*output],
+            NnapiOperation::Softmax { output, .. } => vec![*output],
+            NnapiOperation::Logistic { output, .. } => vec![*output],
+            NnapiOperation::Relu { output, .. } => vec![*output],
+            NnapiOperation::Tanh { output, .. } => vec![*output],
+            NnapiOperation::Conv2d { output, .. } => vec![*output],
+        }
+    }
+
     #[cfg(all(feature = "nnapi", target_os = "android"))]
     pub fn to_nnapi_code(&self) -> i32 {
         match self {

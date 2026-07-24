@@ -19,7 +19,7 @@ use crate::backend::BackendStorage;
 use crate::nnapi_backend::executor::{BinaryOp, SharedExecutor, UnaryOp};
 use crate::nnapi_backend::{create_shared_executor, NnapiDevice, NnapiError};
 use crate::{CpuStorage, DType, Layout, Result, Shape};
-use std::os::unix::io::AsRawFd;
+use std::os::unix::io::{AsRawFd, IntoRawFd};
 use std::sync::Arc;
 
 #[cfg(all(feature = "nnapi", target_os = "android"))]
@@ -293,7 +293,13 @@ impl NnapiStorage {
         device: &crate::NnapiDevice,
         data: &[D],
     ) -> Result<Self> {
-        let bytes: Vec<u8> = data.iter().flat_map(|&x| x.to_bytes()).collect();
+        let bytes: Vec<u8> = unsafe {
+            std::slice::from_raw_parts(
+                data.as_ptr() as *const u8,
+                data.len() * std::mem::size_of::<D>(),
+            )
+        }
+        .to_vec();
         Self::new(bytes, D::DTYPE, device.clone())
     }
 

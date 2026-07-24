@@ -276,7 +276,7 @@ impl BackendStorage for VulkanStorage {
         let shape = layout.shape();
         let count = shape.elem_count();
 
-        let mut output = self.device.allocate_buffer(
+        let output = self.device.allocate_buffer(
             (count * self.dtype.size_in_bytes()) as u64,
             wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         )?;
@@ -406,7 +406,7 @@ impl BackendStorage for VulkanStorage {
 
         match B::KERNEL {
             "add" => {
-                let mut output = self.device.allocate_buffer(
+                let output = self.device.allocate_buffer(
                     (count * self.dtype.size_in_bytes()) as u64,
                     wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
                 )?;

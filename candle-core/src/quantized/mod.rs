@@ -88,6 +88,8 @@ impl Device {
                 let storage = vulkan::QVulkanStorage::zeros(vulkan, elem_count, dtype)?;
                 Ok(QStorage::Vulkan(storage))
             }
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            Device::Nnapi(_) => crate::bail!("quantized tensors are not supported on NNAPI"),
         }
     }
 }
@@ -108,6 +110,8 @@ impl Device {
                 let storage = cuda::QCudaStorage::zeros(cuda, elem_count, dtype)?;
                 Ok(QStorage::Cuda(storage))
             }
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            Device::Nnapi(_) => crate::bail!("quantized tensors are not supported on NNAPI"),
         }
     }
 }
@@ -175,6 +179,7 @@ impl QStorage {
                 GgmlDType::Q8K => vulkan::load_quantized(d, as_t_slice::<BlockQ8K>(data)),
                 GgmlDType::BF16 => vulkan::load_quantized(d, as_t_slice::<bf16>(data)),
             },
+            Device::Nnapi(_) => crate::bail!("quantized tensors are not supported on NNAPI"),
         }
     }
 
@@ -216,6 +221,8 @@ impl QStorage {
                 GgmlDType::Q8K => cuda::load_quantized(d, as_t_slice::<BlockQ8K>(data)),
                 GgmlDType::BF16 => cuda::load_quantized(d, as_t_slice::<bf16>(data)),
             },
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            Device::Nnapi(_) => crate::bail!("quantized tensors are not supported on NNAPI"),
         }
     }
 
