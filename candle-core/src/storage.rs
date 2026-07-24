@@ -1048,7 +1048,10 @@ impl Storage {
                 let data: Vec<half::f16> = (0..count)
                     .map(|_| half::f16::from_f32(rng.gen_range(lo as f32..up as f32)))
                     .collect();
-                let bytes: Vec<u8> = data.iter().flat_map(|&x| x.bits().to_le_bytes()).collect();
+                let bytes: Vec<u8> = data
+                    .iter()
+                    .flat_map(|&x| x.to_bits().to_le_bytes())
+                    .collect();
                 let storage = crate::NnapiStorage::new(bytes, dtype, device.clone())?;
                 Ok(Self::Nnapi(storage))
             }
@@ -1083,7 +1086,10 @@ impl Storage {
                 let data: Vec<half::f16> = (0..count)
                     .map(|_| half::f16::from_f32(normal.sample(&mut rng) as f32))
                     .collect();
-                let bytes: Vec<u8> = data.iter().flat_map(|&x| x.bits().to_le_bytes()).collect();
+                let bytes: Vec<u8> = data
+                    .iter()
+                    .flat_map(|&x| x.to_bits().to_le_bytes())
+                    .collect();
                 let storage = crate::NnapiStorage::new(bytes, dtype, device.clone())?;
                 Ok(Self::Nnapi(storage))
             }

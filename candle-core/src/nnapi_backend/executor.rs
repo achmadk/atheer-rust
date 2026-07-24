@@ -47,7 +47,7 @@ impl ShapeSignature {
 }
 
 #[cfg(all(feature = "nnapi", target_os = "android"))]
-use super::nnapi::{
+use super::nnapi_ndk::{
     get_devices, nnapi_result, ANeuralNetworksCompilation, ANeuralNetworksCompilation_create,
     ANeuralNetworksCompilation_finish, ANeuralNetworksCompilation_free,
     ANeuralNetworksCompilation_setPreference, ANeuralNetworksExecution,
