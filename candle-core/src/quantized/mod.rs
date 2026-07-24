@@ -179,6 +179,7 @@ impl QStorage {
                 GgmlDType::Q8K => vulkan::load_quantized(d, as_t_slice::<BlockQ8K>(data)),
                 GgmlDType::BF16 => vulkan::load_quantized(d, as_t_slice::<bf16>(data)),
             },
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
             Device::Nnapi(_) => crate::bail!("quantized tensors are not supported on NNAPI"),
         }
     }

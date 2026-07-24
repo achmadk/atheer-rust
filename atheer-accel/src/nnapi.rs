@@ -374,13 +374,8 @@ impl NnapiExecutor {
             .unwrap()
             .insert(signature.clone(), compiled);
 
-        let binding = self
-            .compiled_models
-            .read()
-            .unwrap();
-        let model = binding
-            .get(&signature)
-            .unwrap();
+        let binding = self.compiled_models.read().unwrap();
+        let model = binding.get(&signature).unwrap();
         Ok(NnapiCompiledModel {
             compilation: model.compilation,
             _model: model._model,

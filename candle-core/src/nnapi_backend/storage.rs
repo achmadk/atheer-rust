@@ -17,8 +17,8 @@
 
 use crate::backend::BackendStorage;
 use crate::nnapi_backend::executor::{BinaryOp, SharedExecutor, UnaryOp};
-use crate::nnapi_backend::{create_shared_executor, NnapiDevice};
 use crate::nnapi_backend::NnapiError;
+use crate::nnapi_backend::{create_shared_executor, NnapiDevice};
 use crate::{CpuStorage, DType, Layout, Result, Shape};
 use std::fs;
 use std::io::Write;
@@ -30,9 +30,8 @@ use crate::nnapi_backend::nnapi_ndk::{
     nnapi_result, AHardwareBuffer, AHardwareBuffer_Desc, AHardwareBuffer_allocate,
     AHardwareBuffer_release, ANeuralNetworksMemory, ANeuralNetworksMemory_createFromFd,
     ANeuralNetworksMemory_createFromHardwareBuffer, ANeuralNetworksMemory_free,
-    ANEURALNETWORKS_FUSED_NONE,
     AHARDWAREBUFFER_FORMAT_BLOB, AHARDWAREBUFFER_USAGE_CPU_READ_OFTEN,
-    AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN,
+    AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN, ANEURALNETWORKS_FUSED_NONE,
 };
 
 #[cfg(all(feature = "nnapi", target_os = "android"))]
@@ -358,7 +357,7 @@ impl NnapiStorage {
                 let values = unsafe { std::slice::from_raw_parts(ptr, len).to_vec() };
                 Ok(CpuStorage::F32(values))
             }
-DType::F16 => {
+            DType::F16 => {
                 let ptr = self.data.as_ptr() as *const u16;
                 let len = self.data.len() / 2;
                 let tmp: Vec<u16> = unsafe { std::slice::from_raw_parts(ptr, len).to_vec() };
@@ -369,7 +368,8 @@ DType::F16 => {
                 let ptr = self.data.as_ptr() as *const u16;
                 let len = self.data.len() / 2;
                 let tmp: Vec<u16> = unsafe { std::slice::from_raw_parts(ptr, len).to_vec() };
-                let values: Vec<half::bf16> = tmp.iter().map(|&x| half::bf16::from_bits(x)).collect();
+                let values: Vec<half::bf16> =
+                    tmp.iter().map(|&x| half::bf16::from_bits(x)).collect();
                 Ok(CpuStorage::BF16(values))
             }
             _ => Err(crate::Error::Nnapi(NnapiError::Message(format!(
@@ -566,7 +566,8 @@ impl BackendStorage for NnapiStorage {
                 let ptr = self.data.as_ptr() as *const u16;
                 let len = self.data.len() / 2;
                 let tmp: Vec<u16> = unsafe { std::slice::from_raw_parts(ptr, len).to_vec() };
-                let values: Vec<half::bf16> = tmp.iter().map(|&x| half::bf16::from_bits(x)).collect();
+                let values: Vec<half::bf16> =
+                    tmp.iter().map(|&x| half::bf16::from_bits(x)).collect();
                 Ok(CpuStorage::BF16(values))
             }
             _ => Err(crate::Error::Nnapi(NnapiError::Message(format!(

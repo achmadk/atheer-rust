@@ -1124,7 +1124,9 @@ impl Storage {
         let count = shape.elem_count();
         let mut rng = rand::rng();
         let normal = Normal::new(mean, std).map_err(|e| {
-            Error::Nnapi(crate::NnapiError::Message(format!("Normal init failed: {e}")))
+            Error::Nnapi(crate::NnapiError::Message(format!(
+                "Normal init failed: {e}"
+            )))
         })?;
         match dtype {
             DType::F32 => {
