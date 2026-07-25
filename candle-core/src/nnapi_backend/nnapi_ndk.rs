@@ -193,8 +193,7 @@ mod runtime {
         _lib: *mut std::ffi::c_void,
         // ── Device discovery ────────────────────────────────────────────
         get_device_count: unsafe extern "C" fn(*mut u32) -> i32,
-        get_device:
-            unsafe extern "C" fn(u32, *mut *mut ANeuralNetworksDevice) -> i32,
+        get_device: unsafe extern "C" fn(u32, *mut *mut ANeuralNetworksDevice) -> i32,
         device_get_name:
             unsafe extern "C" fn(*const ANeuralNetworksDevice, *mut *const c_char) -> i32,
         device_get_type: unsafe extern "C" fn(*const ANeuralNetworksDevice, *mut i32) -> i32,
@@ -206,40 +205,92 @@ mod runtime {
         model_create: unsafe extern "C" fn(*mut *mut ANeuralNetworksModel) -> i32,
         model_free: unsafe extern "C" fn(*mut ANeuralNetworksModel),
         model_finish: unsafe extern "C" fn(*mut ANeuralNetworksModel) -> i32,
-        model_add_operand:
-            unsafe extern "C" fn(*mut ANeuralNetworksModel, *const ANeuralNetworksOperandType) -> i32,
+        model_add_operand: unsafe extern "C" fn(
+            *mut ANeuralNetworksModel,
+            *const ANeuralNetworksOperandType,
+        ) -> i32,
         model_set_operand_value:
             unsafe extern "C" fn(*mut ANeuralNetworksModel, i32, *const c_void, usize) -> i32,
-        model_add_operation:
-            unsafe extern "C" fn(*mut ANeuralNetworksModel, i32, u32, *const u32, u32, *const u32) -> i32,
-        model_identify_inputs_and_outputs:
-            unsafe extern "C" fn(*mut ANeuralNetworksModel, u32, *const u32, u32, *const u32) -> i32,
-        model_get_supported_operations_for_devices:
-            unsafe extern "C" fn(*const ANeuralNetworksModel, *const *const ANeuralNetworksDevice, u32, *mut bool) -> i32,
-        model_set_operand_value_from_memory:
-            unsafe extern "C" fn(*mut ANeuralNetworksModel, i32, *const ANeuralNetworksMemory, usize, usize) -> i32,
+        model_add_operation: unsafe extern "C" fn(
+            *mut ANeuralNetworksModel,
+            i32,
+            u32,
+            *const u32,
+            u32,
+            *const u32,
+        ) -> i32,
+        model_identify_inputs_and_outputs: unsafe extern "C" fn(
+            *mut ANeuralNetworksModel,
+            u32,
+            *const u32,
+            u32,
+            *const u32,
+        ) -> i32,
+        model_get_supported_operations_for_devices: unsafe extern "C" fn(
+            *const ANeuralNetworksModel,
+            *const *const ANeuralNetworksDevice,
+            u32,
+            *mut bool,
+        ) -> i32,
+        model_set_operand_value_from_memory: unsafe extern "C" fn(
+            *mut ANeuralNetworksModel,
+            i32,
+            *const ANeuralNetworksMemory,
+            usize,
+            usize,
+        ) -> i32,
         // ── Compilation ─────────────────────────────────────────────────
-        compilation_create:
-            unsafe extern "C" fn(*mut ANeuralNetworksModel, *mut *mut ANeuralNetworksCompilation) -> i32,
+        compilation_create: unsafe extern "C" fn(
+            *mut ANeuralNetworksModel,
+            *mut *mut ANeuralNetworksCompilation,
+        ) -> i32,
         compilation_free: unsafe extern "C" fn(*mut ANeuralNetworksCompilation),
         compilation_set_preference:
             unsafe extern "C" fn(*mut ANeuralNetworksCompilation, i32) -> i32,
         compilation_finish: unsafe extern "C" fn(*mut ANeuralNetworksCompilation) -> i32,
-        compilation_create_for_devices:
-            unsafe extern "C" fn(*mut ANeuralNetworksModel, *const *const ANeuralNetworksDevice, u32, *mut *mut ANeuralNetworksCompilation) -> i32,
+        compilation_create_for_devices: unsafe extern "C" fn(
+            *mut ANeuralNetworksModel,
+            *const *const ANeuralNetworksDevice,
+            u32,
+            *mut *mut ANeuralNetworksCompilation,
+        ) -> i32,
         // ── Execution ───────────────────────────────────────────────────
-        execution_create:
-            unsafe extern "C" fn(*mut ANeuralNetworksCompilation, *mut *mut ANeuralNetworksExecution) -> i32,
+        execution_create: unsafe extern "C" fn(
+            *mut ANeuralNetworksCompilation,
+            *mut *mut ANeuralNetworksExecution,
+        ) -> i32,
         execution_free: unsafe extern "C" fn(*mut ANeuralNetworksExecution),
-        execution_set_input:
-            unsafe extern "C" fn(*mut ANeuralNetworksExecution, i32, *const ANeuralNetworksOperandType, *const c_void, usize) -> i32,
-        execution_set_output:
-            unsafe extern "C" fn(*mut ANeuralNetworksExecution, i32, *const ANeuralNetworksOperandType, *mut c_void, usize) -> i32,
+        execution_set_input: unsafe extern "C" fn(
+            *mut ANeuralNetworksExecution,
+            i32,
+            *const ANeuralNetworksOperandType,
+            *const c_void,
+            usize,
+        ) -> i32,
+        execution_set_output: unsafe extern "C" fn(
+            *mut ANeuralNetworksExecution,
+            i32,
+            *const ANeuralNetworksOperandType,
+            *mut c_void,
+            usize,
+        ) -> i32,
         execution_compute: unsafe extern "C" fn(*mut ANeuralNetworksExecution) -> i32,
-        execution_set_input_from_memory:
-            unsafe extern "C" fn(*mut ANeuralNetworksExecution, i32, *const ANeuralNetworksOperandType, *const ANeuralNetworksMemory, usize, usize) -> i32,
-        execution_set_output_from_memory:
-            unsafe extern "C" fn(*mut ANeuralNetworksExecution, i32, *const ANeuralNetworksOperandType, *const ANeuralNetworksMemory, usize, usize) -> i32,
+        execution_set_input_from_memory: unsafe extern "C" fn(
+            *mut ANeuralNetworksExecution,
+            i32,
+            *const ANeuralNetworksOperandType,
+            *const ANeuralNetworksMemory,
+            usize,
+            usize,
+        ) -> i32,
+        execution_set_output_from_memory: unsafe extern "C" fn(
+            *mut ANeuralNetworksExecution,
+            i32,
+            *const ANeuralNetworksOperandType,
+            *const ANeuralNetworksMemory,
+            usize,
+            usize,
+        ) -> i32,
         // ── Memory ──────────────────────────────────────────────────────
         memory_create_from_fd:
             unsafe extern "C" fn(usize, i32, i32, usize, *mut *mut ANeuralNetworksMemory) -> i32,
@@ -266,14 +317,16 @@ mod runtime {
     fn init() -> Result<&'static NnapiHandle, ()> {
         match NNAPI.get_or_init(|| {
             let lib_name = CStr::from_bytes_with_nul(b"libneuralnetworks.so\0").unwrap();
-            let lib = unsafe { libc::dlopen(lib_name.as_ptr(), libc::RTLD_LAZY | libc::RTLD_LOCAL) };
+            let lib =
+                unsafe { libc::dlopen(lib_name.as_ptr(), libc::RTLD_LAZY | libc::RTLD_LOCAL) };
             if lib.is_null() {
                 return Err(());
             }
 
             macro_rules! load {
                 ($name:literal) => {{
-                    let sym_name = CStr::from_bytes_with_nul(concat!($name, "\0").as_bytes()).unwrap();
+                    let sym_name =
+                        CStr::from_bytes_with_nul(concat!($name, "\0").as_bytes()).unwrap();
                     load_symbol(lib, sym_name).ok_or(())?
                 }};
             }
@@ -292,21 +345,33 @@ mod runtime {
                 model_add_operand: load!("ANeuralNetworksModel_addOperand"),
                 model_set_operand_value: load!("ANeuralNetworksModel_setOperandValue"),
                 model_add_operation: load!("ANeuralNetworksModel_addOperation"),
-                model_identify_inputs_and_outputs: load!("ANeuralNetworksModel_identifyInputsAndOutputs"),
-                model_get_supported_operations_for_devices: load!("ANeuralNetworksModel_getSupportedOperationsForDevices"),
-                model_set_operand_value_from_memory: load!("ANeuralNetworksModel_setOperandValueFromMemory"),
+                model_identify_inputs_and_outputs: load!(
+                    "ANeuralNetworksModel_identifyInputsAndOutputs"
+                ),
+                model_get_supported_operations_for_devices: load!(
+                    "ANeuralNetworksModel_getSupportedOperationsForDevices"
+                ),
+                model_set_operand_value_from_memory: load!(
+                    "ANeuralNetworksModel_setOperandValueFromMemory"
+                ),
                 compilation_create: load!("ANeuralNetworksCompilation_create"),
                 compilation_free: load!("ANeuralNetworksCompilation_free"),
                 compilation_set_preference: load!("ANeuralNetworksCompilation_setPreference"),
                 compilation_finish: load!("ANeuralNetworksCompilation_finish"),
-                compilation_create_for_devices: load!("ANeuralNetworksCompilation_createForDevices"),
+                compilation_create_for_devices: load!(
+                    "ANeuralNetworksCompilation_createForDevices"
+                ),
                 execution_create: load!("ANeuralNetworksExecution_create"),
                 execution_free: load!("ANeuralNetworksExecution_free"),
                 execution_set_input: load!("ANeuralNetworksExecution_setInput"),
                 execution_set_output: load!("ANeuralNetworksExecution_setOutput"),
                 execution_compute: load!("ANeuralNetworksExecution_compute"),
-                execution_set_input_from_memory: load!("ANeuralNetworksExecution_setInputFromMemory"),
-                execution_set_output_from_memory: load!("ANeuralNetworksExecution_setOutputFromMemory"),
+                execution_set_input_from_memory: load!(
+                    "ANeuralNetworksExecution_setInputFromMemory"
+                ),
+                execution_set_output_from_memory: load!(
+                    "ANeuralNetworksExecution_setOutputFromMemory"
+                ),
                 memory_create_from_fd: load!("ANeuralNetworksMemory_createFromFd"),
                 memory_free: load!("ANeuralNetworksMemory_free"),
             })
@@ -321,19 +386,34 @@ mod runtime {
     pub unsafe fn ANeuralNetworks_getDeviceCount(numDevices: *mut u32) -> i32 {
         (init().unwrap().get_device_count)(numDevices)
     }
-    pub unsafe fn ANeuralNetworks_getDevice(devIndex: u32, device: *mut *mut ANeuralNetworksDevice) -> i32 {
+    pub unsafe fn ANeuralNetworks_getDevice(
+        devIndex: u32,
+        device: *mut *mut ANeuralNetworksDevice,
+    ) -> i32 {
         (init().unwrap().get_device)(devIndex, device)
     }
-    pub unsafe fn ANeuralNetworksDevice_getName(device: *const ANeuralNetworksDevice, name: *mut *const c_char) -> i32 {
+    pub unsafe fn ANeuralNetworksDevice_getName(
+        device: *const ANeuralNetworksDevice,
+        name: *mut *const c_char,
+    ) -> i32 {
         (init().unwrap().device_get_name)(device, name)
     }
-    pub unsafe fn ANeuralNetworksDevice_getType(device: *const ANeuralNetworksDevice, type_: *mut i32) -> i32 {
+    pub unsafe fn ANeuralNetworksDevice_getType(
+        device: *const ANeuralNetworksDevice,
+        type_: *mut i32,
+    ) -> i32 {
         (init().unwrap().device_get_type)(device, type_)
     }
-    pub unsafe fn ANeuralNetworksDevice_getVersion(device: *const ANeuralNetworksDevice, version: *mut *const c_char) -> i32 {
+    pub unsafe fn ANeuralNetworksDevice_getVersion(
+        device: *const ANeuralNetworksDevice,
+        version: *mut *const c_char,
+    ) -> i32 {
         (init().unwrap().device_get_version)(device, version)
     }
-    pub unsafe fn ANeuralNetworksDevice_getFeatureLevel(device: *const ANeuralNetworksDevice, featureLevel: *mut i32) -> i32 {
+    pub unsafe fn ANeuralNetworksDevice_getFeatureLevel(
+        device: *const ANeuralNetworksDevice,
+        featureLevel: *mut i32,
+    ) -> i32 {
         (init().unwrap().device_get_feature_level)(device, featureLevel)
     }
     pub unsafe fn ANeuralNetworksModel_create(model: *mut *mut ANeuralNetworksModel) -> i32 {
@@ -345,61 +425,165 @@ mod runtime {
     pub unsafe fn ANeuralNetworksModel_finish(model: *mut ANeuralNetworksModel) -> i32 {
         (init().unwrap().model_finish)(model)
     }
-    pub unsafe fn ANeuralNetworksModel_addOperand(model: *mut ANeuralNetworksModel, type_: *const ANeuralNetworksOperandType) -> i32 {
+    pub unsafe fn ANeuralNetworksModel_addOperand(
+        model: *mut ANeuralNetworksModel,
+        type_: *const ANeuralNetworksOperandType,
+    ) -> i32 {
         (init().unwrap().model_add_operand)(model, type_)
     }
-    pub unsafe fn ANeuralNetworksModel_setOperandValue(model: *mut ANeuralNetworksModel, index: i32, buffer: *const c_void, length: usize) -> i32 {
+    pub unsafe fn ANeuralNetworksModel_setOperandValue(
+        model: *mut ANeuralNetworksModel,
+        index: i32,
+        buffer: *const c_void,
+        length: usize,
+    ) -> i32 {
         (init().unwrap().model_set_operand_value)(model, index, buffer, length)
     }
-    pub unsafe fn ANeuralNetworksModel_addOperation(model: *mut ANeuralNetworksModel, operation_type: i32, inputCount: u32, inputs: *const u32, outputCount: u32, outputs: *const u32) -> i32 {
-        (init().unwrap().model_add_operation)(model, operation_type, inputCount, inputs, outputCount, outputs)
+    pub unsafe fn ANeuralNetworksModel_addOperation(
+        model: *mut ANeuralNetworksModel,
+        operation_type: i32,
+        inputCount: u32,
+        inputs: *const u32,
+        outputCount: u32,
+        outputs: *const u32,
+    ) -> i32 {
+        (init().unwrap().model_add_operation)(
+            model,
+            operation_type,
+            inputCount,
+            inputs,
+            outputCount,
+            outputs,
+        )
     }
-    pub unsafe fn ANeuralNetworksModel_identifyInputsAndOutputs(model: *mut ANeuralNetworksModel, inputCount: u32, inputs: *const u32, outputCount: u32, outputs: *const u32) -> i32 {
-        (init().unwrap().model_identify_inputs_and_outputs)(model, inputCount, inputs, outputCount, outputs)
+    pub unsafe fn ANeuralNetworksModel_identifyInputsAndOutputs(
+        model: *mut ANeuralNetworksModel,
+        inputCount: u32,
+        inputs: *const u32,
+        outputCount: u32,
+        outputs: *const u32,
+    ) -> i32 {
+        (init().unwrap().model_identify_inputs_and_outputs)(
+            model,
+            inputCount,
+            inputs,
+            outputCount,
+            outputs,
+        )
     }
-    pub unsafe fn ANeuralNetworksModel_getSupportedOperationsForDevices(model: *const ANeuralNetworksModel, devices: *const *const ANeuralNetworksDevice, numDevices: u32, supportedOps: *mut bool) -> i32 {
-        (init().unwrap().model_get_supported_operations_for_devices)(model, devices, numDevices, supportedOps)
+    pub unsafe fn ANeuralNetworksModel_getSupportedOperationsForDevices(
+        model: *const ANeuralNetworksModel,
+        devices: *const *const ANeuralNetworksDevice,
+        numDevices: u32,
+        supportedOps: *mut bool,
+    ) -> i32 {
+        (init().unwrap().model_get_supported_operations_for_devices)(
+            model,
+            devices,
+            numDevices,
+            supportedOps,
+        )
     }
-    pub unsafe fn ANeuralNetworksModel_setOperandValueFromMemory(model: *mut ANeuralNetworksModel, index: i32, memory: *const ANeuralNetworksMemory, offset: usize, length: usize) -> i32 {
+    pub unsafe fn ANeuralNetworksModel_setOperandValueFromMemory(
+        model: *mut ANeuralNetworksModel,
+        index: i32,
+        memory: *const ANeuralNetworksMemory,
+        offset: usize,
+        length: usize,
+    ) -> i32 {
         (init().unwrap().model_set_operand_value_from_memory)(model, index, memory, offset, length)
     }
-    pub unsafe fn ANeuralNetworksCompilation_create(model: *mut ANeuralNetworksModel, compilation: *mut *mut ANeuralNetworksCompilation) -> i32 {
+    pub unsafe fn ANeuralNetworksCompilation_create(
+        model: *mut ANeuralNetworksModel,
+        compilation: *mut *mut ANeuralNetworksCompilation,
+    ) -> i32 {
         (init().unwrap().compilation_create)(model, compilation)
     }
     pub unsafe fn ANeuralNetworksCompilation_free(compilation: *mut ANeuralNetworksCompilation) {
         (init().unwrap().compilation_free)(compilation)
     }
-    pub unsafe fn ANeuralNetworksCompilation_setPreference(compilation: *mut ANeuralNetworksCompilation, preference: i32) -> i32 {
+    pub unsafe fn ANeuralNetworksCompilation_setPreference(
+        compilation: *mut ANeuralNetworksCompilation,
+        preference: i32,
+    ) -> i32 {
         (init().unwrap().compilation_set_preference)(compilation, preference)
     }
-    pub unsafe fn ANeuralNetworksCompilation_finish(compilation: *mut ANeuralNetworksCompilation) -> i32 {
+    pub unsafe fn ANeuralNetworksCompilation_finish(
+        compilation: *mut ANeuralNetworksCompilation,
+    ) -> i32 {
         (init().unwrap().compilation_finish)(compilation)
     }
-    pub unsafe fn ANeuralNetworksCompilation_createForDevices(model: *mut ANeuralNetworksModel, devices: *const *const ANeuralNetworksDevice, numDevices: u32, compilation: *mut *mut ANeuralNetworksCompilation) -> i32 {
+    pub unsafe fn ANeuralNetworksCompilation_createForDevices(
+        model: *mut ANeuralNetworksModel,
+        devices: *const *const ANeuralNetworksDevice,
+        numDevices: u32,
+        compilation: *mut *mut ANeuralNetworksCompilation,
+    ) -> i32 {
         (init().unwrap().compilation_create_for_devices)(model, devices, numDevices, compilation)
     }
-    pub unsafe fn ANeuralNetworksExecution_create(compilation: *mut ANeuralNetworksCompilation, execution: *mut *mut ANeuralNetworksExecution) -> i32 {
+    pub unsafe fn ANeuralNetworksExecution_create(
+        compilation: *mut ANeuralNetworksCompilation,
+        execution: *mut *mut ANeuralNetworksExecution,
+    ) -> i32 {
         (init().unwrap().execution_create)(compilation, execution)
     }
     pub unsafe fn ANeuralNetworksExecution_free(execution: *mut ANeuralNetworksExecution) {
         (init().unwrap().execution_free)(execution)
     }
-    pub unsafe fn ANeuralNetworksExecution_setInput(execution: *mut ANeuralNetworksExecution, index: i32, type_: *const ANeuralNetworksOperandType, buffer: *const c_void, length: usize) -> i32 {
+    pub unsafe fn ANeuralNetworksExecution_setInput(
+        execution: *mut ANeuralNetworksExecution,
+        index: i32,
+        type_: *const ANeuralNetworksOperandType,
+        buffer: *const c_void,
+        length: usize,
+    ) -> i32 {
         (init().unwrap().execution_set_input)(execution, index, type_, buffer, length)
     }
-    pub unsafe fn ANeuralNetworksExecution_setOutput(execution: *mut ANeuralNetworksExecution, index: i32, type_: *const ANeuralNetworksOperandType, buffer: *mut c_void, length: usize) -> i32 {
+    pub unsafe fn ANeuralNetworksExecution_setOutput(
+        execution: *mut ANeuralNetworksExecution,
+        index: i32,
+        type_: *const ANeuralNetworksOperandType,
+        buffer: *mut c_void,
+        length: usize,
+    ) -> i32 {
         (init().unwrap().execution_set_output)(execution, index, type_, buffer, length)
     }
-    pub unsafe fn ANeuralNetworksExecution_compute(execution: *mut ANeuralNetworksExecution) -> i32 {
+    pub unsafe fn ANeuralNetworksExecution_compute(
+        execution: *mut ANeuralNetworksExecution,
+    ) -> i32 {
         (init().unwrap().execution_compute)(execution)
     }
-    pub unsafe fn ANeuralNetworksExecution_setInputFromMemory(execution: *mut ANeuralNetworksExecution, index: i32, type_: *const ANeuralNetworksOperandType, memory: *const ANeuralNetworksMemory, offset: usize, length: usize) -> i32 {
-        (init().unwrap().execution_set_input_from_memory)(execution, index, type_, memory, offset, length)
+    pub unsafe fn ANeuralNetworksExecution_setInputFromMemory(
+        execution: *mut ANeuralNetworksExecution,
+        index: i32,
+        type_: *const ANeuralNetworksOperandType,
+        memory: *const ANeuralNetworksMemory,
+        offset: usize,
+        length: usize,
+    ) -> i32 {
+        (init().unwrap().execution_set_input_from_memory)(
+            execution, index, type_, memory, offset, length,
+        )
     }
-    pub unsafe fn ANeuralNetworksExecution_setOutputFromMemory(execution: *mut ANeuralNetworksExecution, index: i32, type_: *const ANeuralNetworksOperandType, memory: *const ANeuralNetworksMemory, offset: usize, length: usize) -> i32 {
-        (init().unwrap().execution_set_output_from_memory)(execution, index, type_, memory, offset, length)
+    pub unsafe fn ANeuralNetworksExecution_setOutputFromMemory(
+        execution: *mut ANeuralNetworksExecution,
+        index: i32,
+        type_: *const ANeuralNetworksOperandType,
+        memory: *const ANeuralNetworksMemory,
+        offset: usize,
+        length: usize,
+    ) -> i32 {
+        (init().unwrap().execution_set_output_from_memory)(
+            execution, index, type_, memory, offset, length,
+        )
     }
-    pub unsafe fn ANeuralNetworksMemory_createFromFd(size: usize, protect: i32, fd: i32, offset: usize, memory: *mut *mut ANeuralNetworksMemory) -> i32 {
+    pub unsafe fn ANeuralNetworksMemory_createFromFd(
+        size: usize,
+        protect: i32,
+        fd: i32,
+        offset: usize,
+        memory: *mut *mut ANeuralNetworksMemory,
+    ) -> i32 {
         (init().unwrap().memory_create_from_fd)(size, protect, fd, offset, memory)
     }
     pub unsafe fn ANeuralNetworksMemory_free(memory: *mut ANeuralNetworksMemory) {
@@ -419,11 +603,15 @@ mod ahb_runtime {
 
     struct AhbHandle {
         _lib: *mut std::ffi::c_void,
-        allocate: unsafe extern "C" fn(*const AHardwareBuffer_Desc, *mut *mut AHardwareBuffer) -> i32,
+        allocate:
+            unsafe extern "C" fn(*const AHardwareBuffer_Desc, *mut *mut AHardwareBuffer) -> i32,
         release: unsafe extern "C" fn(*mut AHardwareBuffer),
         describe: unsafe extern "C" fn(*const AHardwareBuffer, *mut AHardwareBuffer_Desc),
-        memory_create_from_hardware_buffer:
-            unsafe extern "C" fn(*const ANeuralNetworksDevice, *const AHardwareBuffer, *mut *mut ANeuralNetworksMemory) -> i32,
+        memory_create_from_hardware_buffer: unsafe extern "C" fn(
+            *const ANeuralNetworksDevice,
+            *const AHardwareBuffer,
+            *mut *mut ANeuralNetworksMemory,
+        ) -> i32,
     }
 
     unsafe impl Send for AhbHandle {}
@@ -433,19 +621,27 @@ mod ahb_runtime {
 
     fn load_symbol<T>(lib: *mut std::ffi::c_void, name: &std::ffi::CStr) -> Option<T> {
         let sym = unsafe { libc::dlsym(lib, name.as_ptr()) };
-        if sym.is_null() { None }
-        else { Some(unsafe { std::mem::transmute_copy(&sym) }) }
+        if sym.is_null() {
+            None
+        } else {
+            Some(unsafe { std::mem::transmute_copy(&sym) })
+        }
     }
 
     fn init() -> Result<&'static AhbHandle, ()> {
         match AHB.get_or_init(|| {
             let lib_name = std::ffi::CStr::from_bytes_with_nul(b"libandroid.so\0").unwrap();
-            let lib = unsafe { libc::dlopen(lib_name.as_ptr(), libc::RTLD_LAZY | libc::RTLD_LOCAL) };
-            if lib.is_null() { return Err(()); }
+            let lib =
+                unsafe { libc::dlopen(lib_name.as_ptr(), libc::RTLD_LAZY | libc::RTLD_LOCAL) };
+            if lib.is_null() {
+                return Err(());
+            }
 
             macro_rules! load {
                 ($name:literal) => {{
-                    let sym_name = std::ffi::CStr::from_bytes_with_nul(concat!($name, "\0").as_bytes()).unwrap();
+                    let sym_name =
+                        std::ffi::CStr::from_bytes_with_nul(concat!($name, "\0").as_bytes())
+                            .unwrap();
                     load_symbol(lib, sym_name).ok_or(())?
                 }};
             }
@@ -455,7 +651,9 @@ mod ahb_runtime {
                 allocate: load!("AHardwareBuffer_allocate"),
                 release: load!("AHardwareBuffer_release"),
                 describe: load!("AHardwareBuffer_describe"),
-                memory_create_from_hardware_buffer: load!("ANeuralNetworksMemory_createFromHardwareBuffer"),
+                memory_create_from_hardware_buffer: load!(
+                    "ANeuralNetworksMemory_createFromHardwareBuffer"
+                ),
             })
         }) {
             Ok(ref handle) => Ok(handle),
@@ -463,13 +661,19 @@ mod ahb_runtime {
         }
     }
 
-    pub unsafe fn AHardwareBuffer_allocate(desc: *const AHardwareBuffer_Desc, out_buffer: *mut *mut AHardwareBuffer) -> i32 {
+    pub unsafe fn AHardwareBuffer_allocate(
+        desc: *const AHardwareBuffer_Desc,
+        out_buffer: *mut *mut AHardwareBuffer,
+    ) -> i32 {
         (init().unwrap().allocate)(desc, out_buffer)
     }
     pub unsafe fn AHardwareBuffer_release(buffer: *mut AHardwareBuffer) {
         (init().unwrap().release)(buffer)
     }
-    pub unsafe fn AHardwareBuffer_describe(buffer: *const AHardwareBuffer, desc: *mut AHardwareBuffer_Desc) {
+    pub unsafe fn AHardwareBuffer_describe(
+        buffer: *const AHardwareBuffer,
+        desc: *mut AHardwareBuffer_Desc,
+    ) {
         (init().unwrap().describe)(buffer, desc)
     }
     pub unsafe fn ANeuralNetworksMemory_createFromHardwareBuffer(
@@ -588,18 +792,29 @@ pub fn get_devices() -> Result<Vec<NnapiDeviceInfo>, NnapiError> {
             nnapi_result(ANeuralNetworksDevice_getName(device, &mut name_ptr))?;
             nnapi_result(ANeuralNetworksDevice_getType(device, &mut type_code))?;
             nnapi_result(ANeuralNetworksDevice_getVersion(device, &mut version_ptr))?;
-            nnapi_result(ANeuralNetworksDevice_getFeatureLevel(device, &mut feature_level))?;
+            nnapi_result(ANeuralNetworksDevice_getFeatureLevel(
+                device,
+                &mut feature_level,
+            ))?;
         }
 
         let name = if name_ptr.is_null() {
             "unknown".to_string()
         } else {
-            unsafe { std::ffi::CStr::from_ptr(name_ptr).to_string_lossy().into_owned() }
+            unsafe {
+                std::ffi::CStr::from_ptr(name_ptr)
+                    .to_string_lossy()
+                    .into_owned()
+            }
         };
         let version = if version_ptr.is_null() {
             "unknown".to_string()
         } else {
-            unsafe { std::ffi::CStr::from_ptr(version_ptr).to_string_lossy().into_owned() }
+            unsafe {
+                std::ffi::CStr::from_ptr(version_ptr)
+                    .to_string_lossy()
+                    .into_owned()
+            }
         };
 
         devices.push(NnapiDeviceInfo {
