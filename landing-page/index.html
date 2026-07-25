@@ -1114,6 +1114,9 @@
               <tr class="row-emph"><td>Prompt guardrails</td><td class="atheer"><span class="mark-yes">L1/L2/L3</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
               <tr class="row-emph"><td>Sandboxed GPU execution</td><td class="atheer"><span class="mark-yes">unique</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
               <tr><td>Privacy manifest</td><td class="atheer"><span class="mark-mid">planned</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
+              <tr><td>Structured telemetry</td><td class="atheer"><span class="mark-mid">planned</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
+              <tr><td>Actual benchmark numbers</td><td class="atheer"><span class="mark-mid">planned</span></td><td class="center"><span class="mark-mid">N/A</span></td><td class="center"><span class="mark-mid">N/A</span></td><td class="center"><span class="mark-mid">N/A</span></td><td class="center"><span class="mark-mid">N/A</span></td></tr>
+              <tr><td>Cache TTL + secure wipe</td><td class="atheer"><span class="mark-mid">planned</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
             </tbody>
           </table>
         </div>
@@ -1358,8 +1361,9 @@ engine.initialize()
       <p>
         A comprehensive codebase audit across 7 dimensions (security, privacy,
         reliability, performance, platform, compliance, observability) produced a
-        prioritized 3-phase roadmap. Estimated total: <strong>9&ndash;15 weeks</strong>
-        for a Rust engineer familiar with the codebase.
+        prioritized 3-phase roadmap. Phases 1 and 2 are complete. Phase 3
+        estimated: <strong>3&ndash;5 weeks</strong> for a Rust engineer
+        familiar with the codebase.
       </p>
     </div>
     <div class="roadmap reveal">
@@ -1367,22 +1371,24 @@ engine.initialize()
         <span class="tag">Done</span>
         <span class="label">Phase 1</span>
         <h3>Security &amp; reliability</h3>
-        <div class="meta">2&ndash;3 weeks &middot; 7 items</div>
+        <div class="meta">2&ndash;3 weeks &middot; 9 items</div>
         <ul>
           <li>Fix 14 test failures + 40+ warnings</li>
           <li>Fix PII redactor + UTF-8 bugs</li>
-          <li>Un-stub draft speculation</li>
-          <li>Continuous runtime calibration</li>
+          <li>Un-stub draft speculation (real GGUF models)</li>
+          <li>Continuous runtime calibration (<code>PerfCalibrator</code>)</li>
           <li>Model loading retry + CPU degrade fallback</li>
           <li>Sampling thread heartbeat watchdog</li>
-          <li>Model signature + hash verification</li>
+          <li>Model signature + hash verification (S2 + S3)</li>
+          <li>KV cache checkpoint persistence (P3/R4)</li>
+          <li>ANE compilation pre-heat (P5)</li>
         </ul>
       </div>
       <div class="phase" data-state="done">
         <span class="tag">Done</span>
         <span class="label">Phase 2</span>
         <h3>Security &amp; privacy hardening</h3>
-        <div class="meta">3&ndash;4 weeks &middot; 10 items</div>
+        <div class="meta">3&ndash;4 weeks &middot; 8 items</div>
         <ul>
           <li>Encrypt L2/L3 cache + checkpoints (AES-256-GCM)</li>
           <li>Model signature + hash verification (S2 + S3)</li>
@@ -1393,25 +1399,28 @@ engine.initialize()
           <li>ANE compilation pre-heat (background)</li>
           <li>Certificate pinning for model downloads (S7)</li>
           <li>Sandboxed GPU execution with crash escalation &amp; compliance attestation (S8)</li>
-          <li>Audit logging for sandbox lifecycle (tamper-evident)</li>
-          <li>KV cache checkpoint persistence</li>
-          <li>Model loading retry + CPU degrade fallback</li>
-          <li>Sampling thread heartbeat watchdog</li>
         </ul>
       </div>
       <div class="phase" data-state="pending">
         <span class="tag">Pending</span>
         <span class="label">Phase 3</span>
-        <h3>Polish &amp; performance</h3>
-        <div class="meta">4&ndash;6 weeks &middot; 9 items</div>
+        <h3>Production hardening &amp; observability</h3>
+        <div class="meta">3&ndash;5 weeks &middot; 14 items</div>
         <ul>
-          <li>Baseline + competitive benchmarks</li>
-          <li>Structured metrics / OpenTelemetry</li>
-          <li>PII redactor upgrade (regex)</li>
-          <li>Time-based cache expiry + secure wipe</li>
+          <li>Baseline + competitive benchmarks (real hardware)</li>
+          <li>Cache TTL + secure wipe (GDPR erasure)</li>
+          <li>iOS Privacy manifest (App Store required)</li>
+          <li>GDPR data flow docs + <code>delete_all_user_data()</code> API</li>
+          <li>Fix binding generation pipeline (E1 + R14)</li>
+          <li>Structured metrics / OpenTelemetry export</li>
+          <li>PII redactor upgrade (regex-based)</li>
+          <li>AGENTS.md (AI-assistant onboarding)</li>
+          <li>macOS CI runner (CoreML/Metal verification)</li>
+          <li>Audit logging (HMAC-chained append-only log)</li>
           <li>FFI API versioning</li>
-          <li>Fix binding generation pipeline</li>
-          <li>GDPR docs + <code>delete_all_user_data()</code> API</li>
+          <li>Fuzz harness expansion</li>
+          <li>Watchdog for runaway inference</li>
+          <li>Example SwiftUI / Compose demo apps</li>
         </ul>
       </div>
     </div>

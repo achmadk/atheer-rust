@@ -143,11 +143,7 @@ The [security.rs](atheer-core/src/security.rs) module now covers path allowlisti
 | S6 | **No memory-safe tensor bounds checking** | ✅ Completed | Two-tier validation: `safe_content::parse_header` (always-on, pre-allocation gate in `atheer-core/src/safe_content.rs`) plus renamed `GgufValidator::validate_full` (deep pass, `gguf-validator` feature). Wired into all three GGUF load paths including the encryption pipeline (`from_gguf_reader`), closing the S5 encryption bypass. Six typed `AtheerCoreError` variants replace the prior string-only failure mode. For `MmapModel`, the gate runs **before** `Mmap::map` so sparse-file attacks cannot induce mmap-OOM. 18 unit tests + 15 validator tests + 3 integration tests + 2 proptests + 1 fuzz target. See `openspec/changes/safe-gguf-load/`. |
 | S7 | **HTTP downloads over plain reqwest** | ✅ Completed | TLS certificate pinning via custom rustls `ServerCertVerifier` (`PinningVerifier`). Dual-pin: Amazon RSA 2048 M04 intermediate CA + huggingface.co leaf. 8 unit tests. Wired into `ModelRegistry` via `with_pinning()` and `new()` `Option<&CertificatePinner>`. See `atheer-core/src/cert_pinner.rs`. |
 | S8 | **No sandboxing of model execution** | ✅ Completed | Android IsolatedService sandbox (`GpuExecutionShardService.kt`) with GPU execution in `android:isolatedProcess`. In-process hardening: tensor bounds validation (`tensor_validation.rs`, 19 tests), GPU fence timeout (`gpu_fence_timeout_ms` config), crash detection with auto-restart and sliding-window escalation. `SandboxedGpuBridge` (14 tests) manages lifecycle: pre-warm → batch (KV page batching) → shutdown. Engine integration routes `generate_sync()` through bridge when ready, falls back to CPU on crash threshold exceeded. Audit logging for all lifecycle events. Cross-session crash counter persistence via flat file. **Residual**: Worker process memory isolation relies on Android `isolatedProcess` (separate UID, no SELinux policy, no network). Real AIDL `init()`/`batch()`/`shutdown()` calls require Android device testing. |
-| S9 | **Secure key storage** | 🟡 Medium | Currently keys in process memory (`String`). Use Android Keystore / iOS Keychain for model decryption keys. |
-| S10 | **Prompt truncation not unicode-safe** | ✅ Completed | `sanitze_prompt()` at `security.rs:56-61` fixed in prior session — now uses `prompt.chars().take(max_len)` to avoid multi-byte UTF-8 panics. |
-| S11 | **Memory sanitization** | 🟢 Low | Tokens, keys, and output buffers remain in process memory after inference. Use `zeroize` crate for sensitive buffers. |
-
-### Recommended New Modules (already implemented)
+| S9 | **Secure key storage** | ⚠️ Partial | Keys in `EncryptedStore` and `Aes256GcmEncryption` are zeroized on drop via `zeroize` crate. Platform Keychain/Keystore wrappers exist for iOS/Android. **Residual**: model decryption key still passed as `[u8; 32]` in process memory during init; FFI boundary could leak. |
 
 ```
 atheer-core/src/
@@ -178,10 +174,10 @@ The project positions itself as "privacy-first" by virtue of on-device inference
 | V1 | **Configurable privacy mode** | ✅ Completed | `PrivacyMode` enum on `AtheerConfig` — Normal (crash reports, disk caching, logging), Ephemeral (no disk writes, no logging), Audited (full compliance logging). Integrated with `CrashReporter`, `AtheerEngine` logging suppression, and L3 cache disablement. |
 | V2 | **KV cache stored in plaintext** | ✅ Completed | `EncryptedStore` wrapper encrypts L3 KV cache snapshots at rest using AES-256-GCM with device-bound key. Key resolved at engine init, zeroized on MemoryBank drop. |
 | V3 | **Checkpoints stored in plaintext** | ✅ Completed | KV cache checkpoint L3 path uses `EncryptedStore` (LZ4 compress → AES-256-GCM encrypt). Engine checkpoint save/restore continues using plain `L3CompressedStorage` for model checkpoint data (not KV cache). | |
-| V4 | **No cache expiry / auto-wipe** | 🟠 High | L2/L3 cache has LRU eviction by size but no time-based expiry. Sensitive conversations persist indefinitely. Add configurable TTL (e.g., 24h default) and secure wipe (overwrite before delete). |
-| V5 | **PII redaction is rudimentary** | 🟠 High | PiiRedactor uses basic string matching for emails and counts digits for credit cards. Phone detection has a `continue` bug (missing `i += 1`) causing an infinite loop on digit input. Replace with regex or established PII library. |
-| V6 | **No audit logging** | 🟡 Medium | No tamper-evident log of what prompts were processed, what models were used, or what content was moderated. Add append-only local audit log for compliance. |
-| V7 | **No differential privacy for cached context** | 🟡 Medium | L2 warm cache stores exact context. Consider adding noise injection before L2 storage to prevent exact reconstruction of cached prompts. |
+| V4 | **No cache expiry / auto-wipe** | 🔴 High | L2/L3 cache has LRU eviction by size but no time-based expiry. Sensitive conversations persist indefinitely. `EncryptedStore` and `L3CompressedStorage` have no TTL fields, no secure overwrite before delete. **Required**: configurable TTL (e.g., 24h default) + `secure_zero()` before file removal. See `atheer-memory-bank/src/l2_warm.rs`, `l3_compressed.rs`. |
+| V5 | **PII redaction is rudimentary** | 🟠 High | `PiiRedactor::redact()` at `safety.rs:216-244` uses `find('@')` for emails and digit counting for credit cards. No regex, no phone/SSN/IBAN detection. The documented phone-loop bug was in separate `safety.rs` code (not the current `PiiRedactor`). **Required**: Replace with regex-based detection using `regex` crate for emails, phones, SSNs, credit cards, IPs. |
+| V6 | **No audit logging** | 🟠 High | "Audited" `PrivacyMode` uses `tracing::info!` for decisions — not an append-only tamper-evident log. No `audit_log.rs` module exists. **Required**: `AuditLog` struct with append-only writes, HMAC integrity chain, and structured JSON entries (timestamp, action, model, prompt_hash, verdict). See `atheer-core/src/audit_log.rs` (missing). |
+| V7 | **No differential privacy for cached context** | 🟡 Medium | L2 warm cache stores exact context verbatim. Could enable noise injection before L2 storage to prevent exact reconstruction. Lower priority — would reduce cache fidelity. |
 | V8 | **Model download reveals user intent** | 🟡 Medium | Downloading specific models from HuggingFace reveals what AI capabilities the user is seeking. Consider pre-bundled models or routing (e.g., onion) for downloads. |
 
 ### V1: Privacy Mode — ✅ Completed July 2026
@@ -204,8 +200,8 @@ Guards wrap `crash_reporter` (Ephemeral skips file writes), `memory_bank` persis
 ```
 atheer-core/src/
 ├── crypto.rs            # AES-256-GCM encryption for cache/checkpoints
-├── secure_memory.rs     # Zeroize wrappers for sensitive buffers
-└── audit_log.rs         # Append-only local audit trail
+├── secure_memory.rs       # ⚠️ NOT YET — Zeroize wrappers for intermediate buffers
+└── audit_log.rs           # ⚠️ NOT YET — Append-only HMAC-chained audit trail
 
 atheer-memory-bank/src/
 ├── encrypted_store.rs   # Encrypted L2/L3 persistence
@@ -233,11 +229,11 @@ The project has a strong architecture for graceful degradation (ANE → Metal �
 | R7 | **No hardware health pre-flight check** | `initialize()` assumes device is ready | Before each generate, verify health snapshot is recent (<2s); warn if stale | 🟢 Low |
 | R8 | **14 test failures + 40+ warnings** | ✅ Completed July 2026 — all 3 real bugs fixed (PII loop, NPU/RAM, CI vars), 0 warnings across workspace, `cargo clippy --workspace -- -D warnings` passes | Clippy gate enabled, CI regression detection restored | 🔴 Critical |
 | R9 | **CI accuracy test env var bug** | ✅ Completed July 2026 — `env:` block moved above steps that reference `$ATHEER_TEST_MODEL` | CI accuracy regression runs now work reliably | 🟠 High |
-| R10 | **No macOS/Android CI runner** | CoreML, Metal, iOS telemetry never verified in CI | Add `macos-latest` runner + `cargo ndk` build step | 🟠 High |
-| R11 | **Fuzz harness is skeletal** | 3 trivial targets, no corpus, no CI integration | Add structured fuzzing for GGUF parsing, tokenizer, grammar validation | 🟡 Medium |
-| R12 | **No watchdog for runaway inference** | Timeout in `generate()` relies on cooperative checking | Secondary watchdog thread force-terminates after 2× the timeout | 🟡 Medium |
-| R13 | **`atheer-bindgen` dead code** | Expects UDL file that doesn't exist | Remove or rewrite | 🟢 Low |
-| R14 | **`generate-bindings.sh` no-op** | All binding generation code commented out | Fix or remove | 🟢 Low |
+| R10 | **No macOS CI runner** | 🟠 High | CoreML, Metal, iOS telemetry never verified in CI. Linux CI cannot catch macOS-specific regressions. **Action**: Add `macos-latest` runner for `cargo test -p atheer-accel --features coreml` compilation + `objc2` linkage check. | |
+| R11 | **Fuzz harness is skeletal** | 🟡 Medium | 3 trivial targets (`fuzz/src/lib.rs`), no corpus, no CI integration, not exercising real inference paths. **Action**: Add structured fuzz targets for GGUF header parsing (`fuzz_gguf_header` exists in `fuzz/`), tokenizer, grammar validation. Integrate `cargo fuzz` into CI. |
+| R12 | **No watchdog for runaway inference** | 🟡 Medium | Timeout in `generate()` relies on cooperative checking inside the loop. A stuck Vulkan shader or ANE hang will block indefinitely. **Design**: Secondary `spawn` thread that sets an `AtomicBool` after `timeout * 2`; if generation hasn't completed, panic/terminate. |
+| R13 | **`atheer-bindgen` dead code** | 🟡 Medium | Crate at `atheer-bindgen/` expects `.udl` file that no longer exists (project uses uniffi proc-macro `#[uniffi::export]`). Cannot generate bindings. **Action**: Remove crate or rewrite to use uniffi's library mode. |
+| R14 | **`generate-bindings.sh` no-op** | 🔴 High | All binding generation code commented out. `ios/atheer_ffi.swift` may be stale. **Action**: Fix `generate-bindings.sh` to invoke `cargo uniffi` with correct crate paths, uncomment generation code, add to CI. |
 
 ### R1 Deep Dive: Draft Speculation — ✅ Completed July 2026
 
@@ -320,11 +316,11 @@ Architecture is strong (speculative decoding framework, NGram cache, per-op devi
 | P3 | **KV cache checkpoint persistence** | ✅ Completed July 2026 — full lifecycle integration: on_background/on_foreground/on_low_memory + LZ4 L3 snapshot + sidecar tracking + generational cleanup | Background checkpoint to L3 (LZ4-compressed disk), restore on resume | 🟡 Medium |
 | P4 | **Quantization profiler** | No per-layer performance measurement | Profile at load time → suggest optimal quantization per layer type | 🟡 Medium |
 | P5 | **ANE model compilation at startup** | ✅ Completed — background thread loads .mlpackage and runs warm-up forward pass, atomically swapped via `Arc<OnceLock>`, triggered in `AtheerEngine::initialize()` | Background compilation thread pre-heats ANE, avoid cold-start latency | ✅ Completed |
-| P6 | **No baseline performance numbers** | All BENCHMARKS.md entries "TBD" | Run `perf-bench` on real hardware and populate | 🟠 High |
-| P7 | **No competitive benchmarks** | Whitepaper claims superiority over llama.cpp/MLC with zero comparison data | Run identical models on identical hardware | 🟠 High |
-| P8 | ~~Vulkan shaders unoptimized~~ | ✅ Completed — F16 GEMM, q4_k_m dequant, elementwise (affine/silu/exp/add/mul/div), reduce (sum/max) shaders implemented in `candle-core/shaders/` via naga GLSL→SPIR-V; dequant-to-F16 wedge defers fused Q-kernels | Warp-level reductions, shared memory tiling, async compute overlap | ✅ Completed |
-| P9 | **Context window eviction naive** | `maybe_evict()` drops oldest turns and clears entire KV cache | Incremental eviction — only remove evicted turn's KV entries | 🟡 Medium |
-| P10 | **No WASM/WebGPU backend** | No browser deployment path | `AccelBackend` trait makes extensible | 🟡 Medium |
+| P6 | **No baseline performance numbers** | 🔴 High | `BENCHMARKS.md` entirely "TBD" — zero actual tok/s, latency, memory, or thermal measurements. `perf-bench` crate exists (9 bench suites) but has never been run on real hardware. **Required**: Run on iPhone 15 Pro, Pixel 8, Snapdragon 8 Gen 3. |
+| P7 | **No competitive benchmarks** | 🔴 High | Whitepaper claims superiority over llama.cpp/MLC with zero comparison data. Cannot prove differentiation without side-by-side numbers on identical hardware. **Required**: Run identical model (e.g., Llama 3.2 1B Q4) on identical device, compare tok/s, time-to-first-token, memory, thermal. |
+| P8 | ~~Vulkan shaders unoptimized~~ | ✅ Completed | F16 GEMM, q4_k_m dequant, elementwise (affine/silu/exp/add/mul/div), reduce (sum/max) shaders implemented in `candle-core/shaders/` via naga GLSL→SPIR-V; dequant-to-F16 wedge defers fused Q-kernels. | ✅ Completed |
+| P9 | **Context window eviction naive** | 🟡 Medium | `maybe_evict()` in `memory_bank.rs` drops oldest turns and clears entire KV entries for that turn. Should only remove evicted turn's KV entries incrementally to preserve other turns' cache state. |
+| P10 | **No WASM/WebGPU backend** | 🟡 Medium | No browser deployment path. `AccelBackend` trait already extensible — WebGPU backend would enable browser clients. |
 
 ### P1 + P2: The Calibration-Speculation Flywheel — ✅ Completed July 2026
 
@@ -350,14 +346,14 @@ UniFFI bindings exist, the binding generation pipeline is broken, and pre-genera
 
 | # | Gap | Severity | Recommendation |
 |---|-----|----------|---------------|
-| E1 | **Binding generation is broken** | 🟠 High | `generate-bindings.sh` is a no-op; `atheer-bindgen` expects non-existent UDL file. Fix the binding generation pipeline, automate in CI. |
-| E2 | **No Linux/desktop backend** | 🟡 Medium | Desktop GPU path (CUDA, ROCm) would accelerate development iteration. ATM development/testing constrained to macOS. |
-| E3 | **No model format abstraction** | 🟡 Medium | Currently hardcoded to GGUF. Supporting GGML/SAFETENSORS/ONNX broadens compatibility. |
-| E4 | **No plugin/extension system** | 🟡 Medium | Custom backends/samplers/grammar constraints require forking. Trait-based plugin registry. |
-| E5 | **No OTA model update mechanism** | 🟡 Medium | Models downloaded once — no incremental updates or silent background updates. |
-| E6 | **No WASM/WebGPU backend** | 🟡 Medium | Browser-based edge AI opens a new market segment. |
-| E7 | **iOS SDK is stale** | 🟢 Low | Pre-generated `ios/atheer_ffi.swift` may not match current API. |
-| E8 | **No example apps** | 🟢 Low | `android/` has `MainActivity.kt` only — no complete runnable demo for either platform. |
+| E1 | **Binding generation is broken** | 🔴 High | `generate-bindings.sh` is a no-op (all code commented out); `atheer-bindgen` expects non-existent UDL file. Pre-generated `ios/atheer_ffi.swift` may be stale. **Fix**: Rewrite `generate-bindings.sh` to use `cargo uniffi` with proc-macro mode, automate in CI. |
+| E2 | **No Linux/desktop backend** | 🟡 Medium | CUDA/ROCm backend for desktop development iteration. Currently dev/test constrained to macOS/iOS/Android. Consider ` candle-core` CUDA backend integration. |
+| E3 | **No model format abstraction** | 🟡 Medium | Hardcoded to GGUF. Supporting GGML/SAFETENSORS/ONNX broadens model compatibility. `Model` trait could abstract over loaders. |
+| E4 | **No plugin/extension system** | 🟡 Medium | Custom backends/samplers/grammar constraints require forking. `AccelBackend` trait already extensible — plugin registry with `dyn Plugin` would enable runtime loading. |
+| E5 | **No OTA model update mechanism** | 🟡 Medium | Models downloaded once via `ModelRegistry`. No delta updates, no background refresh. Consider delta compression or content-addressed storage. |
+| E6 | **No WASM/WebGPU backend** | 🟡 Medium | Browser deployment opens new market. `AccelBackend` trait could abstract over WebGPU. |
+| E7 | **No example/demo apps** | 🟢 Low | `ios/` has only `atheer_ffi.swift` + C header; `android/` has `MainActivity.kt`. No complete runnable demos. **Action**: Add SwiftUI Chat example (iOS), Jetpack Compose Chat example (Android). |
+| E8 | **No AGENTS.md / CLAUDE.md** | 🟢 Low | No AI-assistant onboarding docs. New AI tools cannot understand project structure autonomously. **Action**: Add `AGENTS.md` at repo root with architecture overview, build commands, and key conventions. |
 
 ---
 
@@ -365,9 +361,10 @@ UniFFI bindings exist, the binding generation pipeline is broken, and pre-genera
 
 | # | Gap | Severity | Recommendation |
 |---|-----|----------|---------------|
-| C1 | **No SOC 2/ISO 27001 readiness** | 🟠 High | Enterprise customers need compliance docs: access control for model files, audit logging, key management documentation. |
-| C2 | **No GDPR data flow documentation** | 🟠 High | Even for on-device inference, GDPR requires documenting what personal data is processed, how it's stored, how to delete it. L2/L3 cache stores conversation context that may contain PII. Document the data flow and provide `delete_all_user_data()` API. |
-| C3 | **No export control consideration** | 🟡 Medium | Cryptographic components (if added per S1) may be subject to EAR/ITAR, especially in certain jurisdictions. |
+| C1 | **No SOC 2/ISO 27001 readiness** | 🟠 High | Enterprise customers need compliance documentation: access control for model files, audit logging, key management procedures, incident response. **Action**: Create `docs/compliance/` with SOC2/ISO27001 control mapping, CAIQ questionnaire responses. |
+| C2 | **No GDPR data flow documentation** | 🟠 High | Even for on-device inference, GDPR requires documenting: (1) what personal data is processed, (2) how it's stored (L2/L3 KV cache may contain PII), (3) how to delete it. **Missing**: `delete_all_user_data()` API that wipes L1/L2/L3 cache, checkpoints, crash logs. **Action**: Add `AtheerEngine.delete_all_user_data()` FFI method + `docs/gdpr-data-flow.md`. |
+| C3 | **No privacy manifest (iOS)** | 🟠 High | App Store requires `PrivacyInfo.xcprivacy` listing data collected. No such file exists. **Action**: Create `ios/PrivacyInfo.xcprivacy` declaring no data collection (on-device inference only), required for App Store submission. |
+| C4 | **No export control consideration** | 🟡 Medium | Cryptographic components (AES-256-GCM, Ed25519) may be subject to EAR/ITAR in certain jurisdictions. If distributing internationally, classification analysis required. |
 
 ---
 
@@ -375,9 +372,10 @@ UniFFI bindings exist, the binding generation pipeline is broken, and pre-genera
 
 | # | Gap | Severity | Recommendation |
 |---|-----|----------|---------------|
-| D1 | **No structured telemetry/metrics** | 🟠 High | Uses `tracing::info!` only — no Prometheus/OpenTelemetry export. Add `MetricsCollector` trait for tok/s, latency percentiles, cache hit rate, mode transitions. |
-| D2 | **No CLAUDE.md/AGENTS.md** | 🟡 Medium | No AI-assistant onboarding docs. |
-| D3 | **No API versioning** | 🟡 Medium | FFI API has no version — breaking changes to `GenerationRequest`/`AtheerConfig` silently break consumers. Add API version negotiation. |
+| D1 | **No structured telemetry/metrics** | 🟠 High | Only `tracing::info!` throughout — no Prometheus, OpenTelemetry, or structured metrics export. Cannot observe cache hit rate, tok/s percentiles, mode transitions, guardrail verdicts in production. **Action**: Add `MetricsCollector` trait (or use `metrics` crate) with counters for tok/s, latency histograms, cache tier hits/misses, guardrail block/flag counts, mode switches. Export via `tracing` + optional OTLP endpoint. |
+| D2 | **No CLAUDE.md/AGENTS.md** | 🟠 High | No AI-assistant onboarding docs. New AI tools (Claude Code, Copilot) cannot autonomously understand project structure, build commands, or conventions. **Action**: Add `AGENTS.md` at repo root covering: architecture diagram, `cargo` build/test commands, uniffi binding regeneration, key file locations, and test model setup. |
+| D3 | **No FFI API versioning** | 🟡 Medium | `AtheerConfig` and `GenerationRequest` have no version field. Breaking changes to the Swift/Kotlin API silently break consumers on upgrade. **Action**: Add `api_version: u32` field to `AtheerConfig`, `AtheerEngine::api_version()` method, negotiate compatibility in FFI layer. |
+| D4 | **No BENCHMARK numbers** | 🟠 High | `BENCHMARKS.md` is entirely "TBD" — no actual tok/s, latency, memory, or thermal numbers. Cannot detect regressions or prove competitive superiority. **Action**: Run `perf-bench` on real hardware (iPhone 15 Pro, Pixel 8, Snapdragon 8 Gen 3), populate `BENCHMARKS.md` with actual numbers. |
 
 ---
 
@@ -386,7 +384,7 @@ UniFFI bindings exist, the binding generation pipeline is broken, and pre-genera
 ### Feature Comparison
 
 | Feature | Atheer | llama.cpp | MLC | Apple MLX | Google AI Edge |
-|---------|---------|-----------|-----|-----------|--------------|
+|---------|--------|-----------|-----|-----------|--------------|
 | **Mobile NPU** | CoreML/ANE + NNAPI | ❌ GPU/CPU only | ✅ GPU/NPU | ✅ ANE only | ✅ NNAPI/GPU |
 | **All 4 backends** | ✅ | ❌ | ❌ | ❌ | ❌ |
 | **Cross-platform** | ✅ iOS + Android | ✅ All | ✅ All | ❌ Apple only | ✅ Android |
@@ -399,93 +397,115 @@ UniFFI bindings exist, the binding generation pipeline is broken, and pre-genera
 | **Model encryption + signing + cert pinning** | ✅ **Unique** | ❌ | ❌ | ❌ | ❌ |
 | **Privacy mode (Normal/Ephemeral/Audited)** | ✅ **Unique** | ❌ | ❌ | ❌ | ❌ |
 | **Prompt guardrails** | ✅ **Unique** | ❌ | ❌ | ❌ | ❌ |
-| **Privacy manifest** | ❌ Gap | ❌ | ❌ | ❌ | ❌ |
-| **Session isolation** | ❌ Gap | ❌ | ❌ | ❌ | ❌ |
+| **Privacy manifest** | ❌ Missing | ❌ | ❌ | ❌ | ❌ |
+| **Structured telemetry/metrics** | ❌ Missing | ❌ | ❌ | ❌ | ❌ |
+| **Actual benchmarks** | ❌ All TBD | N/A | N/A | N/A | N/A |
+| **Cache TTL + secure wipe** | ❌ Missing | ❌ | ❌ | ❌ | ❌ |
 
 ### Key Insight
 
-**Nobody in the competitive set does model encryption, model signing, privacy modes, prompt guardrails, or privacy manifests.** These are not "catching up" items — they are genuine greenfield differentiation. Atheer has **shipped S1 (encrypted model distribution), S2+S3 (Ed25519 signature + load-time SHA-256 verification), V1 (configurable privacy mode with Normal/Ephemeral/Audited), and S4 (prompt injection guardrails with L1/L2/L3 defense-in-depth)** — it is now the only open engine with AES-256-GCM encryption at rest, cryptographic model integrity verification, runtime privacy controls, **and** built-in prompt injection defense. Atheer is the engine you choose when "we need to run a model on customer devices and prove nothing leaves."
+**Nobody in the competitive set does model encryption, model signing, privacy modes, prompt guardrails, or privacy manifests.** These are not "catching up" items — they are genuine greenfield differentiation. Atheer has **shipped S1 (encrypted model distribution), S2+S3 (Ed25519 signature + load-time SHA-256 verification), V1 (configurable privacy mode with Normal/Ephemeral/Audited), and S4 (prompt injection guardrails with L1/L2/L3 defense-in-depth)** — it is now the only open engine with AES-256-GCM encryption at rest, cryptographic model integrity verification, runtime privacy controls, **and** built-in prompt injection defense.
 
-R1 (speculative decoding) and P2 (continuous calibration) close the performance gap with MLC/MLX on throughput benchmarks. S2+S3 closes the security gap — Atheer is now the only engine where model provenance can be cryptographically proven at load time.
+**However**, the following remain undifferentiated because they are unimplemented:
+- **Cache TTL + secure wipe (V4)** — data persists forever
+- **Structured telemetry (D1)** — no observability in production
+- **Actual benchmarks (P6/P7)** — claims unsubstantiated
+- **Privacy manifest (C3)** — required for App Store, missing
+- **`delete_all_user_data()` (C2)** — GDPR deletion right, unimplemented
+- **Binding pipeline (E1/R14)** — stale bindings = integration failures
+
+Atheer is the engine you choose when "we need to run a model on customer devices and prove nothing leaves." R1 (speculative decoding) and P2 (continuous calibration) close the performance gap with MLC/MLX on throughput benchmarks. S2+S3 closes the security gap — Atheer is now the only engine where model provenance can be cryptographically proven at load time.
 
 ---
 
 ## 8. Priority Roadmap
 
-### Phase 1: Security & Reliability Foundation (2–3 weeks)
+### Phase 1: Security & Reliability Foundation (2–3 weeks) — ✅ COMPLETED
 
 | # | Item | Est. Days | Integration target |
 |---|-----|-----------|-------------------|
 | 1 | Fix all 14 test failures + 40+ warnings | ✅ Completed | CI gate |
-| 2 | Fix PII redactor infinite loop bug | ✅ Completed | `safety.rs:249-253` |
-| 3 | Fix prompt truncation UTF-8 panic | ✅ Completed | `security.rs:57-59` |
-| 4 | Fix CI env var bug + add macOS runner | ✅ Completed (env var) · 1 (macOS runner) | `ci.yml` |
+| 2 | Fix PII redactor infinite loop bug | ✅ Completed | `safety.rs` |
+| 3 | Fix prompt truncation UTF-8 panic | ✅ Completed | `security.rs` |
+| 4 | Fix CI env var bug + add macOS runner | ✅ Completed (env var) · 🟠 1 (macOS runner) | `ci.yml` |
 | 5 | R1: Un-stub draft speculation | ✅ Completed | `engine.rs`, `inference.rs`, `orchestrator.rs` |
-| 6 | P2: Continuous runtime calibration | ✅ Completed | `orchestrator.rs`, `PerfModel` |
+| 6 | P2: Continuous runtime calibration | ✅ Completed | `orchestrator.rs`, `calibrator.rs` |
 | 7 | R2: Model loading retry with degradation | ✅ Completed | `atheer-ffi/src/engine.rs` |
-| 8 | R3: Sampling thread heartbeat watchdog | ✅ Completed | `atheer-ffi/src/engine.rs`, `atheer-hardware/src/health.rs`, `monitor.rs`, `ios.rs` |
-| 9 | Implement model signature verification | ✅ Completed | New: `model_verifier.rs` (S2) + load-time hash (S3) |
+| 8 | R3: Sampling thread heartbeat watchdog | ✅ Completed | `atheer-ffi/src/engine.rs`, `atheer-hardware/src/health.rs` |
+| 9 | S2 + S3: Model signature + hash verification | ✅ Completed | `model_verifier.rs`, `model.rs` |
 
-**Total remaining: Phase 1 fully completed ✅** (all 9 items done)
+**Phase 1: ✅ Fully completed** (9/9 items done; macOS CI runner is Phase 3 follow-on)
 
-### Phase 2: Security & Privacy Hardening (3-4 weeks)
+### Phase 2: Security & Privacy Hardening (3-4 weeks) — ✅ COMPLETED
 
 | # | Item | Est. Days | Integration |
 |---|-----|-----------|-------------|
-| 10 | V2/V3: Encrypt L2/L3 cache + checkpoints (AES-256-GCM) | ✅ Completed | `memory-bank/src/encrypted_store.rs` + `memory_bank.rs`, `engine.rs`, `config.rs` |
-| 11 | S2 + S3: Model signature + hash verification | ✅ Completed | `model_verifier.rs`, `model.rs`, `engine.rs` |
+| 10 | V2/V3: Encrypt L2/L3 cache + checkpoints (AES-256-GCM) | ✅ Completed | `memory-bank/src/encrypted_store.rs` |
+| 11 | S2 + S3: Model signature + hash verification | ✅ Completed | `model_verifier.rs`, `model.rs` |
 | 12 | V1: Configurable privacy mode (`PrivacyMode`) | ✅ Completed | `privacy.rs`, `crash.rs`, `config.rs`, `engine.rs` |
-| 13 | S4: Prompt injection guardrails | ✅ Completed | `atheer-core/src/guardrails/` (8 files) + `atheer-ffi/src/guardrails.rs` |
-| 14 | P5: ANE compilation pre-heat | ✅ Completed | `coreml.rs` (for_preheat, preheat_ane), `traits.rs` (default no-op), `manager.rs`, `engine.rs` (preheat trigger) |
-| 15 | R5: Model hash verify at load time | ✅ Completed | `model.rs` (streaming SHA-256 in `from_gguf`) |
+| 13 | S4: Prompt injection guardrails | ✅ Completed | `atheer-core/src/guardrails/` (8 files) |
+| 14 | P5: ANE compilation pre-heat | ✅ Completed | `coreml.rs`, `traits.rs`, `manager.rs` |
+| 15 | R5: Model hash verify at load time | ✅ Completed | `model.rs` (streaming SHA-256) |
 | 16 | R4: KV cache checkpoint persistence | ✅ Completed | `lifecycle.rs`, `AtheerEngine` |
 | 17 | S7: TLS certificate pinning | ✅ Completed | `cert_pinner.rs`, `ModelRegistry` |
 
-**Phase 2: ~5-11 days** (V1, S2+S3, S4, P5, R5, R4, S7 ✅ completed)
+**Phase 2: ✅ Fully completed** (all 8 items done)
 
-### Phase 3: Polish & Performance (4-6 weeks)
+### Phase 3: Production Hardening & Observability (4-6 weeks)
 
-| # | Item | Est. Days | Integration |
-|---|-----|-----------|-------------|
-| 18 | P6+P7: Baseline + competitive benchmarks | 2-3 | `perf-bench`, `BENCHMARKS.md` |
-| 19 | D1: Structured metrics/telemetry | 3-5 | `MetricsCollector` trait |
-| 20 | V5: PII redactor upgrade (regex) | 1 | `safety.rs` |
-| 21 | V4: Time-based cache expiry + secure wipe | 2-3 | `memory-bank` |
-| 22 | D3: FFI API versioning | 1 | `uniffi` layer |
-| 23 | E1: Fix binding generation pipeline | 2-3 | CI |
-| 24 | C2: GDPR data flow docs + `delete_all_user_data()` | 2-3 | docs + API |
-| 25 | V6: Audit logging | 2-3 | New `audit_log.rs` |
+| # | Item | Est. Days | Priority | Integration |
+|---|-----|-----------|----------|-------------|
+| 26 | **P6+P7: Baseline + competitive benchmarks** | 3-5 | 🔴 High | `perf-bench`, `BENCHMARKS.md` — run on iPhone 15 Pro, Pixel 8, Snapdragon 8 Gen 3 |
+| 27 | **V4: Cache TTL + secure wipe** | 2-3 | 🔴 High | `memory-bank/` — TTL field on L2/L3 entries, `secure_zero()` before delete |
+| 28 | **C3: iOS Privacy manifest** | 0.5 | 🔴 High | `ios/PrivacyInfo.xcprivacy` — required for App Store |
+| 29 | **C2: GDPR data flow + `delete_all_user_data()`** | 2-3 | 🔴 High | `AtheerEngine` FFI, `docs/gdpr-data-flow.md` |
+| 30 | **R14 + E1: Fix binding generation pipeline** | 2-3 | 🔴 High | `generate-bindings.sh`, `atheer-bindgen/` — rewrite to use uniffi proc-macro mode |
+| 31 | **D1: Structured metrics/telemetry** | 3-5 | 🟠 High | `MetricsCollector` trait, `metrics` crate, OTLP export |
+| 32 | **V5: PII redaction upgrade (regex)** | 1-2 | 🟠 High | `safety.rs` — replace string ops with `regex` crate for phones, SSNs, IBANs |
+| 33 | **D2: AGENTS.md** | 0.5 | 🟠 High | `AGENTS.md` at repo root — architecture, build commands, key files |
+| 34 | **V6: Audit logging** | 2-3 | 🟠 Medium | `atheer-core/src/audit_log.rs` — append-only HMAC-chained log |
+| 35 | **D3: FFI API versioning** | 1 | 🟡 Medium | `AtheerConfig.api_version`, `AtheerEngine::api_version()` |
+| 36 | **R10: Add macOS CI runner** | 1 | 🟡 Medium | `.github/workflows/ci.yml` — `macos-latest` for CoreML/Metal tests |
+| 37 | **R11: Fuzz harness expansion** | 2-3 | 🟡 Medium | `fuzz/` — GGUF parsing corpus, tokenizer fuzzing, CI integration |
+| 38 | **R12: Watchdog thread for runaway inference** | 1 | 🟡 Medium | `generate()` — secondary thread, `AtomicBool` completion flag |
+| 39 | **E7: Example apps** | 2-3 | 🟢 Low | SwiftUI Chat (iOS), Jetpack Compose Chat (Android) |
 
-**Phase 3: ~13-21 days**
+**Phase 3 estimate: ~14-24 days**
 
 ### Visual Timeline
 
 ```
-Phase 1          Phase 2              Phase 3
-(2-3 weeks)      (3-4 weeks)          (4-6 weeks)
-─────────────────────────────────────────────────
-R1 ───────────── V1 ✓ ─────────────── P6+P7
-R2 ✓ ─────────── V2+V3 ✓ ──────────── D1
-R3 ✓ ─────────── S2+S3 ✓ ──────────── C2
-R5 ✓ ─────────── S4 ✓ ─────────────── E1
-R8              R4 ✓ ──────────────── D3
-R9              P5 ✓ ────────
-R10             S7 ✓ ────────
-R11             V4 ──────────────────
-P2 ──────────────────────────────────────────────
-S2+S3 ✓
-V1 ✓
-S4 ✓
+Phase 1 ✅      Phase 2 ✅          Phase 3 (remaining)
+(2-3 weeks)     (3-4 weeks)          (4-6 weeks)
+─────────────────────────────────────────────────────────
+R1 ✅ ───────── V1 ✅ ────────────── P6+P7 🔴
+R2 ✅ ───────── V2+V3 ✅ ─────────── D1 🟠
+R3 ✅ ───────── S2+S3 ✅ ─────────── C2 🔴
+R5 ✅ ───────── S4 ✅ ────────────── E1 🔴
+R8 ✅ ───────── R4 ✅ ────────────── D3 🟡
+R9 ✅ ───────── P5 ✅ ────────────── V4 🔴
+─────────────── S7 ✅ ────────────── C3 🔴
+─────────────── R5 ✅ ────────────── V5 🟠
+─────────────── R2 ✅ ────────────── V6 🟠
+─────────────── R3 ✅ ────────────── R10 🟡
+────────────────────────────────── R11 🟡
+────────────────────────────────── R12 🟡
+────────────────────────────────── E7 🟢
+```
+
+**Legend**: ✅ = completed · 🔴 = high priority · 🟠 = medium · 🟡 = lower · 🟢 = low
 ```
 
 ### Effort Summary
 
 | Effort | Range | Items |
-|--------|-------|------|
-| Low (≤1 day) | 0.5-1 day | R2 ✅, R3 ✅, R5 ✅, R7, R9 ✅, R10, R13, R14, R6, P5 ✅, S3 ✅, S4 ✅, S9 ✅ |
-| Medium (2-5 days) | 2-5 days | R1 ✅, R4, R8, R11, P1 ✅, P2 ✅, P9, P10, S7 ✅ |
-| Med-High (5-10 days) | 5-10 days | S2 ✅, S5 ✅, S6, S8, V1 ✅, V2 ✅, V3 ✅, V4, V5, E1, E2 |
-| High (10+ days) | 10+ days | S5 (sandboxing), S7 (side-channel), V7 (DP analytics) |
+|--------|-------|-------|
+| Low (≤1 day) | 0.5-1 day | C3 (Privacy manifest), D2 (AGENTS.md), D3 (API versioning), R12 (watchdog), R10 (macOS CI) |
+| Medium (2-5 days) | 2-5 days | V4 (TTL + secure wipe), V5 (PII regex), V6 (audit log), R11 (fuzz harness), E1 (binding pipeline), P6+P7 (benchmarks) |
+| Med-High (5-10 days) | 5-10 days | D1 (structured telemetry), C2 (GDPR docs + delete API), R14 (binding pipeline fix) |
+| High (10+ days) | 10+ days | P6+P7 (full benchmark suite on 3 devices), E2 (CUDA backend), E4 (plugin system) |
+
+> **Note**: Items marked ✅ in earlier phases are fully completed. Items marked 🟠 are follow-ons deferred from prior phases.
 
 ---
 
@@ -548,15 +568,60 @@ atheer-core/src/
 ├── model_verifier.rs      # ✅ Ed25519 signature verification at load time (implemented)
 ├── gguf_validator.rs      # ✅ GGUF header/metadata structural validation (implemented)
 ├── model_encryption/      # ✅ AES-256-GCM decrypt pipeline (implemented)
-├── secure_memory.rs       # Zeroize wrappers for sensitive buffers
-└── audit_log.rs          # Append-only local audit trail
+├── cert_pinner.rs         # ✅ TLS certificate pinning (implemented)
+├── secure_memory.rs       # ⚠️ NOT YET — Zeroize wrappers for intermediate buffers
+└── audit_log.rs           # ⚠️ NOT YET — Append-only HMAC-chained audit trail
 
 atheer-memory-bank/src/
-├── encrypted_store.rs     # AES-256-GCM encrypted L2/L3 persistence
-└── ttl_policy.rs          # Time-based cache expiry with secure wipe
+├── encrypted_store.rs     # ✅ AES-256-GCM encrypted L3 persistence (implemented)
+└── ttl_policy.rs          # ⚠️ NOT YET — Time-based cache expiry with secure wipe
 ```
 
-> **Bottom line:** Atheer has a genuinely differentiated architecture — no competitor combines NPU-first probing, predictive thermal management, L1/L2/L3 KV cache, grammar decoding, and agent loops in Rust. The gaps above are the delta between a promising prototype and a market-ready, trustable, best-in-class edge AI engine.
+---
+
+## 11. Remaining Items Not Yet Implemented
+
+> **Status as of July 2026** — All Phase 1 and Phase 2 items are complete. The following remain.
+
+### 🔴 High Priority (Blocks Market Readiness)
+
+| # | Item | Why It Blocks | Where |
+|---|-----|--------------|-------|
+| V4 | **Cache TTL + secure wipe** | L2/L3 KV cache persists conversation history forever. No time-based expiry. No `secure_zero()` before file delete. GDPR right to erasure is non-compliant. | `atheer-memory-bank/src/l2_warm.rs`, `l3_compressed.rs` |
+| P6+P7 | **Actual benchmark numbers** | `BENCHMARKS.md` is entirely "TBD". Claims of competitive superiority are unsubstantiated. Cannot detect regressions. | `perf-bench/`, `BENCHMARKS.md` |
+| C3 | **iOS Privacy manifest** | Required for App Store submission. No `PrivacyInfo.xcprivacy` exists. | `ios/PrivacyInfo.xcprivacy` (missing) |
+| C2 | **`delete_all_user_data()` API** | GDPR requires deletion capability. No wipe API exists. L2/L3 cache + checkpoints + crash logs contain user data. | `AtheerEngine` FFI (missing) |
+| E1+R14 | **Binding generation pipeline** | `generate-bindings.sh` is a no-op. `ios/atheer_ffi.swift` is stale. Swift/Kotlin consumers will have integration failures. | `generate-bindings.sh`, `atheer-bindgen/` |
+
+### 🟠 Medium Priority (Production Hardening)
+
+| # | Item | Why It Matters | Where |
+|---|-----|---------------|-------|
+| D1 | **Structured telemetry/metrics** | `tracing::info!` only. No Prometheus/OpenTelemetry. Cannot observe tok/s percentiles, cache hit rates, guardrail verdicts in production. | `atheer-orchestrator/`, new `MetricsCollector` trait |
+| V5 | **Regex-based PII redaction** | `PiiRedactor` uses `find('@')` + digit counting. No phone/SSN/IBAN/regex detection. | `atheer-core/src/safety.rs` |
+| V6 | **Audit logging** | "Audited" mode uses `tracing`. No append-only tamper-evident log. Compliance deployments need HMAC-chained audit trail. | `atheer-core/src/audit_log.rs` (missing) |
+| D2 | **AGENTS.md** | No AI-assistant onboarding docs. AI tools cannot autonomously understand project structure. | `AGENTS.md` (missing) |
+| R10 | **macOS CI runner** | CoreML/Metal/iOS telemetry never verified in CI. Platform-specific regressions undetected. | `.github/workflows/ci.yml` |
+| R11 | **Fuzz harness expansion** | 3 trivial targets, no corpus, no CI. Not exercising real inference paths. | `fuzz/` |
+| R12 | **Watchdog for runaway inference** | `generate()` cooperative timeout. Vulkan shader hang blocks indefinitely. | `atheer-core/src/inference.rs` |
+
+### 🟡 Lower Priority
+
+| # | Item | Why It Matters |
+|---|-----|---------------|
+| D3 | **FFI API versioning** | Breaking API changes silently break consumers |
+| E7 | **Example apps** | Only `MainActivity.kt` and `atheer_ffi.swift` exist. No runnable demos |
+| E2 | **Linux/CUDA backend** | Development iteration constrained to mobile platforms |
+| E3 | **Model format abstraction** | Hardcoded to GGUF only |
+| E4 | **Plugin/extension system** | Custom backends require forking |
+| E5 | **OTA model updates** | No delta/compression for model updates |
+| E6 | **WASM/WebGPU backend** | No browser deployment path |
+| S11 | **Memory zeroization throughout** | `zeroize` only on encryption keys; intermediate buffers not zeroized |
+| V7 | **Differential privacy for L2 cache** | Noise injection before L2 storage (lower priority) |
+
+---
+
+> **Bottom line:** Atheer has a genuinely differentiated architecture — no competitor combines NPU-first probing, predictive thermal management, L1/L2/L3 KV cache, grammar decoding, and agent loops in Rust. The gaps above are the delta between a promising prototype and a market-ready, trustable, best-in-class edge AI engine. The remaining work is ~14-24 engineering days of production hardening, observability, and compliance — not architectural rework.
 
 ---
 
