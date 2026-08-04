@@ -143,7 +143,12 @@ fn quantized_matmul(device: &Device) -> Result<()> {
                 [341876.0, 994283.0, 1655709.0, 2301518.0]
             ]
         ),
+        #[cfg(all(feature = "vulkan", target_os = "android"))]
         Device::Vulkan(_) => panic!("vulkan backend not supported by this quantized matmul test"),
+        #[cfg(all(feature = "nnapi", target_os = "android"))]
+        Device::Nnapi(_) => panic!("nnapi backend not supported by this quantized matmul test"),
+        #[cfg(not(all(feature = "vulkan", target_os = "android")))]
+        _ => unreachable!("unreachable on this platform"),
     }
     test_matmul(device, (1, 3, 4, 256), GgmlDType::Q4_0)?;
     Ok(())
@@ -208,7 +213,12 @@ fn quantized_matmul_neg(device: &Device) -> Result<()> {
                 [-196472.0, 63012.0, 324585.0, 587902.0]
             ]
         ),
+        #[cfg(all(feature = "vulkan", target_os = "android"))]
         Device::Vulkan(_) => panic!("vulkan backend not supported by this quantized matmul test"),
+        #[cfg(all(feature = "nnapi", target_os = "android"))]
+        Device::Nnapi(_) => panic!("nnapi backend not supported by this quantized matmul test"),
+        #[cfg(not(all(feature = "vulkan", target_os = "android")))]
+        _ => unreachable!("unreachable on this platform"),
     }
     let lhs2 = Tensor::stack(&[&lhs, &lhs], 0)?;
     let res2 = matmul.forward(&lhs2)?;

@@ -7,32 +7,23 @@
 //!
 //! # Memory Model
 //!
-//! Currently uses direct byte buffers. Future versions will support zero-copy
-//! via AHardwareBuffer for improved performance.
+//! Uses direct host byte buffers. Zero-copy backing via AHardwareBuffer is tracked
+//! separately by the `nnapi-zero-copy-memory` change.
 //!
 //! # Thread Safety
 //!
 //! The executor is shared via `Arc<RwLock<>>` allowing concurrent access from
-//! multiple threads.
+//! multiple threads. `NnapiStorage` holds no raw pointers, so `Tensor` remains
+//! `Send + Sync` when the `nnapi` feature is enabled.
 
 use crate::backend::BackendStorage;
 use crate::nnapi_backend::executor::{BinaryOp, SharedExecutor, UnaryOp};
 use crate::nnapi_backend::NnapiError;
 use crate::nnapi_backend::{create_shared_executor, NnapiDevice};
-use crate::{CpuStorage, DType, Layout, Result, Shape};
-use std::fs;
-use std::io::Write;
-use std::os::unix::io::IntoRawFd;
-use std::ptr;
+use crate::{CpuStorage, DType, Layout, Result};
 
 #[cfg(all(feature = "nnapi", target_os = "android"))]
-use crate::nnapi_backend::nnapi_ndk::{
-    nnapi_result, AHardwareBuffer, AHardwareBuffer_Desc, AHardwareBuffer_allocate,
-    AHardwareBuffer_release, ANeuralNetworksMemory, ANeuralNetworksMemory_createFromFd,
-    ANeuralNetworksMemory_createFromHardwareBuffer, ANeuralNetworksMemory_free,
-    AHARDWAREBUFFER_FORMAT_BLOB, AHARDWAREBUFFER_USAGE_CPU_READ_OFTEN,
-    AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN, ANEURALNETWORKS_FUSED_NONE,
-};
+use crate::nnapi_backend::nnapi_ndk::ANEURALNETWORKS_FUSED_NONE;
 
 #[cfg(all(feature = "nnapi", target_os = "android"))]
 pub struct NnapiStorage {
@@ -40,8 +31,6 @@ pub struct NnapiStorage {
     dtype: DType,
     device: NnapiDevice,
     executor: SharedExecutor,
-    memory: Option<*mut ANeuralNetworksMemory>,
-    hwbuffer: Option<*mut AHardwareBuffer>,
 }
 
 #[cfg(not(all(feature = "nnapi", target_os = "android")))]
@@ -71,8 +60,6 @@ impl NnapiStorage {
             dtype,
             device,
             executor,
-            memory: None,
-            hwbuffer: None,
         })
     }
 
@@ -87,164 +74,7 @@ impl NnapiStorage {
             dtype,
             device,
             executor,
-            memory: None,
-            hwbuffer: None,
         }
-    }
-
-    /// Allocates NNAPI-backed storage using AHardwareBuffer for zero-copy operations.
-    ///
-    /// This function attempts to allocate memory using AHardwareBuffer, which allows
-    /// the NNAPI driver to access tensor data directly without copying. If AHardwareBuffer
-    /// allocation fails (e.g., due to memory pressure), it falls back to using
-    /// `ANeuralNetworksMemory_createFromFd` with a temporary file.
-    ///
-    /// # Arguments
-    ///
-    /// * `shape` - The shape of the tensor to allocate
-    /// * `dtype` - The data type of the tensor (F32, F16, BF16 supported)
-    /// * `device` - The NNAPI device to associate this storage with
-    ///
-    /// # Returns
-    ///
-    /// Returns `NnapiStorage` wrapped in `Result`, or an error if allocation fails.
-    ///
-    /// # Memory Alignment
-    ///
-    /// Allocations are 16-byte aligned to meet NNAPI requirements. The actual
-    /// allocated size may be larger than `shape.elem_count() * dtype.size_in_bytes()`
-    /// if alignment padding is added.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// use candle_core::{Device, Tensor, DType, Shape, Result};
-    ///
-    /// fn example() -> Result<()> {
-    ///     let device = Device::new_nnapi(0)?;
-    ///     let shape = Shape::from_dims(&[128, 512]);
-    ///
-    ///     // Allocate zero-copy storage for a 128x512 F32 tensor
-    ///     let storage = candle_core::nnapi_backend::NnapiStorage::allocate(
-    ///         &shape,
-    ///         DType::F32,
-    ///         &device,
-    ///     )?;
-    ///
-    ///     // Check if zero-copy path is being used
-    ///     assert!(storage.is_zero_copy());
-    ///     assert!(storage.memory().is_some());
-    ///
-    ///     Ok(())
-    /// }
-    /// ```
-    pub fn allocate(shape: &Shape, dtype: DType, device: &crate::NnapiDevice) -> Result<Self> {
-        let executor = get_or_create_executor()?;
-        let count = shape.elem_count();
-        let size = count * dtype.size_in_bytes();
-        let aligned_size = Self::align_size(size);
-
-        let (memory, hwbuffer, data) = match Self::allocate_ahardware_buffer(aligned_size) {
-            Ok((mem, buf)) => {
-                let data = vec![0u8; aligned_size];
-                (Some(mem), Some(buf), data)
-            }
-            Err(_) => {
-                let (mem, _fd) = Self::allocate_from_fd(aligned_size)?;
-                let data = vec![0u8; aligned_size];
-                (Some(mem), None, data)
-            }
-        };
-
-        Ok(Self {
-            data,
-            dtype,
-            device: device.clone(),
-            executor,
-            memory,
-            hwbuffer,
-        })
-    }
-
-    const NNAPI_MEMORY_ALIGNMENT: usize = 16;
-
-    fn align_size(size: usize) -> usize {
-        (size + Self::NNAPI_MEMORY_ALIGNMENT - 1) & !(Self::NNAPI_MEMORY_ALIGNMENT - 1)
-    }
-
-    fn allocate_ahardware_buffer(
-        size: usize,
-    ) -> Result<(*mut ANeuralNetworksMemory, *mut AHardwareBuffer)> {
-        use std::ptr;
-
-        let mut desc = AHardwareBuffer_Desc::new();
-        desc.width = size as u32;
-        desc.height = 1;
-        desc.layers = 1;
-        desc.format = AHARDWAREBUFFER_FORMAT_BLOB;
-        desc.usage = AHARDWAREBUFFER_USAGE_CPU_READ_OFTEN | AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN;
-        desc.stride = 0;
-
-        let mut hw_buffer: *mut AHardwareBuffer = ptr::null_mut();
-        let rc =
-            unsafe { AHardwareBuffer_allocate(&desc, &mut hw_buffer as *mut *mut AHardwareBuffer) };
-        nnapi_result(rc)?;
-
-        let mut memory: *mut ANeuralNetworksMemory = ptr::null_mut();
-        let rc = unsafe {
-            ANeuralNetworksMemory_createFromHardwareBuffer(
-                ptr::null(),
-                hw_buffer,
-                &mut memory as *mut *mut ANeuralNetworksMemory,
-            )
-        };
-        if rc != 0 {
-            unsafe {
-                AHardwareBuffer_release(hw_buffer);
-            }
-            return Err(crate::Error::Nnapi(NnapiError::Nnapi(format!(
-                "ANeuralNetworksMemory_createFromHardwareBuffer failed: {:?}",
-                NnapiError::from_code(rc)
-            ))));
-        }
-
-        Ok((memory, hw_buffer))
-    }
-
-    fn allocate_from_fd(size: usize) -> Result<(*mut ANeuralNetworksMemory, i32)> {
-        let mut tmpfile = fs::OpenOptions::new()
-            .read(true)
-            .write(true)
-            .create(true)
-            .open("/tmp/candle_nnapiXXXXXX")?;
-        tmpfile.write_all(&vec![0u8; size])?;
-        let fd = tmpfile.into_raw_fd();
-
-        let mut memory: *mut ANeuralNetworksMemory = ptr::null_mut();
-        let rc = unsafe {
-            ANeuralNetworksMemory_createFromFd(
-                size,
-                libc::PROT_READ | libc::PROT_WRITE,
-                fd,
-                0,
-                &mut memory as *mut *mut ANeuralNetworksMemory,
-            )
-        };
-        nnapi_result(rc)?;
-
-        Ok((memory, fd))
-    }
-
-    pub fn memory(&self) -> Option<*mut ANeuralNetworksMemory> {
-        self.memory
-    }
-
-    pub fn hwbuffer(&self) -> Option<*mut AHardwareBuffer> {
-        self.hwbuffer
-    }
-
-    pub fn is_zero_copy(&self) -> bool {
-        self.memory.is_some()
     }
 
     pub fn data(&self) -> &[u8] {
@@ -505,22 +335,6 @@ impl std::fmt::Debug for NnapiStorage {
         #[cfg(not(all(feature = "nnapi", target_os = "android")))]
         {
             write!(f, "NnapiStorage")
-        }
-    }
-}
-
-#[cfg(all(feature = "nnapi", target_os = "android"))]
-impl Drop for NnapiStorage {
-    fn drop(&mut self) {
-        if let Some(memory) = self.memory {
-            unsafe {
-                ANeuralNetworksMemory_free(memory);
-            }
-        }
-        if let Some(hwbuffer) = self.hwbuffer {
-            unsafe {
-                AHardwareBuffer_release(hwbuffer);
-            }
         }
     }
 }

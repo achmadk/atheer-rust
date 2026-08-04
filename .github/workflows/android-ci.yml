@@ -361,9 +361,13 @@ jobs:
     name: Candle NNAPI Build & Compile (Emulator)
     runs-on: ubuntu-latest
     # NOTE: candle-core/src/nnapi_backend contains the NNAPI backend for Android.
-    # Unit tests for NNAPI operations are in atheer-accel/src/nnapi.rs (requires
-    # physical device or full instrumentation test setup). This job verifies
-    # compilation on Android target and basic execution on emulator.
+    # This job cross-compiles the candle-core `nnapi_tests` integration binary for
+    # Android and runs it on an emulator. The `#[ignore]`d device tests require an
+    # NNAPI driver; the default run confirms they report as ignored (exit 0), and a
+    # second `--include-ignored` run exercises them against the emulator as a
+    # non-blocking discovery step. The NNAPI backend has not yet been verified on
+    # hardware — see
+    # openspec/changes/fix-nnapi-supported-config-build/NOTES.md.
     defaults:
       run:
         shell: bash
@@ -415,9 +419,12 @@ jobs:
         env:
           ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.3.13750724
 
-      - name: Find test binary
+      - name: Find NNAPI integration test binary
         run: |
-          find target/x86_64-linux-android -name "candle_core*" -type f 2>/dev/null | head -20
+          find target/x86_64-linux-android/release/deps -maxdepth 1 -type f \
+            -name "nnapi_tests-*" ! -name "*.d" 2>/dev/null | head -20
+          find target/x86_64-linux-android/release/deps -maxdepth 1 -type f \
+            -name "nnapi_ahb_ffi_tests-*" ! -name "*.d" 2>/dev/null | head -20
 
       - name: Generate emulator test script
         run: |
@@ -432,20 +439,64 @@ jobs:
           adb shell mkdir -p /data/local/tmp/candle-test
           adb shell chmod 777 /data/local/tmp/candle-test
 
-          echo "Pushing test binary..."
-          TESTBIN=$(find target/x86_64-linux-android/release/deps -maxdepth 1 -type f -name "candle_core*" ! -name "*.d" ! -name "*.rlib" ! -name "*.rmeta" ! -name "*.so" | head -1)
+          # ── FFI smoke test (task 1.10/1.11 gate for nnapi-zero-copy-memory) ───────
+          # The AHardwareBuffer zero-copy FFI layer (allocate/lock/unlock/release +
+          # NNAPI memory derivation) must be proven on a device before any storage or
+          # execution code is built on top of it. The previous attempt failed by skipping
+          # this. cargo names this binary `nnapi_ahb_ffi_tests-<hash>`.
+          echo "Locating nnapi_ahb_ffi_tests FFI smoke binary..."
+          FFIBIN=$(find target/x86_64-linux-android/release/deps -maxdepth 1 -type f \
+            -name "nnapi_ahb_ffi_tests-*" ! -name "*.d" ! -name "*.rlib" ! -name "*.rmeta" ! -name "*.so" | head -1)
 
-          if [ -n "$TESTBIN" ]; then
-            echo "Found binary: $TESTBIN"
-            adb push "$TESTBIN" /data/local/tmp/candle-test/candle_core_test
-            adb shell chmod +x /data/local/tmp/candle-test/candle_core_test
+          if [ -n "$FFIBIN" ]; then
+            echo "Found FFI smoke binary: $FFIBIN"
+            adb push "$FFIBIN" /data/local/tmp/candle-test/nnapi_ahb_ffi_tests
+            adb shell chmod +x /data/local/tmp/candle-test/nnapi_ahb_ffi_tests
+            echo "== FFI smoke test (--include-ignored). Non-blocking on this emulator: =="
+            echo "   aosp_atd may lack a real NNAPI driver / AHB support; a failure here is"
+            echo "   a signal to run on physical hardware, which is the true 1.11 gate."
+            if adb shell "cd /data/local/tmp/candle-test && TMPDIR=/data/local/tmp/candle-test ./nnapi_ahb_ffi_tests --test-threads=1 --include-ignored"; then
+              echo "FFI smoke test passed on the emulator."
+            else
+              echo "::warning::AHB FFI smoke test failed on the emulator. The zero-copy gate (task 1.11) requires this to pass on physical hardware before nnapi-zero-copy-memory group 2 proceeds. See openspec/changes/nnapi-zero-copy-memory/NOTES.md."
+            fi
           else
-            echo "Test binary not found!"
-            exit 1
+            echo "::warning::nnapi_ahb_ffi_tests binary not found; skipping FFI smoke test."
           fi
 
-          echo "Running NNAPI tests..."
-          adb shell "cd /data/local/tmp/candle-test && TMPDIR=/data/local/tmp/candle-test ./candle_core_test --test-threads=1"
+          echo "Locating nnapi_tests integration binary..."
+          # cargo names the integration-test binary after the source file
+          # (candle-core/tests/nnapi_tests.rs) as `nnapi_tests-<hash>`. Do NOT use the
+          # `candle_core-<hash>` lib-test binary here: it does not contain these tests.
+          TESTBIN=$(find target/x86_64-linux-android/release/deps -maxdepth 1 -type f \
+            -name "nnapi_tests-*" ! -name "*.d" ! -name "*.rlib" ! -name "*.rmeta" ! -name "*.so" | head -1)
+
+          if [ -z "$TESTBIN" ]; then
+            echo "NNAPI test binary not found!"
+            exit 1
+          fi
+          echo "Found binary: $TESTBIN"
+          adb push "$TESTBIN" /data/local/tmp/candle-test/nnapi_tests
+          adb shell chmod +x /data/local/tmp/candle-test/nnapi_tests
+
+          RUNBIN="cd /data/local/tmp/candle-test && TMPDIR=/data/local/tmp/candle-test ./nnapi_tests --test-threads=1"
+
+          # ── Phase 1 (blocking): default run must succeed. The device tests are
+          # #[ignore]d, so this confirms they are registered and reported as ignored,
+          # and that the binary exits 0 without a device NNAPI driver. This is the CI
+          # home for task 5.4.
+          echo "== Phase 1: default run (ignored tests skipped, must exit 0) =="
+          adb shell "$RUNBIN"
+
+          # ── Phase 2 (non-blocking discovery): actually execute the #[ignore]d tests
+          # against the emulator's NNAPI driver. The backend has never been verified on
+          # hardware, so failures here are recorded as warnings, not merge blockers.
+          echo "== Phase 2: discovery run (--include-ignored, non-blocking) =="
+          if adb shell "$RUNBIN --include-ignored"; then
+            echo "NNAPI device tests passed on the emulator."
+          else
+            echo "::warning::NNAPI device tests failed under --include-ignored on the emulator. This is expected until the backend is verified on hardware; treat as discovery, not regression. See openspec/changes/fix-nnapi-supported-config-build/NOTES.md."
+          fi
 
           echo "Testing ADB connectivity..."
           adb devices

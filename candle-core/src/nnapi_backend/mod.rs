@@ -101,8 +101,11 @@ pub use graph::{
     NnapiGraphBuilder, NnapiOperation, UnaryOp as GraphUnaryOp,
 };
 
+// `nnapi_ndk` is public under the Android+nnapi cfg so the raw FFI layer can be
+// exercised by the on-device smoke test (candle-core/tests/nnapi_ahb_ffi_tests.rs).
+// It remains private off-target.
 #[cfg(all(feature = "nnapi", target_os = "android"))]
-mod nnapi_ndk;
+pub mod nnapi_ndk;
 #[cfg(not(all(feature = "nnapi", target_os = "android")))]
 mod nnapi_ndk;
 

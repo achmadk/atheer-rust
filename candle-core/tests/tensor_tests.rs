@@ -1767,6 +1767,14 @@ test_device!(
     tensor_send_sync_metal
 );
 
+// Compile-time guard: `Tensor` must remain `Send + Sync` under every feature
+// combination. Enabling the `nnapi` feature previously regressed this by embedding
+// raw pointers in `NnapiStorage`. This fails to compile if the guarantee is lost.
+const _: fn() = || {
+    fn assert_send_sync<T: Send + Sync>() {}
+    assert_send_sync::<Tensor>();
+};
+
 // There was originally a bug on the CPU implementation for randn
 // https://github.com/huggingface/candle/issues/381
 #[test]

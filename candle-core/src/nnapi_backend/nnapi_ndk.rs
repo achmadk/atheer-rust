@@ -4,6 +4,11 @@
 //! is a device-only system library — it's NOT available in the NDK sysroot
 //! for compile-time linking.
 #![allow(dead_code)]
+// FFI wrapper functions and their parameters intentionally mirror the exact C symbol
+// names loaded from libneuralnetworks.so / libandroid.so. Renaming would sever the
+// correspondence with the string literals passed to `dlsym`, which is the module's main
+// defence against typos, so the non-snake-case lint is suppressed at module scope.
+#![allow(non_snake_case)]
 
 use std::os::raw::{c_char, c_void};
 
@@ -41,6 +46,18 @@ pub struct ANeuralNetworksOperandType {
 #[repr(C)]
 pub struct AHardwareBuffer {}
 
+// `ARect` from `<android/rect.h>`. Only needed to type the `rect` parameter of
+// `AHardwareBuffer_lock`; we always pass a null pointer to lock the whole buffer, so no
+// instance is ever constructed.
+#[cfg(all(feature = "nnapi", target_os = "android"))]
+#[repr(C)]
+pub struct ARect {
+    pub left: i32,
+    pub top: i32,
+    pub right: i32,
+    pub bottom: i32,
+}
+
 #[cfg(all(feature = "nnapi", target_os = "android"))]
 #[repr(C)]
 pub struct AHardwareBuffer_Desc {
@@ -75,8 +92,12 @@ impl AHardwareBuffer_Desc {
 pub const AHARDWAREBUFFER_FORMAT_BLOB: u32 = 33;
 #[cfg(all(feature = "nnapi", target_os = "android"))]
 pub const AHARDWAREBUFFER_USAGE_CPU_READ_OFTEN: u64 = 3;
+// CPU write usage flags occupy the second nibble of the usage field
+// (`hardware_buffer.h`): CPU_WRITE_OFTEN = 3 << 4 = 48. It was previously `2`, which is
+// the value of CPU_READ_RARELY and carries no write bit, so `AHardwareBuffer_lock` for
+// writing would fail with -EINVAL.
 #[cfg(all(feature = "nnapi", target_os = "android"))]
-pub const AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN: u64 = 2;
+pub const AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN: u64 = 3 << 4;
 
 // ── NNAPI Constants ────────────────────────────────────────────────────────
 
@@ -295,6 +316,12 @@ mod runtime {
         memory_create_from_fd:
             unsafe extern "C" fn(usize, i32, i32, usize, *mut *mut ANeuralNetworksMemory) -> i32,
         memory_free: unsafe extern "C" fn(*mut ANeuralNetworksMemory),
+        // API 29+. Optional: absent on API 26-28, so a missing symbol must not fail
+        // `runtime` init. This is an NNAPI symbol from libneuralnetworks.so, NOT an
+        // AHardwareBuffer symbol from libandroid.so.
+        memory_create_from_ahardware_buffer: Option<
+            unsafe extern "C" fn(*const AHardwareBuffer, *mut *mut ANeuralNetworksMemory) -> i32,
+        >,
     }
 
     static NNAPI: OnceLock<Result<NnapiHandle, ()>> = OnceLock::new();
@@ -328,6 +355,16 @@ mod runtime {
                     let sym_name =
                         CStr::from_bytes_with_nul(concat!($name, "\0").as_bytes()).unwrap();
                     load_symbol(lib, sym_name).ok_or(())?
+                }};
+            }
+
+            // Optional load: returns `None` instead of failing init when the symbol is
+            // absent (e.g. an API 29+ symbol on an older device).
+            macro_rules! load_opt {
+                ($name:literal) => {{
+                    let sym_name =
+                        CStr::from_bytes_with_nul(concat!($name, "\0").as_bytes()).unwrap();
+                    load_symbol(lib, sym_name)
                 }};
             }
 
@@ -374,6 +411,9 @@ mod runtime {
                 ),
                 memory_create_from_fd: load!("ANeuralNetworksMemory_createFromFd"),
                 memory_free: load!("ANeuralNetworksMemory_free"),
+                memory_create_from_ahardware_buffer: load_opt!(
+                    "ANeuralNetworksMemory_createFromAHardwareBuffer"
+                ),
             })
         }) {
             Ok(ref handle) => Ok(handle),
@@ -589,6 +629,34 @@ mod runtime {
     pub unsafe fn ANeuralNetworksMemory_free(memory: *mut ANeuralNetworksMemory) {
         (init().unwrap().memory_free)(memory)
     }
+
+    /// Whether the API 29+ `ANeuralNetworksMemory_createFromAHardwareBuffer` symbol
+    /// resolved. False on API 26-28 or if `libneuralnetworks.so` failed to open.
+    pub fn has_memory_create_from_ahardware_buffer() -> bool {
+        matches!(
+            init(),
+            Ok(handle) if handle.memory_create_from_ahardware_buffer.is_some()
+        )
+    }
+
+    /// Derive an `ANeuralNetworksMemory` handle from an `AHardwareBuffer`.
+    ///
+    /// This is an NNAPI symbol (libneuralnetworks.so), API 29+. Returns `Err(())` without
+    /// panicking when the runtime failed to load or the symbol is absent, so callers on
+    /// older devices can fall back rather than abort.
+    ///
+    /// # Safety
+    /// `buffer` must be a valid `AHardwareBuffer` and `memory` a valid out-pointer.
+    pub unsafe fn ANeuralNetworksMemory_createFromAHardwareBuffer(
+        buffer: *const AHardwareBuffer,
+        memory: *mut *mut ANeuralNetworksMemory,
+    ) -> Result<i32, ()> {
+        let handle = init()?;
+        match handle.memory_create_from_ahardware_buffer {
+            Some(f) => Ok(f(buffer, memory)),
+            None => Err(()),
+        }
+    }
 }
 
 #[cfg(all(feature = "nnapi", target_os = "android"))]
@@ -607,11 +675,16 @@ mod ahb_runtime {
             unsafe extern "C" fn(*const AHardwareBuffer_Desc, *mut *mut AHardwareBuffer) -> i32,
         release: unsafe extern "C" fn(*mut AHardwareBuffer),
         describe: unsafe extern "C" fn(*const AHardwareBuffer, *mut AHardwareBuffer_Desc),
-        memory_create_from_hardware_buffer: unsafe extern "C" fn(
-            *const ANeuralNetworksDevice,
-            *const AHardwareBuffer,
-            *mut *mut ANeuralNetworksMemory,
+        // API 26. Locks the buffer for direct CPU access, returning a mapped pointer.
+        lock: unsafe extern "C" fn(
+            *mut AHardwareBuffer,
+            u64,
+            i32,
+            *const ARect,
+            *mut *mut std::ffi::c_void,
         ) -> i32,
+        // API 26. Unlocks after CPU access.
+        unlock: unsafe extern "C" fn(*mut AHardwareBuffer, *mut i32) -> i32,
     }
 
     unsafe impl Send for AhbHandle {}
@@ -651,9 +724,8 @@ mod ahb_runtime {
                 allocate: load!("AHardwareBuffer_allocate"),
                 release: load!("AHardwareBuffer_release"),
                 describe: load!("AHardwareBuffer_describe"),
-                memory_create_from_hardware_buffer: load!(
-                    "ANeuralNetworksMemory_createFromHardwareBuffer"
-                ),
+                lock: load!("AHardwareBuffer_lock"),
+                unlock: load!("AHardwareBuffer_unlock"),
             })
         }) {
             Ok(ref handle) => Ok(handle),
@@ -665,27 +737,58 @@ mod ahb_runtime {
         desc: *const AHardwareBuffer_Desc,
         out_buffer: *mut *mut AHardwareBuffer,
     ) -> i32 {
-        (init().unwrap().allocate)(desc, out_buffer)
+        match init() {
+            Ok(h) => (h.allocate)(desc, out_buffer),
+            // No libandroid.so / AHB support: report failure rather than panic.
+            Err(_) => -1,
+        }
     }
     pub unsafe fn AHardwareBuffer_release(buffer: *mut AHardwareBuffer) {
-        (init().unwrap().release)(buffer)
+        if let Ok(h) = init() {
+            (h.release)(buffer)
+        }
     }
     pub unsafe fn AHardwareBuffer_describe(
         buffer: *const AHardwareBuffer,
         desc: *mut AHardwareBuffer_Desc,
     ) {
-        (init().unwrap().describe)(buffer, desc)
+        if let Ok(h) = init() {
+            (h.describe)(buffer, desc)
+        }
     }
-    pub unsafe fn ANeuralNetworksMemory_createFromHardwareBuffer(
-        device: *const ANeuralNetworksDevice,
-        buffer: *const AHardwareBuffer,
-        memory: *mut *mut ANeuralNetworksMemory,
+    pub unsafe fn AHardwareBuffer_lock(
+        buffer: *mut AHardwareBuffer,
+        usage: u64,
+        fence: i32,
+        rect: *const ARect,
+        out_virtual_address: *mut *mut std::ffi::c_void,
     ) -> i32 {
-        (init().unwrap().memory_create_from_hardware_buffer)(device, buffer, memory)
+        match init() {
+            Ok(h) => (h.lock)(buffer, usage, fence, rect, out_virtual_address),
+            Err(_) => -1,
+        }
+    }
+    pub unsafe fn AHardwareBuffer_unlock(buffer: *mut AHardwareBuffer, fence: *mut i32) -> i32 {
+        match init() {
+            Ok(h) => (h.unlock)(buffer, fence),
+            Err(_) => -1,
+        }
+    }
+
+    /// Whether the complete zero-copy chain resolved: the API-26 `AHardwareBuffer_*`
+    /// family from `libandroid.so` (this module) AND the API-29 NNAPI
+    /// `ANeuralNetworksMemory_createFromAHardwareBuffer` from `libneuralnetworks.so`
+    /// (the `runtime` module). Both are required to build driver-visible storage.
+    pub fn is_available() -> bool {
+        init().is_ok() && super::runtime::has_memory_create_from_ahardware_buffer()
     }
 }
 
+// The AHardwareBuffer FFI wrappers are currently unused: the dead zero-copy storage
+// surface that consumed them was removed. They are retained and re-exported for the
+// `nnapi-zero-copy-memory` change, which rebuilds the zero-copy path on top of them.
 #[cfg(all(feature = "nnapi", target_os = "android"))]
+#[allow(unused_imports)]
 pub use ahb_runtime::*;
 
 // ── NnapiError ─────────────────────────────────────────────────────────────

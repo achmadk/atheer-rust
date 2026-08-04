@@ -46,6 +46,11 @@ impl BenchDevice for Device {
                 #[cfg(not(feature = "vulkan"))]
                 panic!("Vulkan device without vulkan feature enabled: {device:?}")
             }
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            Device::Nnapi(device) => {
+                use candle_core::backend::BackendDevice;
+                return Ok(device.synchronize()?);
+            }
         }
     }
 
@@ -64,6 +69,8 @@ impl BenchDevice for Device {
             Device::Cuda(_) => format!("cuda_{}", name.into()),
             Device::Metal(_) => format!("metal_{}", name.into()),
             Device::Vulkan(_) => format!("vulkan_{}", name.into()),
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            Device::Nnapi(_) => format!("nnapi_{}", name.into()),
         }
     }
 }
