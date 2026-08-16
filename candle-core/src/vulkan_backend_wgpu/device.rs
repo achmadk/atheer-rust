@@ -423,6 +423,215 @@ impl VulkanDevice {
 
         Ok(())
     }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn dispatch_gemm(
+        &self,
+        shader_src: &str,
+        lhs: &wgpu::Buffer,
+        rhs: &wgpu::Buffer,
+        output: &wgpu::Buffer,
+        meta: GemmMeta,
+    ) -> Result<()> {
+        let shader = self.compile_shader(shader_src)?;
+
+        let bind_group_layout =
+            self.inner
+                .device
+                .create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    label: Some("gemm-bind-group"),
+                    entries: &[
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: true },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 2,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Storage { read_only: false },
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 3,
+                            visibility: wgpu::ShaderStages::COMPUTE,
+                            ty: wgpu::BindingType::Buffer {
+                                ty: wgpu::BufferBindingType::Uniform,
+                                has_dynamic_offset: false,
+                                min_binding_size: None,
+                            },
+                            count: None,
+                        },
+                    ],
+                });
+
+        // Uniform buffer: 15 u32 fields = 60 bytes; WGSL uniform structs require
+        // a 16-byte-aligned size, so allocate 64 bytes (one word of padding).
+        let meta_words = meta.to_words();
+        let mut meta_bytes = vec![0u8; 64];
+        for (i, w) in meta_words.iter().enumerate() {
+            meta_bytes[i * 4..i * 4 + 4].copy_from_slice(&w.to_le_bytes());
+        }
+        let uniform_buffer = self.allocate_buffer(
+            meta_bytes.len() as u64,
+            wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        )?;
+        self.queue().write_buffer(&uniform_buffer, 0, &meta_bytes);
+
+        let pipeline_layout =
+            self.inner
+                .device
+                .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                    label: Some("gemm-pipeline"),
+                    bind_group_layouts: &[&bind_group_layout],
+                    push_constant_ranges: &[],
+                });
+
+        let pipeline =
+            self.inner
+                .device
+                .create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                    label: Some("gemm"),
+                    layout: Some(&pipeline_layout),
+                    module: &shader,
+                    entry_point: "main",
+                    cache: None,
+                    compilation_options: Default::default(),
+                });
+
+        let bind_group = self
+            .inner
+            .device
+            .create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("gemm-bind-group"),
+                layout: &bind_group_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                            buffer: lhs,
+                            offset: 0,
+                            size: None,
+                        }),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                            buffer: rhs,
+                            offset: 0,
+                            size: None,
+                        }),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                            buffer: output,
+                            offset: 0,
+                            size: None,
+                        }),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                            buffer: &uniform_buffer,
+                            offset: 0,
+                            size: None,
+                        }),
+                    },
+                ],
+            });
+
+        let mut encoder =
+            self.inner
+                .device
+                .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                    label: Some("gemm-encoder"),
+                });
+
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("gemm-pass"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&pipeline);
+            pass.set_bind_group(0, &bind_group, &[]);
+            // Workgroup is 8x8 over (m, n); z axis is batch.
+            let wg_m = (meta.m + 7) / 8;
+            let wg_n = (meta.n + 7) / 8;
+            pass.dispatch_workgroups(wg_m, wg_n, meta.batch);
+        }
+
+        self.inner.queue.submit(Some(encoder.finish()));
+        self.sync()?;
+
+        Ok(())
+    }
+}
+
+/// Metadata passed to the GEMM compute shader as a uniform buffer.
+///
+/// Field order MUST match the `Metadata` struct in `shaders::GEMM_SHADER`.
+/// Stride/offset semantics mirror candle's CPU `MatMul` (batch skip strides plus
+/// row/col strides per operand, contiguous destination), so transposed and
+/// offset operand layouts compute correctly.
+#[derive(Clone, Copy, Debug)]
+pub(crate) struct GemmMeta {
+    pub m: u32,
+    pub n: u32,
+    pub k: u32,
+    pub batch: u32,
+    pub lhs_offset: u32,
+    pub rhs_offset: u32,
+    pub dst_offset: u32,
+    pub lhs_batch_stride: u32,
+    pub rhs_batch_stride: u32,
+    pub lhs_stride_m: u32,
+    pub lhs_stride_k: u32,
+    pub rhs_stride_k: u32,
+    pub rhs_stride_n: u32,
+    pub dst_stride_m: u32,
+    pub dst_stride_n: u32,
+}
+
+impl GemmMeta {
+    fn to_words(self) -> [u32; 15] {
+        [
+            self.m,
+            self.n,
+            self.k,
+            self.batch,
+            self.lhs_offset,
+            self.rhs_offset,
+            self.dst_offset,
+            self.lhs_batch_stride,
+            self.rhs_batch_stride,
+            self.lhs_stride_m,
+            self.lhs_stride_k,
+            self.rhs_stride_k,
+            self.rhs_stride_n,
+            self.dst_stride_m,
+            self.dst_stride_n,
+        ]
+    }
 }
 
 impl std::fmt::Debug for VulkanDevice {

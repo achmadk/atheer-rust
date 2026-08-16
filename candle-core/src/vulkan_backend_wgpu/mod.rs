@@ -4,6 +4,8 @@ mod device;
 mod shaders;
 
 #[cfg(all(feature = "vulkan", target_os = "android"))]
+pub(crate) use device::GemmMeta;
+#[cfg(all(feature = "vulkan", target_os = "android"))]
 pub use device::VulkanDevice;
 #[cfg(all(feature = "vulkan", target_os = "android"))]
 pub use shaders::{ADD_SHADER, AFFINE_SHADER, BROADCAST_ADD_SHADER, GEMM_SHADER};
@@ -186,6 +188,85 @@ impl VulkanStorage {
         let data = slice.get_mapped_range().to_vec();
         Ok(data)
     }
+
+    /// Build GEMM shader metadata from operand layouts.
+    ///
+    /// Batch (skip) strides replicate candle's CPU `MatMul::ab_skip`; row/col
+    /// strides are the trailing two layout strides. The destination is contiguous
+    /// `[b, m, n]`. This makes transposed / offset operands (e.g. `x.matmul(&w.t())`)
+    /// index correctly on the GPU.
+    fn gemm_meta(
+        bmnk: (usize, usize, usize, usize),
+        lhs_l: &Layout,
+        rhs_l: &Layout,
+    ) -> Result<GemmMeta> {
+        let (b, m, n, k) = bmnk;
+        let lhs_stride = lhs_l.stride();
+        let rhs_stride = rhs_l.stride();
+        let lhs_rank = lhs_stride.len();
+        let rhs_rank = rhs_stride.len();
+        if lhs_rank < 2 || rhs_rank < 2 {
+            return Err(Error::Vulkan(VulkanError::Message(
+                "matmul requires rank >= 2 operands".to_string(),
+            )));
+        }
+
+        let lhs_stride_m = lhs_stride[lhs_rank - 2];
+        let lhs_stride_k = lhs_stride[lhs_rank - 1];
+        let rhs_stride_k = rhs_stride[rhs_rank - 2];
+        let rhs_stride_n = rhs_stride[rhs_rank - 1];
+
+        // Batch skip strides (mirrors MatMul::ab_skip). Defaults assume the
+        // contiguous packing m*k / k*n when there is no explicit batch dim.
+        let lhs_batch_stride = match lhs_stride[..lhs_rank - 2] {
+            [s1, stride] if s1 == stride * lhs_l.dims()[1] => stride,
+            [_, stride] if lhs_l.dims()[0] == 1 => stride,
+            [stride, _] if lhs_l.dims()[1] == 1 => stride,
+            [stride] => stride,
+            [] => m * k,
+            _ => {
+                return Err(Error::Vulkan(VulkanError::Message(
+                    "matmul: non-contiguous lhs batch striding not supported".to_string(),
+                )))
+            }
+        };
+        let rhs_batch_stride = match rhs_stride[..rhs_rank - 2] {
+            [s1, stride] if s1 == stride * rhs_l.dims()[1] => stride,
+            [_, stride] if rhs_l.dims()[0] == 1 => stride,
+            [stride, _] if rhs_l.dims()[1] == 1 => stride,
+            [stride] => stride,
+            [] => n * k,
+            _ => {
+                return Err(Error::Vulkan(VulkanError::Message(
+                    "matmul: non-contiguous rhs batch striding not supported".to_string(),
+                )))
+            }
+        };
+
+        Ok(GemmMeta {
+            m: m as u32,
+            n: n as u32,
+            k: k as u32,
+            batch: b as u32,
+            lhs_offset: lhs_l.start_offset() as u32,
+            rhs_offset: rhs_l.start_offset() as u32,
+            dst_offset: 0,
+            lhs_batch_stride: lhs_batch_stride as u32,
+            rhs_batch_stride: rhs_batch_stride as u32,
+            lhs_stride_m: lhs_stride_m as u32,
+            lhs_stride_k: lhs_stride_k as u32,
+            rhs_stride_k: rhs_stride_k as u32,
+            rhs_stride_n: rhs_stride_n as u32,
+            dst_stride_m: n as u32,
+            dst_stride_n: 1,
+        })
+    }
+}
+
+/// Reinterpret an `f32` slice as its little-endian byte representation.
+#[cfg(all(feature = "vulkan", target_os = "android"))]
+fn bytemuck_f32(data: &[f32]) -> &[u8] {
+    unsafe { std::slice::from_raw_parts(data.as_ptr() as *const u8, std::mem::size_of_val(data)) }
 }
 
 #[cfg(not(all(feature = "vulkan", target_os = "android")))]
@@ -655,29 +736,116 @@ impl BackendStorage for VulkanStorage {
         rhs_l: &Layout,
     ) -> Result<Self> {
         let (b, m, n, k) = bmnk;
-        let lhs_bytes = self.read_to_bytes()?;
-        let rhs_bytes = rhs.read_to_bytes()?;
 
-        let lhs_f32 = self.bytes_to_f32(&lhs_bytes, lhs_l)?;
-        let rhs_f32 = rhs.bytes_to_f32(&rhs_bytes, rhs_l)?;
-
-        let mut result = vec![0.0f32; b * m * n];
-
-        for bi in 0..b {
-            for mi in 0..m {
-                for ni in 0..n {
-                    let mut sum = 0.0f32;
-                    for ki in 0..k {
-                        let lhs_idx = bi * m * k + mi * k + ki;
-                        let rhs_idx = bi * k * n + ki * n + ni;
-                        sum += lhs_f32[lhs_idx] * rhs_f32[rhs_idx];
-                    }
-                    result[bi * m * n + mi * n + ni] = sum;
-                }
+        // GPU GEMM only supports the float dtypes this backend can represent in
+        // its WGSL buffers. Reject anything else explicitly rather than silently
+        // falling back to a CPU round-trip.
+        match self.dtype {
+            DType::F32 | DType::F16 => {}
+            other => {
+                return Err(Error::UnsupportedDTypeForOp(other, "matmul"));
             }
         }
+        if rhs.dtype != self.dtype {
+            return Err(Error::Vulkan(VulkanError::Message(format!(
+                "matmul dtype mismatch: lhs {:?} vs rhs {:?}",
+                self.dtype, rhs.dtype
+            ))));
+        }
 
-        self.device.storage_from_slice(&result)
+        // Derive strides/offsets from the operand layouts, mirroring candle's CPU
+        // `MatMul` so transposed / offset operands compute correctly. The last two
+        // dims of each operand are [m, k] and [k, n]; leading dims are the batch.
+        let meta = Self::gemm_meta(bmnk, lhs_l, rhs_l)?;
+
+        // Output is freshly allocated and contiguous: [b, m, n].
+        let out_count = b * m * n;
+
+        match self.dtype {
+            DType::F32 => {
+                let output = self.device.allocate_buffer(
+                    (out_count * self.dtype.size_in_bytes()) as u64,
+                    wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                )?;
+                self.device.dispatch_gemm(
+                    shaders::GEMM_SHADER,
+                    &self.buffer,
+                    &rhs.buffer,
+                    &output,
+                    meta,
+                )?;
+                Ok(VulkanStorage::new(
+                    output,
+                    out_count,
+                    self.dtype,
+                    self.device.clone(),
+                ))
+            }
+            DType::F16 => {
+                // The GEMM shader operates on f32 storage buffers and accumulates
+                // in f32. Downlevel Android adapters are not guaranteed to expose
+                // the `shader-f16` feature, so we up-convert F16 operands to F32,
+                // run the GPU GEMM, then convert the result back to F16. Inputs
+                // still stay on the GPU except for this dtype normalization.
+                let lhs_f32 = {
+                    let bytes = self.read_to_bytes()?;
+                    self.bytes_to_f32(&bytes, lhs_l)?
+                };
+                let rhs_f32 = {
+                    let bytes = rhs.read_to_bytes()?;
+                    rhs.bytes_to_f32(&bytes, rhs_l)?
+                };
+                let lhs_buf = self.device.new_buffer_with_data(bytemuck_f32(&lhs_f32))?;
+                let rhs_buf = self.device.new_buffer_with_data(bytemuck_f32(&rhs_f32))?;
+                // Match the backend-wide convention: STORAGE | COPY_DST buffers
+                // are mapped for readback via `read_to_bytes`. (In wgpu MAP_READ
+                // may only combine with COPY_DST, not STORAGE, so we do not add it.)
+                let out_f32 = self.device.allocate_buffer(
+                    (out_count * DType::F32.size_in_bytes()) as u64,
+                    wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                )?;
+
+                // When up-converting we materialize contiguous f32 operands, so
+                // the strides/offsets collapse to the contiguous layout.
+                let meta_contig = GemmMeta {
+                    lhs_offset: 0,
+                    rhs_offset: 0,
+                    dst_offset: 0,
+                    lhs_batch_stride: (m * k) as u32,
+                    rhs_batch_stride: (k * n) as u32,
+                    lhs_stride_m: k as u32,
+                    lhs_stride_k: 1,
+                    rhs_stride_k: n as u32,
+                    rhs_stride_n: 1,
+                    dst_stride_m: n as u32,
+                    dst_stride_n: 1,
+                    ..meta
+                };
+
+                let f32_storage =
+                    VulkanStorage::new(out_f32, out_count, DType::F32, self.device.clone());
+                self.device.dispatch_gemm(
+                    shaders::GEMM_SHADER,
+                    &lhs_buf,
+                    &rhs_buf,
+                    &f32_storage.buffer,
+                    meta_contig,
+                )?;
+
+                // Convert the f32 result back to F16 storage.
+                let result_f32 = {
+                    let bytes = f32_storage.read_to_bytes()?;
+                    let ptr = bytes.as_ptr() as *const f32;
+                    unsafe { std::slice::from_raw_parts(ptr, out_count).to_vec() }
+                };
+                let mut storage = self
+                    .device
+                    .zeros_impl(&Shape::from_dims(&[out_count]), DType::F16)?;
+                storage.write_from_f32(&result_f32, 0)?;
+                Ok(storage)
+            }
+            _ => unreachable!("dtype guarded above"),
+        }
     }
 
     fn copy_strided_src(&self, dst: &mut Self, dst_offset: usize, src_l: &Layout) -> Result<()> {
