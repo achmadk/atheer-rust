@@ -36,19 +36,25 @@ fn ahb_ffi_smoke_test() -> Result<()> {
         let mut buffer: *mut AHardwareBuffer = ptr::null_mut();
         let rc = AHardwareBuffer_allocate(&desc, &mut buffer);
         assert_eq!(rc, 0, "AHardwareBuffer_allocate failed with code {}", rc);
-        assert!(!buffer.is_null(), "buffer is null after successful allocate");
+        assert!(
+            !buffer.is_null(),
+            "buffer is null after successful allocate"
+        );
 
         // 2. Lock the buffer for CPU access, obtaining a mapped pointer
         let mut virt_addr: *mut std::ffi::c_void = ptr::null_mut();
         let rc = AHardwareBuffer_lock(
             buffer,
             AHARDWAREBUFFER_USAGE_CPU_READ_OFTEN | AHARDWAREBUFFER_USAGE_CPU_WRITE_OFTEN,
-            -1, // no fence
+            -1,          // no fence
             ptr::null(), // null rect = lock the whole buffer
             &mut virt_addr,
         );
         assert_eq!(rc, 0, "AHardwareBuffer_lock failed with code {}", rc);
-        assert!(!virt_addr.is_null(), "virtual address is null after successful lock");
+        assert!(
+            !virt_addr.is_null(),
+            "virtual address is null after successful lock"
+        );
 
         // 3. Write a test pattern and read it back to confirm CPU access works
         let ptr = virt_addr as *mut u8;
@@ -76,7 +82,10 @@ fn ahb_ffi_smoke_test() -> Result<()> {
                     "ANeuralNetworksMemory_createFromAHardwareBuffer failed with code {}",
                     rc
                 );
-                assert!(!memory.is_null(), "memory is null after successful derivation");
+                assert!(
+                    !memory.is_null(),
+                    "memory is null after successful derivation"
+                );
                 ANeuralNetworksMemory_free(memory);
             }
             Err(_) => {
