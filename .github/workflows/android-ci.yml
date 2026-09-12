@@ -357,10 +357,181 @@ jobs:
             /tmp/candle-test-results/
           retention-days: 14
 
+  candle-nnapi-tests:
+    name: Candle NNAPI Build & Compile (Emulator)
+    runs-on: ubuntu-latest
+    # NOTE: candle-core/src/nnapi_backend contains the NNAPI backend for Android.
+    # This job cross-compiles the candle-core `nnapi_tests` integration binary for
+    # Android and runs it on an emulator. The `#[ignore]`d device tests require an
+    # NNAPI driver; the default run confirms they report as ignored (exit 0), and a
+    # second `--include-ignored` run exercises them against the emulator as a
+    # non-blocking discovery step. The NNAPI backend has not yet been verified on
+    # hardware — see
+    # openspec/changes/fix-nnapi-supported-config-build/NOTES.md.
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install NDK
+        run: |
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install \
+            "ndk;27.3.13750724" \
+            --sdk_root="$ANDROID_HOME"
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-linux-android
+
+      - name: Restore Rust cache
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry/
+            ~/.cargo/git/
+            target/
+          key: ${{ runner.os }}-android-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-android-cargo-
+            ${{ runner.os }}-cargo-
+
+      - name: Install cargo-ndk
+        run: cargo install cargo-ndk --locked
+
+      - name: Build candle-core with nnapi feature for Android
+        run: |
+          cargo ndk \
+            -t x86_64 \
+            build -p candle-core --features nnapi \
+            --tests --release 2>&1 | tail -30
+        env:
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.3.13750724
+
+      - name: Find NNAPI integration test binary
+        run: |
+          find target/x86_64-linux-android/release/deps -maxdepth 1 -type f \
+            -name "nnapi_tests-*" ! -name "*.d" 2>/dev/null | head -20
+          find target/x86_64-linux-android/release/deps -maxdepth 1 -type f \
+            -name "nnapi_ahb_ffi_tests-*" ! -name "*.d" 2>/dev/null | head -20
+
+      - name: Generate emulator test script
+        run: |
+          cat << 'EOF' > run_nnapi_tests.sh
+          #!/usr/bin/env bash
+          set -e
+
+          echo "Waiting for device..."
+          adb wait-for-device
+
+          echo "Creating test data directory..."
+          adb shell mkdir -p /data/local/tmp/candle-test
+          adb shell chmod 777 /data/local/tmp/candle-test
+
+          # ── FFI smoke test (task 1.10/1.11 gate for nnapi-zero-copy-memory) ───────
+          # The AHardwareBuffer zero-copy FFI layer (allocate/lock/unlock/release +
+          # NNAPI memory derivation) must be proven on a device before any storage or
+          # execution code is built on top of it. The previous attempt failed by skipping
+          # this. cargo names this binary `nnapi_ahb_ffi_tests-<hash>`.
+          echo "Locating nnapi_ahb_ffi_tests FFI smoke binary..."
+          FFIBIN=$(find target/x86_64-linux-android/release/deps -maxdepth 1 -type f \
+            -name "nnapi_ahb_ffi_tests-*" ! -name "*.d" ! -name "*.rlib" ! -name "*.rmeta" ! -name "*.so" | head -1)
+
+          if [ -n "$FFIBIN" ]; then
+            echo "Found FFI smoke binary: $FFIBIN"
+            adb push "$FFIBIN" /data/local/tmp/candle-test/nnapi_ahb_ffi_tests
+            adb shell chmod +x /data/local/tmp/candle-test/nnapi_ahb_ffi_tests
+            echo "== FFI smoke test (--include-ignored). Non-blocking on this emulator: =="
+            echo "   aosp_atd may lack a real NNAPI driver / AHB support; a failure here is"
+            echo "   a signal to run on physical hardware, which is the true 1.11 gate."
+            if adb shell "cd /data/local/tmp/candle-test && TMPDIR=/data/local/tmp/candle-test ./nnapi_ahb_ffi_tests --test-threads=1 --include-ignored"; then
+              echo "FFI smoke test passed on the emulator."
+            else
+              echo "::warning::AHB FFI smoke test failed on the emulator. The zero-copy gate (task 1.11) requires this to pass on physical hardware before nnapi-zero-copy-memory group 2 proceeds. See openspec/changes/nnapi-zero-copy-memory/NOTES.md."
+            fi
+          else
+            echo "::warning::nnapi_ahb_ffi_tests binary not found; skipping FFI smoke test."
+          fi
+
+          echo "Locating nnapi_tests integration binary..."
+          # cargo names the integration-test binary after the source file
+          # (candle-core/tests/nnapi_tests.rs) as `nnapi_tests-<hash>`. Do NOT use the
+          # `candle_core-<hash>` lib-test binary here: it does not contain these tests.
+          TESTBIN=$(find target/x86_64-linux-android/release/deps -maxdepth 1 -type f \
+            -name "nnapi_tests-*" ! -name "*.d" ! -name "*.rlib" ! -name "*.rmeta" ! -name "*.so" | head -1)
+
+          if [ -z "$TESTBIN" ]; then
+            echo "NNAPI test binary not found!"
+            exit 1
+          fi
+          echo "Found binary: $TESTBIN"
+          adb push "$TESTBIN" /data/local/tmp/candle-test/nnapi_tests
+          adb shell chmod +x /data/local/tmp/candle-test/nnapi_tests
+
+          RUNBIN="cd /data/local/tmp/candle-test && TMPDIR=/data/local/tmp/candle-test ./nnapi_tests --test-threads=1"
+
+          # ── Phase 1 (blocking): default run must succeed. The device tests are
+          # #[ignore]d, so this confirms they are registered and reported as ignored,
+          # and that the binary exits 0 without a device NNAPI driver. This is the CI
+          # home for task 5.4.
+          echo "== Phase 1: default run (ignored tests skipped, must exit 0) =="
+          adb shell "$RUNBIN"
+
+          # ── Phase 2 (non-blocking discovery): actually execute the #[ignore]d tests
+          # against the emulator's NNAPI driver. The backend has never been verified on
+          # hardware, so failures here are recorded as warnings, not merge blockers.
+          echo "== Phase 2: discovery run (--include-ignored, non-blocking) =="
+          if adb shell "$RUNBIN --include-ignored"; then
+            echo "NNAPI device tests passed on the emulator."
+          else
+            echo "::warning::NNAPI device tests failed under --include-ignored on the emulator. This is expected until the backend is verified on hardware; treat as discovery, not regression. See openspec/changes/fix-nnapi-supported-config-build/NOTES.md."
+          fi
+
+          echo "Testing ADB connectivity..."
+          adb devices
+          adb shell cat /proc/version 2>/dev/null || echo "proc/version not available"
+          EOF
+          chmod +x run_nnapi_tests.sh
+
+      - uses: reactivecircus/android-emulator-runner@v2
+        id: emulator
+        with:
+          api-level: 34
+          arch: x86_64
+          target: aosp_atd
+          profile: pixel_6
+          avd-name: candle-nnapi-test
+          force-avd-creation: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim -memory 4096
+          disable-animations: true
+          disable-spellchecker: true
+          script: ./run_nnapi_tests.sh
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: candle-nnapi-test-results
+          path: |
+            target/x86_64-linux-android/
+            /tmp/candle-test-results/
+          retention-days: 14
+
   instrumented-tests:
     name: Instrumentation Tests (Emulator)
     if: github.event_name == 'workflow_dispatch'
-    needs: [build, candle-vulkan-build, candle-vulkan-tests]
+    needs: [build, candle-vulkan-build, candle-vulkan-tests, candle-nnapi-tests]
     runs-on: ubuntu-latest
     defaults:
       run:

@@ -81,6 +81,7 @@ impl VulkanStorage {
         &self.buffer
     }
 
+    #[allow(dead_code)]
     fn alloc_result_storage(&self, elem_count: usize) -> Result<VulkanStorage> {
         let size = elem_count * self.dtype.size_in_bytes();
         let buffer = self
@@ -173,7 +174,7 @@ impl VulkanStorage {
 
     fn read_to_bytes(&self) -> Result<Vec<u8>> {
         self.device.sync()?;
-        let size = self.count * self.dtype.size_in_bytes();
+        let _size = self.count * self.dtype.size_in_bytes();
         let slice = self.buffer.slice(..);
         let (tx, rx) = std::sync::mpsc::channel();
         slice.map_async(wgpu::MapMode::Read, move |result| {
@@ -276,7 +277,7 @@ impl BackendStorage for VulkanStorage {
         let shape = layout.shape();
         let count = shape.elem_count();
 
-        let mut output = self.device.allocate_buffer(
+        let output = self.device.allocate_buffer(
             (count * self.dtype.size_in_bytes()) as u64,
             wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         )?;
@@ -406,7 +407,7 @@ impl BackendStorage for VulkanStorage {
 
         match B::KERNEL {
             "add" => {
-                let mut output = self.device.allocate_buffer(
+                let output = self.device.allocate_buffer(
                     (count * self.dtype.size_in_bytes()) as u64,
                     wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
                 )?;

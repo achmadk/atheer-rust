@@ -285,6 +285,10 @@ impl Tensor {
                         );
                         Storage::Vulkan(storage)
                     }
+                    #[cfg(all(feature = "nnapi", target_os = "android"))]
+                    Device::Nnapi(_) => {
+                        return Err(Error::Msg("NNAPI does not support dummy types".to_string()));
+                    }
                 };
 
                 let op = BackpropOp::none();
@@ -360,6 +364,10 @@ impl Tensor {
                     #[cfg(not(feature = "metal"))]
                     Device::Metal(_) => {
                         return Err(Error::Msg("Metal support not compiled".to_string()));
+                    }
+                    #[cfg(all(feature = "nnapi", target_os = "android"))]
+                    Device::Nnapi(_) => {
+                        return Err(Error::Msg("NNAPI does not support dummy types".to_string()));
                     }
                 };
 
@@ -468,6 +476,10 @@ fn convert_dummy(view: &st::TensorView<'_>, device: &Device) -> Result<Tensor> {
                 device.clone(),
             );
             Storage::Vulkan(storage)
+        }
+        #[cfg(all(feature = "nnapi", target_os = "android"))]
+        Device::Nnapi(_) => {
+            return Err(Error::Msg("NNAPI does not support dummy types".to_string()));
         }
     };
 

@@ -37,7 +37,9 @@ struct VulkanContext {
     instance: ash::Instance,
     device: ash::Device,
     physical_device: vk::PhysicalDevice,
+    #[allow(dead_code)]
     queue: vk::Queue,
+    #[allow(dead_code)]
     queue_family_index: u32,
     allocator: ManuallyDrop<Allocator>,
     gemv_descriptor_set_layout: vk::DescriptorSetLayout,
@@ -426,6 +428,7 @@ impl VulkanContext {
         }
     }
 
+    #[allow(dead_code)]
     fn allocate_buffer(
         &mut self,
         size: u64,
@@ -477,6 +480,7 @@ impl VulkanContext {
         Ok((buffer, allocation))
     }
 
+    #[allow(dead_code)]
     fn ensure_weight_buffers(&mut self, hidden_size: u32, vocab_size: u32) -> Result<()> {
         if self.weight_buffer.is_some()
             && self.weight_hidden_size == hidden_size
@@ -514,6 +518,7 @@ impl VulkanContext {
         Ok(())
     }
 
+    #[allow(dead_code)]
     fn dispatch_gemv(
         &mut self,
         input_ids: &[u32],
@@ -697,6 +702,7 @@ impl VulkanContext {
         }
     }
 
+    #[allow(dead_code)]
     fn dispatch_attention(
         &mut self,
         q_buf: &[f32],

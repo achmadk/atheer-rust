@@ -142,16 +142,20 @@ impl BackendManager {
             }
             #[cfg(not(any(target_os = "ios", target_os = "macos")))]
             BackendType::Metal | BackendType::CoreML => candle_core::Device::Cpu,
-            #[cfg(target_os = "android")]
-            BackendType::Vulkan => candle_core::Device::Cpu,
-            #[cfg(target_os = "android")]
-            BackendType::NNAPI => candle_core::Device::Cpu,
+            #[cfg(all(feature = "vulkan", target_os = "android"))]
+            BackendType::Vulkan => {
+                candle_core::Device::vulkan_if_available(0).unwrap_or(candle_core::Device::Cpu)
+            }
+            #[cfg(all(feature = "nnapi", target_os = "android"))]
+            BackendType::NNAPI => {
+                candle_core::Device::new_nnapi(0).unwrap_or(candle_core::Device::Cpu)
+            }
             BackendType::Cuda => {
                 candle_core::Device::cuda_if_available(0).unwrap_or(candle_core::Device::Cpu)
             }
-            #[cfg(not(target_os = "android"))]
+            #[cfg(not(all(feature = "vulkan", target_os = "android")))]
             BackendType::Vulkan => candle_core::Device::Cpu,
-            #[cfg(not(target_os = "android"))]
+            #[cfg(not(all(feature = "nnapi", target_os = "android")))]
             BackendType::NNAPI => candle_core::Device::Cpu,
         }
     }

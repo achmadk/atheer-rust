@@ -18,9 +18,13 @@ impl Tensor {
             crate::DeviceLocation::Metal { gpu_id } => {
                 format!(", metal:{gpu_id}")
             }
-            #[cfg(all(feature = "vulkan", target_os = "android"))]
+            #[cfg(target_os = "android")]
             crate::DeviceLocation::Vulkan { gpu_id } => {
                 format!(", vulkan:{gpu_id}")
+            }
+            #[cfg(target_os = "android")]
+            crate::DeviceLocation::Nnapi { gpu_id } => {
+                format!(", nnapi:{gpu_id}")
             }
         };
 
@@ -549,9 +553,13 @@ impl std::fmt::Display for Tensor {
             crate::DeviceLocation::Metal { gpu_id } => {
                 format!(", metal:{gpu_id}")
             }
-            #[cfg(all(feature = "vulkan", target_os = "android"))]
+            #[cfg(target_os = "android")]
             crate::DeviceLocation::Vulkan { gpu_id } => {
                 format!(", vulkan:{gpu_id}")
+            }
+            #[cfg(target_os = "android")]
+            crate::DeviceLocation::Nnapi { gpu_id } => {
+                format!(", nnapi:{gpu_id}")
             }
         };
 

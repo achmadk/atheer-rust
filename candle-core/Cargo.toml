@@ -18,6 +18,12 @@ mkl = ["dep:libc", "dep:intel-mkl-src"]
 accelerate = ["dep:libc", "dep:accelerate-src"]
 metal = ["dep:objc2-metal", "dep:objc2-foundation", "dep:candle-metal-kernels", "candle-ug?/metal"]
 vulkan = ["dep:wgpu", "dep:pollster", "dep:bytemuck"]
+# NNAPI is not intended to build without Vulkan: the `Device` enum's NNAPI
+# constructors (`new_nnapi`, `is_nnapi`, `as_nnapi_device`) are defined only in the
+# Vulkan-gated `impl` block in src/device.rs. Declaring the dependency collapses the
+# vulkan x nnapi feature space to a chain and makes `--features nnapi` alone, which
+# selected an enum variant with no constructor, inexpressible.
+nnapi = ["dep:libc", "vulkan"]
 ug = ["dep:candle-ug"]
 
 [dependencies]
