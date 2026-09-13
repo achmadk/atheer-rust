@@ -397,6 +397,7 @@ tools/gen-bindings [thin uniffi CLI wrapper]
 - The workspace `naga` dependency remains because `atheer-accel/build.rs` still compiles its live `gemv.glsl` and `attention.glsl` inputs.
 - The deleted `candle-core/shaders/` sources are recoverable from commit `3afeb5cbaa5fd179f50c428200ae0f5f565e51c3`; Phase 2 can restore `dequant_q4k.glsl` and `matmul_f16.glsl` from that commit.
 - Verification baseline and post-sync result: **794 passed, 0 failed, 7 ignored** across 44 test binaries.
+- wgpu 22.1.0 → 30.0.1 in the `vulkan` feature (direct jump; `device.rs` adapted to the v30 API, no WGSL changes, workspace `naga 0.20` untouched); workspace `rust-version` 1.75 → 1.87 (wgpu 30 MSRV); `naga`/`wgpu` future-incompat warnings resolved; post-bump verification: **817 passed, 0 failed, 8 ignored**.
 
 ---
 

@@ -185,7 +185,15 @@ impl VulkanStorage {
         rx.recv().unwrap().map_err(|e| {
             Error::Vulkan(VulkanError::Mapping(format!("failed to map buffer: {}", e)))
         })?;
-        let data = slice.get_mapped_range().to_vec();
+        let data = slice
+            .get_mapped_range()
+            .map_err(|e| {
+                Error::Vulkan(VulkanError::Mapping(format!(
+                    "failed to get mapped range: {}",
+                    e
+                )))
+            })?
+            .to_vec();
         Ok(data)
     }
 

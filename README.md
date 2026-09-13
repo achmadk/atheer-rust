@@ -462,6 +462,8 @@ The current pinned release is **0.11.0**. The local fork branch `patched-v0.11.0
 
 The unused `candle-core/src/vulkan_backend_old/`, `candle-core/shaders/`, and `candle-core/build.rs` artifacts were removed after the WGSL backend replaced the old GLSL pipeline. The live shaders under `atheer-accel/shaders/` are unrelated and must remain.
 
+Carried delta vs upstream: `candle-core/Cargo.toml` pins `wgpu = "30.0"` (upstream 0.11.0 pins wgpu 22), with `vulkan_backend_wgpu/device.rs` adapted to the v30 API — `request_adapter` returns `Result`, single-arg `request_device`, `DeviceDescriptor` gains `experimental_features` + `trace`, `RequestAdapterOptions` gains `apply_limit_buckets`, `entry_point: Some(..)`, `bind_group_layouts` entries wrapped in `Some`, push constants replaced by `immediate_size: 0`, `get_mapped_range()` returns `Result`. Re-apply both the version pin and the device.rs adaptations after every upstream retree. Workspace `rust-version` is 1.87 (wgpu 30 MSRV).
+
 ### `candle-transformers`
 
 The vendored `candle-transformers` crate is a tracked copy of the crates.io package, not a subtree. It is pinned to **0.11.0** and carries three local changes:

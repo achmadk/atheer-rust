@@ -44,29 +44,33 @@ impl VulkanDevice {
     fn new_internal(ordinal: usize) -> Result<Self> {
         let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
             backends: wgpu::Backends::VULKAN,
-            ..Default::default()
+            flags: wgpu::InstanceFlags::default(),
+            memory_budget_thresholds: Default::default(),
+            backend_options: Default::default(),
+            display: None,
         });
 
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::HighPerformance,
             force_fallback_adapter: false,
             compatible_surface: None,
+            apply_limit_buckets: false,
         }))
-        .ok_or_else(|| {
-            crate::Error::Vulkan(VulkanError::Message(
-                "Failed to request Vulkan adapter".to_string(),
-            ))
+        .map_err(|e| {
+            crate::Error::Vulkan(VulkanError::Message(format!(
+                "Failed to request Vulkan adapter: {}",
+                e
+            )))
         })?;
 
-        let (device, queue) = pollster::block_on(adapter.request_device(
-            &wgpu::DeviceDescriptor {
-                label: Some("candle-wgpu-device"),
-                required_features: wgpu::Features::empty(),
-                required_limits: wgpu::Limits::downlevel_defaults(),
-                memory_hints: Default::default(),
-            },
-            None,
-        ))
+        let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+            label: Some("candle-wgpu-device"),
+            required_features: wgpu::Features::empty(),
+            required_limits: wgpu::Limits::downlevel_defaults(),
+            experimental_features: Default::default(),
+            memory_hints: Default::default(),
+            trace: Default::default(),
+        }))
         .map_err(|e| {
             crate::Error::Vulkan(VulkanError::Message(format!(
                 "Failed to request device: {}",
@@ -214,8 +218,8 @@ impl VulkanDevice {
                 .device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("binary-op-pipeline"),
-                    bind_group_layouts: &[&bind_group_layout],
-                    push_constant_ranges: &[],
+                    bind_group_layouts: &[Some(&bind_group_layout)],
+                    immediate_size: 0,
                 });
 
         let pipeline =
@@ -225,7 +229,7 @@ impl VulkanDevice {
                     label: Some("binary-op"),
                     layout: Some(&pipeline_layout),
                     module: &shader,
-                    entry_point: "main",
+                    entry_point: Some("main"),
                     cache: None,
                     compilation_options: Default::default(),
                 });
@@ -351,8 +355,8 @@ impl VulkanDevice {
                 .device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("affine-pipeline"),
-                    bind_group_layouts: &[&bind_group_layout],
-                    push_constant_ranges: &[],
+                    bind_group_layouts: &[Some(&bind_group_layout)],
+                    immediate_size: 0,
                 });
 
         let pipeline =
@@ -362,7 +366,7 @@ impl VulkanDevice {
                     label: Some("affine"),
                     layout: Some(&pipeline_layout),
                     module: &shader,
-                    entry_point: "main",
+                    entry_point: Some("main"),
                     cache: None,
                     compilation_options: Default::default(),
                 });
@@ -502,8 +506,8 @@ impl VulkanDevice {
                 .device
                 .create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("gemm-pipeline"),
-                    bind_group_layouts: &[&bind_group_layout],
-                    push_constant_ranges: &[],
+                    bind_group_layouts: &[Some(&bind_group_layout)],
+                    immediate_size: 0,
                 });
 
         let pipeline =
@@ -513,7 +517,7 @@ impl VulkanDevice {
                     label: Some("gemm"),
                     layout: Some(&pipeline_layout),
                     module: &shader,
-                    entry_point: "main",
+                    entry_point: Some("main"),
                     cache: None,
                     compilation_options: Default::default(),
                 });
