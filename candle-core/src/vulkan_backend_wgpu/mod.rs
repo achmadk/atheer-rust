@@ -695,6 +695,27 @@ impl BackendStorage for VulkanStorage {
                 dst.device
                     .write_buffer(&dst.buffer, (dst_offset * elem_size) as u64, data)?;
             }
+            crate::StridedBlocks::UniformBlocks {
+                start_offset,
+                block_len,
+                count,
+                src_stride,
+            } => {
+                let mut dst_idx = dst_offset;
+                for i in 0..count {
+                    if dst_idx + block_len > dst_count {
+                        break;
+                    }
+                    let src_start = (start_offset + i * src_stride) * elem_size;
+                    let src_end = src_start + block_len * elem_size;
+                    dst.device.write_buffer(
+                        &dst.buffer,
+                        (dst_idx * elem_size) as u64,
+                        &src_bytes[src_start..src_end],
+                    )?;
+                    dst_idx += block_len;
+                }
+            }
             crate::StridedBlocks::MultipleBlocks {
                 block_start_index,
                 block_len,
