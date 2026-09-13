@@ -34,6 +34,7 @@
 
 ## Table of Contents
 
+0. [Market-Readiness Assessment (Reality Check)](#0-market-readiness-assessment-reality-check)
 1. [Current Architecture Overview](#current-architecture-overview)
 2. [Security & Model Integrity](#1-security--model-integrity)
 3. [Privacy Engineering](#2-privacy-engineering)
@@ -46,6 +47,131 @@
 10. [Priority Roadmap](#9-priority-roadmap)
 11. [Known Critical Bugs](#10-known-critical-bugs)
 12. [Implementation Guide](#11-implementation-guide)
+
+---
+
+## 0. Market-Readiness Assessment (Reality Check)
+
+> **Audit date: 2026-08-03** · Ground truth = the `atheer-rust` repository at HEAD (commit `e4405824`, 113 commits, first commit 2026-05-29 — a ~2-month-old codebase at `v0.1.0`).
+>
+> This section answers one question directly: **Is Atheer a reliable, secure, fast, privacy-first edge AI inference engine "on the market"?**
+>
+> **Verdict: Not yet.** Atheer is a **well-architected research prototype** with the **strongest security-primitive foundation in its class**, wrapped around an inference core that is real on Apple, **CPU-bound in practice on Android**, **entirely unbenchmarked**, and **partially stubbed** in its two headline features (GPU sandbox worker, NPU acceleration). The security/privacy *vision* leads the field; the *execution-and-proof* does not yet substantiate the marketing claims.
+
+### Scorecard
+
+| Dimension | Grade | One-line justification |
+|-----------|:-----:|------------------------|
+| **Fast** | 🔴 **F (unsubstantiated)** | `BENCHMARKS.md` is 100% `TBD` (15 TBD cells). Zero measured tok/s, latency, memory, or thermal numbers on any device. |
+| **Reliable** | 🟠 **D+ (prototype-grade)** | ~2 months old, v0.1.0. No real-device iOS/Android validation. Sandbox worker calls are `TODO`. Real E2E inference tests don't run in CI. |
+| **Secure** | 🟢 **B− (strong primitives, unproven system)** | AES-256-GCM, Ed25519, TLS pinning, GGUF safe-load, L1/L2/L3 guardrails are **genuinely implemented and tested** — but opt-in, keys in process memory, and **no third-party audit**. |
+| **Privacy-first** | 🟡 **C+ (best-in-class at-rest, incomplete lifecycle)** | Encrypted cache + `PrivacyMode` lead the field, but **no cache TTL/secure-wipe, no `delete_all_user_data()`, no audit log, toy PII redaction, no iOS Privacy Manifest**. |
+| **"On the market"** | 🔴 **F** | No released binaries, no users, no example apps, broken binding-generation pipeline. |
+
+### The Central Distinction: Claimed vs. Ground Truth
+
+```
+┌────────────────────────────┬──────────────────────────────────────────────┐
+│  MARKETING CLAIM           │  GROUND TRUTH (from the code, 2026-08-03)      │
+├────────────────────────────┼──────────────────────────────────────────────┤
+│ "5 backends, NPU-first"    │  Backends now attempt real devices             │
+│                            │  (vulkan_if_available / new_nnapi), BUT the    │
+│                            │  candle Vulkan matmul reads GPU→CPU and runs   │
+│                            │  a naive scalar triple-loop (mod.rs:649-679).  │
+│                            │  to_dtype is UNIMPLEMENTED for wgpu → quantized│
+│                            │  (q4/q8 GGUF) inference cannot dequantize      │
+│                            │  on-GPU. Net: Android GPU path ≤ CPU speed.    │
+├────────────────────────────┼──────────────────────────────────────────────┤
+│ "Sandboxed GPU execution   │  bridge.rs:150,210,336 → three "TODO: Real     │
+│  + compliance attestation" │  AIDL" markers. batch() calls                  │
+│                            │  cpu_fallback_batch() which produces FAKE      │
+│                            │  logits. Tests exercise the state machine,     │
+│                            │  not real process isolation.                   │
+├────────────────────────────┼──────────────────────────────────────────────┤
+│ "Fast edge AI"             │  BENCHMARKS.md = 15× "TBD". Nothing measured.  │
+├────────────────────────────┼──────────────────────────────────────────────┤
+│ "Runs LLMs" (general)      │  weights.rs supports ONLY quantized_llama +    │
+│                            │  quantized_lfm2. Everything else silently      │
+│                            │  falls back to the Llama loader → Qwen/Gemma/  │
+│                            │  Phi/etc. will mis-load or fail.               │
+├────────────────────────────┼──────────────────────────────────────────────┤
+│ Model encryption/signing/  │  REAL and well-tested. AES-256-GCM, Ed25519,   │
+│  cert-pinning/guardrails/  │  rustls SPKI pinning, safe_content pre-alloc   │
+│  safe-load/privacy-modes   │  gate, L1/L2/L3 guardrails all genuine.        │
+└────────────────────────────┴──────────────────────────────────────────────┘
+```
+
+### What Atheer Actually Is
+
+```
+        ┌──────────────────────────────────────────────────────┐
+        │  A well-architected RESEARCH PROTOTYPE with genuinely │
+        │  novel security/privacy PRIMITIVES that no competitor │
+        │  ships — wrapped around a real-but-limited            │
+        │  candle-transformers inference core.                  │
+        └──────────────────────────────────────────────────────┘
+                              │
+        ┌─────────────────────┼─────────────────────┐
+        ▼                     ▼                     ▼
+  Real & impressive     Real but limited      Aspirational / stubbed
+  ───────────────────   ──────────────────    ────────────────────────
+  • Model encryption    • Inference core       • Android GPU/NPU accel
+    (AES-256-GCM)         (candle; llama +        (Vulkan matmul = CPU
+  • Ed25519 signing       lfm2 arch only)         scalar loop; to_dtype
+  • TLS cert pinning    • Metal on Apple          unimplemented)
+  • GGUF safe-load        (candle Metal)        • GPU sandbox worker
+  • L1/L2/L3 guardrails • Predictive thermal      (AIDL batch = TODO,
+  • Privacy modes         model                    fake logits)
+  • Encrypted L3 cache  • KV cache hierarchy    • Benchmarks (all TBD)
+                                                • Real-device validation
+                                                • Binding pipeline (E1)
+```
+
+### Where Real Acceleration Stands (updated since prior audit)
+
+The Android routing was improved after the last audit — `BackendManager::device()` now calls `vulkan_if_available(0)` and `new_nnapi(0)` instead of hard-coding `Device::Cpu`. **However**, the underlying candle backends are not production-capable for quantized LLM inference:
+
+| Backend | Status | Blocking evidence |
+|---------|--------|-------------------|
+| **Metal (Apple)** | ✅ Real GPU | candle's mature Metal backend |
+| **CoreML/ANE** | 🟡 Conditional | Requires `.mlpackage` + `candle-coreml` fork; ANE compat heuristics gate it |
+| **Vulkan (Android)** | 🔴 Not viable for LLMs | `matmul` at `vulkan_backend_wgpu/mod.rs:649` reads buffers to CPU and runs a scalar `O(b·m·n·k)` loop; `to_dtype`, `cmp`, `conv*`, `scatter*`, `index_add`, pooling all `not implemented` (19 ops). Quantized dequant path cannot run. |
+| **NNAPI (Android)** | 🟡 Substantial but untested | 4,126 LOC executor/graph/storage exists, but **never validated on a real Android device** (per PROGRESS.md); emulator uses SwiftShader (no real NPU). |
+| **CPU** | ✅ Real | candle CPU backend (the de-facto path everywhere non-Apple). |
+
+> **Implication**: the flagship "NPU-first, 5-backend" narrative is real as *plumbing and probing*, but on Android the actual math still lands on CPU (or a Vulkan path that is slower than CPU). "Fast" cannot be claimed until (a) Android GPU/NPU carries a real forward pass, and (b) somebody measures it.
+
+### What It Would Take to Earn Each Claim
+
+```
+CLAIM          BLOCKER TO REMOVE                              PRIORITY
+─────────────  ─────────────────────────────────────────────  ────────
+Fast           Populate BENCHMARKS.md on real hardware         🔴 P0
+               (iPhone 15 Pro, Pixel 8, SD 8 Gen 3)
+               + make Android GPU/NPU carry the forward pass
+               (real Vulkan GEMM shader + on-GPU dequant, or
+               validated NNAPI graph) — otherwise drop the
+               "NPU-first / 5-backend acceleration" framing.
+Reliable       Real-device iOS + Android validation;           🔴 P0
+               finish sandbox AIDL batch(); run E2E
+               inference tests in CI (not model-gated skips).
+Secure         Third-party crypto/security audit;              🟠 P1
+               move keys out of process String memory (S9);
+               publish a threat model.
+Privacy-first  Cache TTL + secure wipe (V4);                   🔴 P0
+               delete_all_user_data() (C2);
+               append-only audit log (V6);
+               regex PII (V5); iOS PrivacyInfo.xcprivacy (C3).
+On the market  Fix binding-generation pipeline (E1/R14);       🟠 P1
+               ship example apps; cut a real release.
+```
+
+### The Honest One-Liner
+
+> **Atheer has the best security-primitive foundation in its class bolted onto an inference core that is real on Apple, CPU-bound on Android, unbenchmarked everywhere, and partially stubbed in its headline "sandbox" and "NPU" features. The architecture and security vision are genuinely strong — the gap is execution-and-proof, not design. That is the good kind of gap, but it is still the difference between "promising prototype" and "best-in-class engine on the market."**
+
+> [!NOTE]
+> This assessment is deliberately adversarial to counterbalance the marketing surface (README, WHITEPAPER, landing page, INVESTOR-DECK). The completed security/privacy items in the status blocks below are **not** disputed — they are real. What is disputed is the *system-level* claim of a shipped, fast, reliable, privacy-first engine. Treat the sections that follow as the prioritized path from prototype to that claim.
 
 ---
 

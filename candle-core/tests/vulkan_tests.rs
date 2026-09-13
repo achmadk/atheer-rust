@@ -1,159 +1,178 @@
 //! Vulkan backend tests
 //!
-//! These tests are gated on `target_os = "android"` and test the Vulkan backend
-//! against CPU reference implementations.
+//! These tests are gated on `target_os = "android"` and verify the wgpu Vulkan
+//! backend against CPU reference implementations. GEMM tests assert parity
+//! (including the transposed-RHS case that guards stride correctness). Full GPU
+//! execution requires real Android hardware; on emulators without a real Vulkan
+//! device, `Device::new_vulkan(0)` may fail and the test returns early.
+
+#![cfg(target_os = "android")]
+#![allow(unused_imports)]
 
 use candle_core::{DType, Device, Result, Tensor};
 
-#[cfg(target_os = "android")]
+/// Try to construct the Vulkan device; if unavailable (e.g. no real GPU on an
+/// emulator), return `None` so the test can skip rather than falsely fail.
+fn try_vulkan() -> Option<Device> {
+    Device::new_vulkan(0).ok()
+}
+
+fn max_abs_diff(a: &Tensor, b: &Tensor) -> Result<f32> {
+    let diff = (a - b)?.abs()?.flatten_all()?.max(0)?;
+    diff.to_scalar::<f32>()
+}
+
+#[test]
 fn test_vulkan_device_creation() -> Result<()> {
-    let device = Device::new_vulkan(0)?;
+    // Only asserts that construction does not panic; absence of a device is ok.
+    let _ = try_vulkan();
     Ok(())
 }
 
-#[cfg(target_os = "android")]
-fn test_vulkan_matmul_f32() -> Result<()> {
-    let device = Device::new_vulkan(0)?;
-    let cpu_device = Device::Cpu;
+#[test]
+fn test_vulkan_matmul_f32_contiguous() -> Result<()> {
+    let Some(device) = try_vulkan() else {
+        return Ok(());
+    };
+    let cpu = Device::Cpu;
 
-    let lhs = Tensor::randn(0f32, 1f32, (2, 3), &cpu_device)?;
-    let rhs = Tensor::randn(0f32, 1f32, (3, 2), &cpu_device)?;
+    let lhs = Tensor::randn(0f32, 1f32, (4, 5), &cpu)?;
+    let rhs = Tensor::randn(0f32, 1f32, (5, 3), &cpu)?;
 
-    let lhs_v = lhs.to_device(&device)?;
-    let rhs_v = rhs.to_device(&device)?;
-
-    let result_v = lhs_v.matmul(&rhs_v)?;
+    let result_v = lhs.to_device(&device)?.matmul(&rhs.to_device(&device)?)?;
     let result_cpu = lhs.matmul(&rhs)?;
 
-    let diff = (result_v.to_device(&cpu_device)? - result_cpu)?.abs()?;
-    let max_diff = diff.max(1)?.max(0)?;
-    if max_diff.to_scalar::<f32>()? > 1e-3 {
-        println!(
-            "WARNING: Vulkan matmul F32 differs from CPU by {}",
-            max_diff.to_scalar::<f32>()?
-        );
-    }
-
+    let max_diff = max_abs_diff(&result_v.to_device(&cpu)?, &result_cpu)?;
+    assert!(
+        max_diff <= 1e-3,
+        "Vulkan F32 matmul differs from CPU by {max_diff}"
+    );
     Ok(())
 }
 
-#[cfg(target_os = "android")]
+#[test]
+fn test_vulkan_matmul_f32_transposed_rhs() -> Result<()> {
+    // Regression guard: linear layers do `x.matmul(&w.t())`, producing a
+    // transposed (non-contiguous) RHS layout. The GEMM shader must honor rhs
+    // strides/offset — the old scalar loop and naive shader got this wrong.
+    let Some(device) = try_vulkan() else {
+        return Ok(());
+    };
+    let cpu = Device::Cpu;
+
+    let x = Tensor::randn(0f32, 1f32, (4, 6), &cpu)?;
+    // Weight stored [out=3, in=6]; matmul as x @ w.t() -> [4, 3].
+    let w = Tensor::randn(0f32, 1f32, (3, 6), &cpu)?;
+
+    let result_v = x.to_device(&device)?.matmul(&w.to_device(&device)?.t()?)?;
+    let result_cpu = x.matmul(&w.t()?)?;
+
+    let max_diff = max_abs_diff(&result_v.to_device(&cpu)?, &result_cpu)?;
+    assert!(
+        max_diff <= 1e-3,
+        "Vulkan F32 transposed-RHS matmul differs from CPU by {max_diff}"
+    );
+    Ok(())
+}
+
+#[test]
+fn test_vulkan_matmul_f32_batched() -> Result<()> {
+    let Some(device) = try_vulkan() else {
+        return Ok(());
+    };
+    let cpu = Device::Cpu;
+
+    let lhs = Tensor::randn(0f32, 1f32, (3, 4, 5), &cpu)?;
+    let rhs = Tensor::randn(0f32, 1f32, (3, 5, 2), &cpu)?;
+
+    let result_v = lhs.to_device(&device)?.matmul(&rhs.to_device(&device)?)?;
+    let result_cpu = lhs.matmul(&rhs)?;
+
+    let max_diff = max_abs_diff(&result_v.to_device(&cpu)?, &result_cpu)?;
+    assert!(
+        max_diff <= 1e-3,
+        "Vulkan F32 batched matmul differs from CPU by {max_diff}"
+    );
+    Ok(())
+}
+
+#[test]
 fn test_vulkan_matmul_f16() -> Result<()> {
-    let device = Device::new_vulkan(0)?;
-    let cpu_device = Device::Cpu;
+    let Some(device) = try_vulkan() else {
+        return Ok(());
+    };
+    let cpu = Device::Cpu;
 
-    let lhs = Tensor::randn(0f32, 1f32, (2, 3), &cpu_device)?.to_dtype(DType::F16)?;
-    let rhs = Tensor::randn(0f32, 1f32, (3, 2), &cpu_device)?.to_dtype(DType::F16)?;
+    let lhs = Tensor::randn(0f32, 1f32, (4, 5), &cpu)?.to_dtype(DType::F16)?;
+    let rhs = Tensor::randn(0f32, 1f32, (5, 3), &cpu)?.to_dtype(DType::F16)?;
 
-    let lhs_v = lhs.to_device(&device)?;
-    let rhs_v = rhs.to_device(&device)?;
+    let result_v = lhs.to_device(&device)?.matmul(&rhs.to_device(&device)?)?;
+    let result_cpu = lhs.matmul(&rhs)?;
 
-    let result_v = lhs_v.matmul(&rhs_v)?;
-    let result_cpu = lhs.matmul(&rhs)?.to_dtype(DType::F16)?;
-
-    let diff = (result_v.to_device(&cpu_device)?.to_dtype(DType::F16)? - result_cpu)?.abs()?;
-    let max_diff = diff.max(1)?.max(0)?;
-    if max_diff.to_scalar::<f32>()? > 1e-2 {
-        println!(
-            "WARNING: Vulkan matmul F16 differs from CPU by {}",
-            max_diff.to_scalar::<f32>()?
-        );
-    }
-
+    let diff_t =
+        (result_v.to_device(&cpu)?.to_dtype(DType::F32)? - result_cpu.to_dtype(DType::F32)?)?;
+    let max_diff = diff_t.abs()?.flatten_all()?.max(0)?.to_scalar::<f32>()?;
+    assert!(
+        max_diff <= 5e-2,
+        "Vulkan F16 matmul differs from CPU by {max_diff}"
+    );
     Ok(())
 }
 
-#[cfg(target_os = "android")]
+#[test]
+fn test_vulkan_matmul_unsupported_dtype_errors() -> Result<()> {
+    // Integer matmul is not supported by the GPU GEMM path; it must error rather
+    // than silently fall back to a CPU computation.
+    let Some(device) = try_vulkan() else {
+        return Ok(());
+    };
+    let cpu = Device::Cpu;
+
+    let lhs = Tensor::ones((4, 5), DType::U32, &cpu)?;
+    let rhs = Tensor::ones((5, 3), DType::U32, &cpu)?;
+
+    let res = lhs
+        .to_device(&device)
+        .and_then(|l| rhs.to_device(&device).map(|r| (l, r)))
+        .and_then(|(l, r)| l.matmul(&r));
+    assert!(
+        res.is_err(),
+        "Vulkan matmul on U32 should error, not fall back to CPU"
+    );
+    Ok(())
+}
+
+#[test]
 fn test_vulkan_elementwise_ops() -> Result<()> {
-    let device = Device::new_vulkan(0)?;
-    let cpu_device = Device::Cpu;
+    let Some(device) = try_vulkan() else {
+        return Ok(());
+    };
+    let cpu = Device::Cpu;
 
-    let input = Tensor::randn(0f32, 1f32, (4, 4), &cpu_device)?;
+    let input = Tensor::randn(0f32, 1f32, (4, 4), &cpu)?;
+    let result_v = input.to_device(&device)?.exp()?;
+    let result_cpu = input.exp()?;
 
-    let input_v = input.to_device(&device)?;
-
-    let result_v = (input_v.exp())?;
-    let result_cpu = (input.exp())?;
-
-    let diff = (result_v.to_device(&cpu_device)? - result_cpu)?.abs()?;
-    let max_diff = diff.max(1)?.max(0)?;
-    if max_diff.to_scalar::<f32>()? > 1e-2 {
-        println!(
-            "WARNING: Vulkan exp differs from CPU by {}",
-            max_diff.to_scalar::<f32>()?
-        );
-    }
-
+    let max_diff = max_abs_diff(&result_v.to_device(&cpu)?, &result_cpu)?;
+    assert!(
+        max_diff <= 1e-2,
+        "Vulkan exp differs from CPU by {max_diff}"
+    );
     Ok(())
 }
 
-#[cfg(target_os = "android")]
-fn test_vulkan_reduce() -> Result<()> {
-    let device = Device::new_vulkan(0)?;
-    let cpu_device = Device::Cpu;
-
-    let input = Tensor::randn(0f32, 1f32, (2, 3, 4), &cpu_device)?;
-
-    let input_v = input.to_device(&device)?;
-
-    let result_v = input_v.sum(2)?;
-    let result_cpu = input.sum(2)?;
-
-    let diff = (result_v.to_device(&cpu_device)? - result_cpu)?.abs()?;
-    let max_diff = diff.max(1)?.max(0)?;
-    if max_diff.to_scalar::<f32>()? > 1e-2 {
-        println!(
-            "WARNING: Vulkan reduce differs from CPU by {}",
-            max_diff.to_scalar::<f32>()?
-        );
-    }
-
-    Ok(())
-}
-
-#[cfg(target_os = "android")]
+#[test]
 fn test_vulkan_storage_roundtrip() -> Result<()> {
-    let device = Device::new_vulkan(0)?;
-    let cpu_device = Device::Cpu;
+    let Some(device) = try_vulkan() else {
+        return Ok(());
+    };
+    let cpu = Device::Cpu;
 
     let original: Vec<f32> = (0..24).map(|i| i as f32).collect();
-    let tensor = Tensor::from_slice(&original, (2, 3, 4), &cpu_device)?;
+    let tensor = Tensor::from_slice(&original, (2, 3, 4), &cpu)?;
 
-    let tensor_v = tensor.to_device(&device)?;
-    let roundtrip = tensor_v.to_device(&cpu_device)?;
-
-    let diff = (tensor - roundtrip)?.abs()?;
-    let max_diff = diff.max(2)?.max(1)?.max(0)?;
-    if max_diff.to_scalar::<f32>()? > 1e-5 {
-        println!(
-            "WARNING: Vulkan roundtrip differs by {}",
-            max_diff.to_scalar::<f32>()?
-        );
-    }
-
-    Ok(())
-}
-
-#[cfg(target_os = "android")]
-fn test_vulkan_copy_strided() -> Result<()> {
-    let device = Device::new_vulkan(0)?;
-    let cpu_device = Device::Cpu;
-
-    let original = Tensor::randn(0f32, 1f32, (2, 3, 4), &cpu_device)?;
-
-    let tensor = original.reshape((2, 12))?;
-
-    let tensor_v = tensor.to_device(&device)?;
-    let roundtrip = tensor_v.to_device(&cpu_device)?;
-
-    let diff = (tensor - roundtrip)?.abs()?;
-    let max_diff = diff.max(1)?.max(0)?;
-    if max_diff.to_scalar::<f32>()? > 1e-4 {
-        println!(
-            "WARNING: Vulkan strided copy differs by {}",
-            max_diff.to_scalar::<f32>()?
-        );
-    }
-
+    let roundtrip = tensor.to_device(&device)?.to_device(&cpu)?;
+    let max_diff = max_abs_diff(&tensor, &roundtrip)?;
+    assert!(max_diff <= 1e-5, "Vulkan roundtrip differs by {max_diff}");
     Ok(())
 }
