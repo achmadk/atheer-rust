@@ -10,7 +10,6 @@ name: Android CI
 #
 # Key changes:
 # - candle-core/src/vulkan_backend_wgpu/ - new wgpu-backed implementation
-# - candle-core/src/vulkan_backend_old/ - preserved for rollback reference
 # - Tests in candle-core/tests/vulkan_tests.rs verify correctness vs CPU reference
 # =============================================================================
 
