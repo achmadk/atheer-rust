@@ -347,7 +347,7 @@ The `CoreMLBackend` now supports real ANE inference via `candle-coreml` integrat
 5. **Caching** — compatibility computed at load time and stored on the `CoreMLBackend` instance.
 6. **16 unit tests** — all passing (20 with pre-heat tests, cfg-gated).
 
-**Remaining**: Create the `atheer-npu/candle-coreml` GitHub fork (upstream dep bump from 0.9.1 to 0.10.2 and API adaptation), then uncomment the git dep in `atheer-accel/Cargo.toml` and verify the `coreml` feature compiles end-to-end.
+**Remaining**: Create the `atheer-npu/candle-coreml` GitHub fork (upstream dep bump from 0.9.1 to 0.11.0 and API adaptation), then uncomment the git dep in `atheer-accel/Cargo.toml` and verify the `coreml` feature compiles end-to-end.
 
 ### ANE Compilation Pre-Heat (P5) ✅
 
@@ -426,27 +426,60 @@ The Metal backend (`atheer-accel/src/metal.rs`) panics on systems without a Meta
 
 ## Vendored Dependencies
 
-Atheer vendors specific upstream crates that require patches for stability or platform compatibility. These are managed via `git subtree` and live in-tree as workspace members with `[patch.crates-io]` entries in the root `Cargo.toml`.
+Atheer vendors specific upstream crates that require patches for stability or platform compatibility. They live in-tree as workspace members with `[patch.crates-io]` entries in the root `Cargo.toml`.
 
 ### `candle-core`
 
 The vendored `candle-core` crate at `candle-core/` includes a stability fix for the Metal backend — on systems without a Metal GPU (virtualized macOS, CI), `MetalDevice::new()` returns `Err` instead of panicking on an empty device list.
 
 **Upstream:** `https://github.com/huggingface/candle`  
-**Fork:** `github.com/achmadk/candle` (branch `patched-v0.10.2`)  
+**Fork:** `github.com/achmadk/candle` (branch `patched-v0.11.0`)
 **Remote:** `candle-core-upstream`
 
 **Update procedure:**
 
 ```bash
-# Pull latest from the fork
-git subtree pull --prefix=candle-core --squash candle-core-upstream crate-candle-core
+# In the fork: rebase the one-file Metal fix onto the next upstream release.
+git fetch upstream --tags
+git switch patched-v0.11.0
+git rebase <next-release-tag>
+git push --force-with-lease origin patched-v0.11.0
 
-# Re-apply the Metal stability patch if it was not in the pulled revision
-# The fix lives in candle-core/src/metal_backend/mod.rs ~line 1927
+# Retree the crate as a child of the previous flattened tip. This preserves
+# the ancestor required by git subtree; use the previous crate-candle-core SHA.
+TREE=$(git rev-parse 'patched-v0.11.0^{tree}:candle-core')
+git commit-tree "$TREE" -p <previous-crate-candle-core-sha> \
+  -m "chore: retree candle-core to <next-release-tag> with metal fix"
+git push origin <new-commit>:crate-candle-core
+
+# In this repository, pull the flattened child commit.
+git subtree pull --prefix=candle-core --squash candle-core-upstream crate-candle-core
 ```
 
-After pulling, run `cargo check -p candle-core` to verify the vendored crate compiles, then `cargo test --workspace --exclude candle-coreml` to verify the full workspace.
+After pulling, run `cargo check -p candle-core`, the Android Vulkan/NNAPI check, and `cargo test --workspace`.
+
+The current pinned release is **0.11.0**. The local fork branch `patched-v0.11.0` is rebased from upstream tag `0.11.0`; replace `<next-release-tag>` when a later release is selected. The flattened `crate-candle-core` branch must always be advanced as a child of its previous tip, not recreated as an orphan.
+
+The unused `candle-core/src/vulkan_backend_old/`, `candle-core/shaders/`, and `candle-core/build.rs` artifacts were removed after the WGSL backend replaced the old GLSL pipeline. The live shaders under `atheer-accel/shaders/` are unrelated and must remain.
+
+### `candle-transformers`
+
+The vendored `candle-transformers` crate is a tracked copy of the crates.io package, not a subtree. It is pinned to **0.11.0** and carries three local changes:
+
+- `#![allow(clippy::all)]` for the vendored upstream source;
+- `quantized_llama::ModelWeights::kv_cache_snapshot()` and `kv_cache_restore()` for checkpoint persistence;
+- `quantized_lfm2::ModelWeights::clear_kv_cache()` for resetting Attention and ShortConv state.
+
+**Update procedure:**
+
+```bash
+# Replace only src/ with the next candle-transformers package source.
+# Preserve Cargo.toml.orig, Cargo.lock, Cargo.toml, README.md, and tests/.
+# Re-apply the three local changes above, then update candle-core and
+# candle-nn versions in the normalized Cargo.toml.
+```
+
+Run `cargo check -p candle-transformers`, `cargo test -p atheer-core`, and `cargo test --workspace` after each update.
 
 ### `candle-coreml`
 

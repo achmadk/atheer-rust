@@ -599,7 +599,8 @@ impl ModelWeights {
 
     /// Clear all per-layer KV caches (both Attention and ShortConv).
     /// This resets the model state so the next forward starts fresh.
-    pub fn kv_cache_clear(&mut self) {
+    /// Named to match upstream's `clear_kv_cache` convention (#3536).
+    pub fn clear_kv_cache(&mut self) {
         for layer in self.layers.iter_mut() {
             match &mut layer.kind {
                 LayerKind::Attention(attn) => attn.kv_cache = None,

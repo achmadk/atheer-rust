@@ -12,7 +12,7 @@
 [package]
 edition = "2021"
 name = "candle-transformers"
-version = "0.10.2"
+version = "0.11.0"
 build = false
 autolib = false
 autobins = false
@@ -75,15 +75,15 @@ optional = true
 version = "1.5.0"
 
 [dependencies.candle]
-version = "0.10.2"
+version = "0.11.0"
 package = "candle-core"
 
 [dependencies.candle-flash-attn]
-version = "0.10.2"
+version = "0.11.0"
 optional = true
 
 [dependencies.candle-nn]
-version = "0.10.2"
+version = "0.11.0"
 
 [dependencies.fancy-regex]
 version = "0.17.0"

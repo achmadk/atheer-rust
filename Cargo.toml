@@ -30,13 +30,13 @@ rust-version = "1.75"
 # Local forks of upstream crates
 # ═══════════════════════════════════════════════════════════════
 #
-# candle-transformers 0.10.2 — patched to add:
+# candle-transformers 0.11.0 — patched to add:
 #   - ModelWeights::kv_cache_snapshot()
 #   - ModelWeights::kv_cache_restore()
 [patch.crates-io]
 candle-core = { path = "candle-core" }
 candle-transformers = { path = "candle-transformers" }
-# candle-nn = { path = "/tmp/candle-nn-0.10.2" }
+# candle-nn = { path = "/tmp/candle-nn-0.11.0" }
 
 [workspace.dependencies]
 # Async runtime

@@ -159,8 +159,9 @@
 
 ### 2.7 `candle-transformers` — Local Upstream Fork ✅
 
-- Forked from upstream v0.10.2
-- Patched to add `ModelWeights::kv_cache_snapshot()` and `kv_cache_restore()`
+- Vendored from upstream v0.11.0
+- Patched to add `ModelWeights::kv_cache_snapshot()` and `kv_cache_restore()` for quantized Llama checkpoint persistence
+- Patched to add `quantized_lfm2::ModelWeights::clear_kv_cache()` for Attention and ShortConv state reset
 - Includes all upstream model architectures (100+ files)
 - Pinned via `[patch.crates-io]` in workspace Cargo.toml
 
@@ -380,13 +381,22 @@ tools/gen-bindings [thin uniffi CLI wrapper]
 | Category | Count | Notes |
 |----------|-------|-------|
 | Rust source files (`.rs`) | 72 | Across all crates |
-| GLSL shaders | 2 | `gemv.glsl`, `attention.glsl` (build.rs only compiles these 2) |
+| GLSL shaders | 2 | `atheer-accel/shaders/gemv.glsl`, `attention.glsl` — live Android Vulkan inputs; the obsolete `candle-core/shaders/` reference set was pruned in the 0.11.0 sync |
 | Build scripts | 3 | `build.rs` (atheer-accel), `generate-bindings.sh`, `sync-udl.sh`, `download-test-model.sh` |
 | CI workflows | 1 | `.github/workflows/ci.yml` |
 | Config files | 8 | `Cargo.toml` (workspace + 9 crates), `uniffi.toml`, `.gitignore` |
 | Documentation | 4 | `README.md`, `PROGRESS.md`, `BENCHMARKS.md`, `macOS-PRD.md` |
 | Mobile SDK files | 7 | Swift (3) + Kotlin (4) |
 | OpenSpec artifacts | 22 | 3 completed changes with specs/design/tasks |
+
+### 8.1 Candle 0.11.0 sync
+
+- `candle-core` and `candle-transformers` updated from 0.10.2 to 0.11.0.
+- `candle-core` keeps the Atheer Vulkan/NNAPI backends and the Metal empty-device guard.
+- The obsolete `candle-core/src/vulkan_backend_old/`, `candle-core/shaders/`, and `candle-core/build.rs` were removed after the WGSL backend replaced the old GLSL pipeline.
+- The workspace `naga` dependency remains because `atheer-accel/build.rs` still compiles its live `gemv.glsl` and `attention.glsl` inputs.
+- The deleted `candle-core/shaders/` sources are recoverable from commit `3afeb5cbaa5fd179f50c428200ae0f5f565e51c3`; Phase 2 can restore `dequant_q4k.glsl` and `matmul_f16.glsl` from that commit.
+- Verification baseline and post-sync result: **794 passed, 0 failed, 7 ignored** across 44 test binaries.
 
 ---
 

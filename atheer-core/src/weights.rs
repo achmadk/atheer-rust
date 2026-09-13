@@ -57,10 +57,10 @@ impl WeightsVariant {
     }
 
     /// Drop all GPU-side KV cache tensors, freeing VRAM.
-    pub fn kv_cache_clear(&mut self) {
+    pub fn clear_kv_cache(&mut self) {
         match self {
-            Self::Llama(w) => w.kv_cache_clear(),
-            Self::Lfm2(w) => w.kv_cache_clear(),
+            Self::Llama(w) => w.clear_kv_cache(),
+            Self::Lfm2(w) => w.clear_kv_cache(),
         }
     }
 

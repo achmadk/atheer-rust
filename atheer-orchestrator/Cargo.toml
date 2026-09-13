@@ -11,7 +11,7 @@ anyhow = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 
-candle-core = "0.10.2"
+candle-core = "0.11.0"
 atheer-core = { path = "../atheer-core" }
 atheer-hardware = { path = "../atheer-hardware" }
 atheer-memory-bank = { path = "../atheer-memory-bank" }

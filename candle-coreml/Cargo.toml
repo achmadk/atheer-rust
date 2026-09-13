@@ -8,9 +8,9 @@ autoexamples = false
 autotests = false
 
 [dependencies]
-candle-core = "0.10.2"
-candle-nn = "0.10.2"
-candle-transformers = "0.10.2"
+candle-core = "0.11.0"
+candle-nn = "0.11.0"
+candle-transformers = "0.11.0"
 tokenizers = "0.21.4"
 anyhow = "1"
 serde = { version = "1", features = ["derive"] }

@@ -17,15 +17,15 @@ tokio = { workspace = true }
 tracing = { workspace = true }
 
 rayon = "1.12"
-candle-core = "0.10.2"
+candle-core = "0.11.0"
 
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
-candle-core = { version = "0.10.2", features = ["metal"] }
+candle-core = { version = "0.11.0", features = ["metal"] }
 sysctl = "0.6"
 candle-coreml = { path = "../candle-coreml" }
 
 [target.'cfg(target_os = "android")'.dependencies]
-candle-core = { version = "0.10.2", features = ["vulkan", "nnapi"] }
+candle-core = { version = "0.11.0", features = ["vulkan", "nnapi"] }
 ash = { workspace = true }
 gpu-allocator = { workspace = true }
 bytemuck = "1.25"

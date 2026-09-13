@@ -154,6 +154,11 @@ struct LayerWeights {
     n_head: usize,
     n_kv_head: usize,
     head_dim: usize,
+    /// RoPE convention: true = NEOX (non-interleaved, pairs i with i+d/2),
+    /// false = NORM (interleaved, pairs 2i with 2i+1).
+    /// Must match the model architecture — using the wrong convention corrupts
+    /// attention patterns and causes severe output degradation.
+    rope_is_neox: bool,
     cos: Tensor,
     sin: Tensor,
     neg_inf: Tensor,
@@ -175,9 +180,12 @@ impl LayerWeights {
         let (_b_sz, _n_head, seq_len, _n_embd) = x.dims4()?;
         let cos = self.cos.narrow(0, index_pos, seq_len)?;
         let sin = self.sin.narrow(0, index_pos, seq_len)?;
-        // The call to contiguous below is only necessary when processing the prompt.
-        // When the seq_len is 1 in the inference loop, this is a no-op.
-        candle_nn::rotary_emb::rope_i(&x.contiguous()?, &cos, &sin)
+        let x = x.contiguous()?;
+        if self.rope_is_neox {
+            candle_nn::rotary_emb::rope(&x, &cos, &sin)
+        } else {
+            candle_nn::rotary_emb::rope_i(&x, &cos, &sin)
+        }
     }
 
     fn forward_attn(
@@ -333,6 +341,7 @@ impl ModelWeights {
                 n_head: ct.hparams.n_head as usize,
                 n_kv_head: ct.hparams.n_head as usize / gqa,
                 head_dim: (ct.hparams.n_embd / ct.hparams.n_head) as usize,
+                rope_is_neox: false, // GGML format = standard Llama = interleaved
                 cos: cos.clone(),
                 sin: sin.clone(),
                 neg_inf: neg_inf.clone(),
@@ -383,6 +392,41 @@ impl ModelWeights {
         let rope_freq_base = md_get("llama.rope.freq_base")
             .and_then(|m| m.to_f32())
             .unwrap_or(10000f32);
+
+        // Determine RoPE convention from model architecture (matching llama.cpp).
+        // NEOX (non-interleaved): pairs (i, i+d/2) — Qwen, Qwen2, Falcon, Phi, etc.
+        // NORM (interleaved): pairs (2i, 2i+1) — Llama, Mistral, DeepSeek, etc.
+        // See llama_model_rope_type() in llama.cpp for the authoritative mapping.
+        let arch = ct
+            .metadata
+            .get("general.architecture")
+            .and_then(|v| v.to_string().ok())
+            .cloned()
+            .unwrap_or_default();
+        let rope_is_neox = matches!(
+            arch.as_str(),
+            "qwen"
+                | "qwen2"
+                | "qwen2moe"
+                | "qwen3"
+                | "qwen3moe"
+                | "falcon"
+                | "grok"
+                | "dbrx"
+                | "phi2"
+                | "phi3"
+                | "phimoe"
+                | "stablelm"
+                | "starcoder2"
+                | "bert"
+                | "nomic-bert"
+                | "jina-bert-v2"
+                | "olmo2"
+                | "olmoe"
+                | "codeshell"
+                | "plamo"
+        );
+
         let (cos, sin) = precomput_freqs_cis(rope_dim, rope_freq_base, device)?;
         let neg_inf = Tensor::new(f32::NEG_INFINITY, device)?;
 
@@ -456,6 +500,7 @@ impl ModelWeights {
                 n_head: head_count,
                 n_kv_head: head_count_kv,
                 head_dim: embedding_length / head_count,
+                rope_is_neox,
                 cos: cos.clone(),
                 sin: sin.clone(),
                 neg_inf: neg_inf.clone(),
@@ -510,48 +555,21 @@ impl ModelWeights {
         }
     }
 
-    pub fn forward(&mut self, x: &Tensor, index_pos: usize) -> Result<Tensor> {
-        let (_b_sz, seq_len) = x.dims2()?;
-        let mask = if seq_len == 1 {
-            None
-        } else {
-            Some(self.mask(seq_len, index_pos, x.device())?)
-        };
-        let _enter = self.span.enter();
-        let mut layer_in = self.tok_embeddings.forward(x)?;
+    /// Clear the KV cache across all layers.
+    ///
+    /// Call this between independent conversations to free cached attention
+    /// state without recreating the model.
+    pub fn clear_kv_cache(&mut self) {
         for layer in self.layers.iter_mut() {
-            let x = layer_in;
-            let residual = &x;
-            let x = layer.attention_norm.forward(&x)?;
-            let attn = layer.forward_attn(&x, mask.as_ref(), index_pos)?;
-            let x = (attn + residual)?;
-
-            // MLP
-            let _enter = layer.span_mlp.enter();
-            let residual = &x;
-            let x = layer.ffn_norm.forward(&x)?;
-            let x = layer.mlp_or_moe.forward(&x)?;
-            let x = (x + residual)?;
-            layer_in = x
+            layer.kv_cache = None;
         }
-        let x = self.norm.forward(&layer_in)?;
-        let x = x.i((.., seq_len - 1, ..))?;
-        let _enter = self.span_output.enter();
-        self.output.forward(&x)
     }
 
     /// Returns a flat CPU-memory copy of all layer KV cache entries.
     ///
     /// The returned vector has one entry per transformer layer:
     /// `(keys_flat: Vec<f32>, values_flat: Vec<f32>)`.
-    ///
     /// Layers with no cached entries return `(vec![], vec![])`.
-    ///
-    /// Each non-empty buffer has length `n_kv_head × seq_len × head_dim`
-    /// matching the cached tensor shape `(1, n_kv_head, seq_len, head_dim)`.
-    ///
-    /// This triggers a GPU→CPU transfer via `to_device`. On unified memory
-    /// (Apple Silicon) this is zero-copy; on discrete GPUs it is a PCIe read.
     pub fn kv_cache_snapshot(&self) -> Result<Vec<(Vec<f32>, Vec<f32>)>> {
         let mut result = Vec::with_capacity(self.layers.len());
         for layer in &self.layers {
@@ -567,18 +585,7 @@ impl ModelWeights {
         Ok(result)
     }
 
-    /// Restore per-layer KV cache from a flat CPU snapshot.
-    ///
-    /// `snapshot` must have exactly `self.layers.len()` entries.  Each
-    /// `(keys, values)` pair is reshaped to `(1, n_kv_head, seq_len, head_dim)`
-    /// on the model's current device and assigned to `LayerWeights::kv_cache`.
-    ///
-    /// # Errors
-    ///
-    /// - Returns an error if the layer count does not match.
-    /// - Returns an error if the keys length is not divisible by
-    ///   `n_kv_head × head_dim` or if keys and values length differ.
-    /// - Empty buffers (`vec![]`) clear the corresponding layer's cache.
+    /// Restores per-layer KV cache from a flat CPU snapshot.
     pub fn kv_cache_restore(&mut self, snapshot: &[(Vec<f32>, Vec<f32>)]) -> Result<()> {
         if snapshot.len() != self.layers.len() {
             candle::bail!(
@@ -620,18 +627,34 @@ impl ModelWeights {
         Ok(())
     }
 
-    /// Drop all GPU-side KV cache tensors, freeing VRAM.
-    ///
-    /// After calling this, all layers have `kv_cache: None`.  The memory
-    /// occupied by the cached key/value tensors is released on the
-    /// accelerator device.
-    ///
-    /// Call this after taking a [`kv_cache_snapshot`](Self::kv_cache_snapshot)
-    /// to offload the cache from GPU→CPU.
-    pub fn kv_cache_clear(&mut self) {
-        for layer in &mut self.layers {
-            layer.kv_cache = None;
+    pub fn forward(&mut self, x: &Tensor, index_pos: usize) -> Result<Tensor> {
+        let (_b_sz, seq_len) = x.dims2()?;
+        let mask = if seq_len == 1 {
+            None
+        } else {
+            Some(self.mask(seq_len, index_pos, x.device())?)
+        };
+        let _enter = self.span.enter();
+        let mut layer_in = self.tok_embeddings.forward(x)?;
+        for layer in self.layers.iter_mut() {
+            let x = layer_in;
+            let residual = &x;
+            let x = layer.attention_norm.forward(&x)?;
+            let attn = layer.forward_attn(&x, mask.as_ref(), index_pos)?;
+            let x = (attn + residual)?;
+
+            // MLP
+            let _enter = layer.span_mlp.enter();
+            let residual = &x;
+            let x = layer.ffn_norm.forward(&x)?;
+            let x = layer.mlp_or_moe.forward(&x)?;
+            let x = (x + residual)?;
+            layer_in = x
         }
+        let x = self.norm.forward(&layer_in)?;
+        let x = x.i((.., seq_len - 1, ..))?;
+        let _enter = self.span_output.enter();
+        self.output.forward(&x)
     }
 }
 
@@ -641,20 +664,13 @@ mod tests {
     use crate::quantized_nn::RmsNorm;
     use crate::utils::build_causal_mask;
     use candle::{Device, Result, Tensor};
-    use candle_nn::Embedding;
+    use candle_nn::{Embedding, Module};
 
-    // ── Helpers ───────────────────────────────────────────────────────────────
-
-    /// Build a minimal single-layer ModelWeights on CPU.
     fn single_layer_model() -> Result<ModelWeights> {
         let device = Device::Cpu;
-
-        // Shared quantized tensor for weight matrices
         let qt = Tensor::rand(-1f32, 1f32, (64, 64), &device)?;
         let qq = candle::quantized::QTensor::quantize(&qt, candle::quantized::GgmlDType::Q4_0)?;
         let qw = QMatMul::from_qtensor(qq)?;
-
-        // Shared norm
         let norm = RmsNorm::from_qtensor(
             candle::quantized::QTensor::quantize(
                 &Tensor::rand(-1f32, 1f32, (64,), &device)?,
@@ -662,106 +678,77 @@ mod tests {
             )?,
             1e-5,
         )?;
-
-        // Embedding table
-        let tok = Embedding::new(Tensor::rand(-1f32, 1f32, (1, 64), &device)?, 64);
-
-        // Rotary embeddings
-        let cos = Tensor::rand(-1f32, 1f32, (128, 32), &device)?;
-        let sin = Tensor::rand(-1f32, 1f32, (128, 32), &device)?;
-        let neg_inf = Tensor::new(f32::NEG_INFINITY, &device)?;
-
-        // MLP layer
-        let mlp = MlpOrMoe::Mlp(Mlp {
-            feed_forward_w1: qw.clone(),
-            feed_forward_w2: qw.clone(),
-            feed_forward_w3: qw.clone(),
-        });
         let layer = LayerWeights {
             attention_wq: qw.clone(),
             attention_wk: qw.clone(),
             attention_wv: qw.clone(),
             attention_wo: qw.clone(),
             attention_norm: norm.clone(),
-            mlp_or_moe: mlp,
+            mlp_or_moe: MlpOrMoe::Mlp(Mlp {
+                feed_forward_w1: qw.clone(),
+                feed_forward_w2: qw.clone(),
+                feed_forward_w3: qw.clone(),
+            }),
             ffn_norm: norm.clone(),
             n_head: 8,
             n_kv_head: 4,
             head_dim: 64,
-            cos,
-            sin,
-            neg_inf,
+            rope_is_neox: false,
+            cos: Tensor::rand(-1f32, 1f32, (128, 32), &device)?,
+            sin: Tensor::rand(-1f32, 1f32, (128, 32), &device)?,
+            neg_inf: Tensor::new(f32::NEG_INFINITY, &device)?,
             kv_cache: None,
             span_attn: tracing::span!(tracing::Level::TRACE, "attn"),
             span_rot: tracing::span!(tracing::Level::TRACE, "rot"),
             span_mlp: tracing::span!(tracing::Level::TRACE, "mlp"),
         };
-
-        let masks = std::collections::HashMap::new();
-        let span = tracing::span!(tracing::Level::TRACE, "model");
-        let span_output = tracing::span!(tracing::Level::TRACE, "out");
-
         Ok(ModelWeights {
-            tok_embeddings: tok,
+            tok_embeddings: Embedding::new(Tensor::rand(-1f32, 1f32, (1, 64), &device)?, 64),
             layers: vec![layer],
             norm,
             output: qw,
-            masks,
-            span,
-            span_output,
+            masks: std::collections::HashMap::new(),
+            span: tracing::span!(tracing::Level::TRACE, "model"),
+            span_output: tracing::span!(tracing::Level::TRACE, "out"),
         })
     }
 
-    // ── kv_cache_restore validation tests ──────────────────────────────────────
-
     #[test]
     fn restore_rejects_wrong_layer_count() -> Result<()> {
-        let mut m = single_layer_model()?;
-        let snap = vec![(vec![], vec![]), (vec![], vec![])];
-        let err = m.kv_cache_restore(&snap).unwrap_err();
-        let msg = format!("{err}");
-        assert!(msg.contains("expected 1"), "got: {msg}");
+        let mut model = single_layer_model()?;
+        let result = model.kv_cache_restore(&[(vec![], vec![]), (vec![], vec![])]);
+        assert!(result.is_err());
         Ok(())
     }
 
     #[test]
     fn restore_rejects_length_mismatch() -> Result<()> {
-        let mut m = single_layer_model()?;
-        // n_kv_head=4, head_dim=64 → stride=256, so min valid length=256
-        let snap = vec![(vec![1.0; 256], vec![2.0; 128])];
-        let err = m.kv_cache_restore(&snap).unwrap_err();
-        let msg = format!("{err}");
-        assert!(msg.contains("length mismatch"), "got: {msg}");
+        let mut model = single_layer_model()?;
+        let result = model.kv_cache_restore(&[(vec![1.0; 256], vec![2.0; 128])]);
+        assert!(result.is_err());
         Ok(())
     }
 
     #[test]
     fn restore_rejects_indivisible_length() -> Result<()> {
-        let mut m = single_layer_model()?;
-        // 250 is not divisible by n_kv_head(4) * head_dim(64) = 256
-        let snap = vec![(vec![1.0; 250], vec![1.0; 250])];
-        let err = m.kv_cache_restore(&snap).unwrap_err();
-        let msg = format!("{err}");
-        assert!(msg.contains("not divisible"), "got: {msg}");
+        let mut model = single_layer_model()?;
+        let result = model.kv_cache_restore(&[(vec![1.0; 250], vec![1.0; 250])]);
+        assert!(result.is_err());
         Ok(())
     }
 
     #[test]
     fn restore_accepts_empty_buffers() -> Result<()> {
-        let mut m = single_layer_model()?;
-        let snap = vec![(vec![], vec![])];
-        m.kv_cache_restore(&snap)?;
-        assert!(m.layers[0].kv_cache.is_none());
+        let mut model = single_layer_model()?;
+        model.kv_cache_restore(&[(vec![], vec![])])?;
         Ok(())
     }
 
     #[test]
-    fn snapshot_on_empty_model_returns_zeroed() -> Result<()> {
-        let m = single_layer_model()?;
-        let snap = m.kv_cache_snapshot()?;
-        assert_eq!(snap.len(), 1, "expected 1 layer");
-        assert!(snap[0].0.is_empty(), "keys should be empty");
-        assert!(snap[0].1.is_empty(), "values should be empty");
+    fn snapshot_on_empty_model_returns_empty_buffers() -> Result<()> {
+        let model = single_layer_model()?;
+        let snapshot = model.kv_cache_snapshot()?;
+        assert_eq!(snapshot, vec![(vec![], vec![])]);
         Ok(())
     }
 

@@ -189,8 +189,8 @@ impl MmapModel {
     }
 
     /// Delegate to the inner weights for kv_cache management.
-    pub fn kv_cache_clear(&mut self) {
-        self.weights.kv_cache_clear();
+    pub fn clear_kv_cache(&mut self) {
+        self.weights.clear_kv_cache();
     }
 
     pub fn device(&self) -> &candle_core::Device {

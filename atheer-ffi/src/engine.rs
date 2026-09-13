@@ -1062,7 +1062,7 @@ impl AtheerEngine {
         if self.config.clear_on_low_memory {
             if let Ok(mut guard) = self.inference_engine.lock() {
                 if let Some(engine) = guard.as_mut() {
-                    engine.kv_cache_clear();
+                    engine.clear_kv_cache();
                     trace_if_ok!(self.should_log(), info, target: "atheer::engine::lifecycle", "on_low_memory: KV cache cleared");
                 }
             }
@@ -1845,11 +1845,14 @@ fn generate_with_timeout_detection<R>(
     let timed_out = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let timed_out_clone = timed_out.clone();
 
-    // Watchdog thread — fires after timeout_ms
-    std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(timeout_ms));
-        timed_out_clone.store(true, std::sync::atomic::Ordering::Release);
-    });
+    if timeout_ms == 0 {
+        timed_out.store(true, std::sync::atomic::Ordering::Release);
+    } else {
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(timeout_ms));
+            timed_out_clone.store(true, std::sync::atomic::Ordering::Release);
+        });
+    }
 
     let result = f();
 

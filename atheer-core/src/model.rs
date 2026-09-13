@@ -208,8 +208,8 @@ impl Model {
 impl Model {
     /// Drop all GPU-side KV cache tensors, freeing VRAM.
     /// After this, calling `forward()` will rebuild the cache from scratch.
-    pub fn kv_cache_clear(&mut self) {
-        self.weights.kv_cache_clear();
+    pub fn clear_kv_cache(&mut self) {
+        self.weights.clear_kv_cache();
     }
 }
 

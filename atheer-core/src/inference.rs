@@ -291,7 +291,7 @@ impl InferenceEngine {
 
         // Clear the GPU-side KV cache entirely; remaining context will be
         // re-encoded on the next forward call(s).
-        self.model.kv_cache_clear();
+        self.model.clear_kv_cache();
 
         tracing::info!(
             "Evicted oldest turn(s), last_pos now {}, turns remaining: {}",
@@ -901,7 +901,7 @@ impl InferenceEngine {
     /// After this call, the next `continue_turn()` or `generate()` will begin
     /// at the system prompt offset.
     pub fn reset_for_turn(&mut self) -> Result<()> {
-        self.model.kv_cache_clear();
+        self.model.clear_kv_cache();
         self.turn_history.clear();
 
         // Re-encode the system prompt so the KV cache is repopulated.
@@ -939,7 +939,7 @@ impl InferenceEngine {
     /// Reset the entire session including the system prompt KV cache.
     /// After this call, the engine is in a fresh state.
     pub fn reset_session(&mut self) {
-        self.model.kv_cache_clear();
+        self.model.clear_kv_cache();
         self.turn_history.clear();
         self.system_prompt_len = 0;
         self.system_prompt = None;
@@ -1133,8 +1133,8 @@ impl InferenceEngine {
 
     /// Drop all GPU-side KV cache tensors, freeing VRAM.
     /// After this, `forward()` will rebuild the cache from scratch.
-    pub fn kv_cache_clear(&mut self) {
-        self.model.kv_cache_clear();
+    pub fn clear_kv_cache(&mut self) {
+        self.model.clear_kv_cache();
     }
 
     /// Save a persistent checkpoint of the current KV cache to `checkpoint_dir`.
@@ -1361,7 +1361,7 @@ impl InferenceEngine {
             .count();
         if populated > 0 {
             bank.promote_to_l2(&snapshot, n_kv_head, head_dim);
-            self.model.kv_cache_clear();
+            self.model.clear_kv_cache();
         }
         Ok(populated)
     }

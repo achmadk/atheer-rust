@@ -1,4 +1,3 @@
-// Vendored crate — silence all clippy lints from upstream code.
 #![allow(clippy::all)]
 
 pub mod fused_moe;
