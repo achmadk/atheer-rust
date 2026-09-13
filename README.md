@@ -249,7 +249,7 @@ xcode-select --install
 
 ## Testing
 
-The workspace contains **~525 tests** across all crates, verified via `cargo test --workspace --lib`:
+The workspace contains **817 tests** across all crates, verified via `cargo test --workspace`:
 
 | Crate | Test Count | Scope |
 |-------|-----------|-------|

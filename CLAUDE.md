@@ -72,7 +72,7 @@ ios/  android/          ── Mobile SDK wrappers (Swift, Kotlin)
 # Full workspace build (—features coreml on macOS for CoreML/ANE)
 cargo build --workspace
 
-# Run all workspace tests (525+ across 15 crates)
+# Run all workspace tests (817 across the workspace)
 cargo test --workspace
 
 # Run specific crate tests
