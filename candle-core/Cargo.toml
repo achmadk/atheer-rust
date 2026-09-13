@@ -61,6 +61,13 @@ wgpu = { version = "22.0", features = ["vulkan-portability"], optional = true }
 pollster = { version = "0.4", optional = true }
 bytemuck = { version = "1.25", optional = true }
 
+# utils.rs uses libc under bare cfg(target_os = "macos") (perf-core count via
+# sysctlbyname, thread QoS elevation) with no feature gate, while the libc
+# dependency above is optional (mkl/accelerate/nnapi only). Pin it on macOS
+# so plain and --features metal macOS builds resolve.
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2"
+
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokenizers = { version = "0.22.0", features = ["onig"], default-features = false }
 
