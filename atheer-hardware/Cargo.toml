@@ -5,18 +5,17 @@ edition.workspace = true
 
 [dependencies]
 serde = { workspace = true }
-serde_json = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true }
-tracing = { workspace = true }
 chrono = { workspace = true }
 
 [target.'cfg(target_os = "android")'.dependencies]
-jni = "0.21"
+jni = "0.22"
 
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
 objc2 = { version = "0.6", features = ["alloc", "std"] }
 objc2-foundation = { version = "0.3", features = ["alloc", "std"] }
+# tracing is used only by ios.rs (apple-gated); target-gated so Linux builds stay warning-free
+tracing = { workspace = true }
 
 [target.'cfg(target_os = "ios")'.dependencies]
 block = "0.1"

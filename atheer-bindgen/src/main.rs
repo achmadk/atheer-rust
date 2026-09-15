@@ -1,5 +1,6 @@
 use camino::Utf8PathBuf;
 use std::path::PathBuf;
+use uniffi_bindgen::bindings::{generate, GenerateOptions, TargetLanguage};
 use uniffi_bindgen::ComponentInterface;
 use uniffi_udl::parse_udl;
 
@@ -39,9 +40,14 @@ fn main() {
             let swift_dir = output_dir.join("swift");
             std::fs::create_dir_all(&swift_dir).expect("Failed to create swift dir");
 
-            let config = uniffi_bindgen::bindings::swift::gen_swift::Config::default();
-            uniffi_bindgen::bindings::swift::write_bindings(&config, &ci, &swift_dir, true)
-                .expect("Failed to generate Swift bindings");
+            generate(GenerateOptions {
+                languages: vec![TargetLanguage::Swift],
+                source: udl_path.clone(),
+                out_dir: swift_dir.clone(),
+                format: true,
+                ..Default::default()
+            })
+            .expect("Failed to generate Swift bindings");
 
             println!("Swift bindings written to {}", swift_dir);
         }
@@ -49,9 +55,14 @@ fn main() {
             let kotlin_dir = output_dir.join("kotlin");
             std::fs::create_dir_all(&kotlin_dir).expect("Failed to create kotlin dir");
 
-            let config = uniffi_bindgen::bindings::kotlin::gen_kotlin::Config::default();
-            uniffi_bindgen::bindings::kotlin::write_bindings(&config, &ci, &kotlin_dir, true)
-                .expect("Failed to generate Kotlin bindings");
+            generate(GenerateOptions {
+                languages: vec![TargetLanguage::Kotlin],
+                source: udl_path,
+                out_dir: kotlin_dir.clone(),
+                format: true,
+                ..Default::default()
+            })
+            .expect("Failed to generate Kotlin bindings");
 
             println!("Kotlin bindings written to {}", kotlin_dir);
         }

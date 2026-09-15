@@ -439,7 +439,10 @@ impl Storage {
                 Ok(Self::Vulkan(storage))
             }
             #[cfg(all(feature = "nnapi", target_os = "android"))]
-            Self::Nnapi(_) => Err(Error::NotCompiledWithNnapiSupport),
+            Self::Nnapi(storage) => {
+                let storage = storage.unary_impl::<B>(layout)?;
+                Ok(Self::Nnapi(storage))
+            }
         }
     }
 

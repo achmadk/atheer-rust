@@ -20,7 +20,6 @@ autoexamples = false
 autotests = false
 autobenches = false
 description = "Minimalist ML framework."
-readme = "README.md"
 keywords = [
     "blas",
     "tensor",
@@ -86,7 +85,7 @@ optional = true
 version = "0.11.0"
 
 [dependencies.fancy-regex]
-version = "0.17.0"
+version = "0.19.2"
 
 [dependencies.intel-mkl-src]
 version = "0.8.1"
@@ -97,17 +96,17 @@ optional = true
 version = "0.2.19"
 
 [dependencies.rand]
-version = "0.9.4"
+version = "0.10.2"
 
 [dependencies.rayon]
 version = "1.12.0"
 
 [dependencies.serde]
-version = "1.0.228"
+version = "1.0.229"
 features = ["derive"]
 
 [dependencies.serde_json]
-version = "1.0.150"
+version = "1.0.151"
 
 [dependencies.serde_plain]
 version = "1.0.2"
