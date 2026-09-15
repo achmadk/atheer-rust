@@ -1,7 +1,7 @@
 use crate::l3_compressed::L3CompressedStorage;
 use aes_gcm::{
     aead::{Aead, KeyInit, Payload},
-    Aes256Gcm, Key, Nonce,
+    Aes256Gcm, Nonce,
 };
 use std::path::PathBuf;
 use zeroize::Zeroize;
@@ -44,22 +44,22 @@ impl EncryptedStore {
             .map_err(|e| std::io::Error::other(e.to_string()))?;
 
         // 2. AES-256-GCM encrypt with a fresh random nonce
-        let key = Key::<Aes256Gcm>::from_slice(self.key.as_ref());
-        let cipher = Aes256Gcm::new(key);
+        let cipher = Aes256Gcm::new_from_slice(self.key.as_ref())
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
         let nonce_bytes: [u8; 12] = {
-            // Use a random nonce — `aes_gcm` 0.10 does not export a
-            // `generate_nonce()` convenience fn, so we generate bytes
-            // ourselves (same approach as the upstream `aes_gcm` examples).
-            use rand::Rng;
+            // Use a random nonce — generate bytes explicitly so the serialized
+            // format remains `[12 B nonce || ciphertext + GCM tag]`.
+            use rand::RngExt;
             let mut buf = [0u8; 12];
-            rand::thread_rng().fill(&mut buf);
+            rand::rng().fill(&mut buf);
             buf
         };
-        let nonce = Nonce::from_slice(&nonce_bytes);
+        let nonce =
+            Nonce::try_from(&nonce_bytes[..]).map_err(|e| std::io::Error::other(e.to_string()))?;
 
         let ciphertext = cipher
             .encrypt(
-                nonce,
+                &nonce,
                 Payload {
                     msg: &compressed,
                     aad: b"atheer-cache-v1",
@@ -89,13 +89,14 @@ impl EncryptedStore {
         let (nonce_bytes, ciphertext) = data.split_at(12);
 
         // 2. AES-256-GCM decrypt
-        let key = Key::<Aes256Gcm>::from_slice(self.key.as_ref());
-        let cipher = Aes256Gcm::new(key);
-        let nonce = Nonce::from_slice(nonce_bytes);
+        let cipher = Aes256Gcm::new_from_slice(self.key.as_ref())
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
+        let nonce =
+            Nonce::try_from(nonce_bytes).map_err(|e| std::io::Error::other(e.to_string()))?;
 
         let compressed = cipher
             .decrypt(
-                nonce,
+                &nonce,
                 Payload {
                     msg: ciphertext,
                     aad: b"atheer-cache-v1",

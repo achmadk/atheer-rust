@@ -6,9 +6,8 @@
 //!   atheer-encrypt --input model.gguf --output model.gguf.enc --key-id mykey --server-mode
 
 use aes_gcm::{
-    aead::generic_array::GenericArray,
-    aead::{Aead, OsRng},
-    AeadCore, Aes256Gcm, KeyInit,
+    aead::{Aead, Generate, Key},
+    AeadCore, Aes256Gcm, KeyInit, Nonce,
 };
 use clap::Parser;
 use std::fs;
@@ -39,8 +38,8 @@ struct Args {
 fn main() {
     let args = Args::parse();
 
-    let key = Aes256Gcm::generate_key(OsRng);
-    let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
+    let key = Key::<Aes256Gcm>::generate();
+    let nonce = Nonce::<<Aes256Gcm as AeadCore>::NonceSize>::generate();
 
     if args.mlpackage {
         encrypt_mlpackage(&args.input, &args.output, key.as_slice(), nonce.as_slice());
@@ -73,10 +72,11 @@ fn main() {
 fn encrypt_gguf(input: &Path, output: &Path, key: &[u8], nonce: &[u8]) {
     let plaintext = fs::read(input).expect("failed to read input");
     let cipher = Aes256Gcm::new_from_slice(key).expect("valid key");
-    let nonce_arr = GenericArray::<u8, typenum::U12>::from_slice(nonce);
+    let nonce_arr = Nonce::<<Aes256Gcm as AeadCore>::NonceSize>::try_from(nonce)
+        .expect("nonce must be 12 bytes");
     let ciphertext = cipher
         .encrypt(
-            nonce_arr,
+            &nonce_arr,
             aes_gcm::aead::Payload {
                 msg: &plaintext,
                 aad: b"atheer-model-v1",
@@ -105,7 +105,7 @@ fn encrypt_bin_files(dir: &Path, key: &[u8]) -> std::io::Result<()> {
             } else if path.extension().map(|e| e == "bin").unwrap_or(false) {
                 let plaintext = fs::read(&path)?;
                 let cipher = Aes256Gcm::new_from_slice(key).expect("valid key");
-                let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
+                let nonce = Nonce::<<Aes256Gcm as AeadCore>::NonceSize>::generate();
                 let ciphertext = cipher
                     .encrypt(
                         &nonce,

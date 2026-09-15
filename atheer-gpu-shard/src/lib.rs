@@ -7,11 +7,12 @@
 //! - `nativeGetInfo`: Return worker diagnostics as JSON
 //! - `nativeShutdown`: Release GPU resources
 //!
-//! All functions are JNI-compatible (`extern "system" fn` with `JNIEnv`).
+//! All functions are JNI-compatible (`extern "system" fn` with `EnvUnowned`).
 
+use jni::errors::ThrowRuntimeExAndDefault;
 use jni::objects::{JClass, JLongArray, ReleaseMode};
 use jni::sys::{jboolean, jint, jlong, JNI_FALSE, JNI_TRUE};
-use jni::JNIEnv;
+use jni::EnvUnowned;
 use std::sync::Mutex;
 use tracing::{error, info};
 
@@ -33,8 +34,8 @@ static SHARD: Mutex<Option<GpuShardContext>> = Mutex::new(None);
 /// Returns an opaque handle (currently always 1 on success, 0 on failure).
 #[no_mangle]
 pub extern "system" fn Java_com_atheer_ffi_sandbox_GpuExecutionShardService_nativeInit(
-    _env: JNIEnv,
-    _class: JClass,
+    _env: EnvUnowned<'_>,
+    _class: JClass<'_>,
     model_fd: jint,
     model_size: jlong,
 ) -> jlong {
@@ -67,8 +68,8 @@ pub extern "system" fn Java_com_atheer_ffi_sandbox_GpuExecutionShardService_nati
 /// Forwards a known tensor through the GPU and verifies the output.
 #[no_mangle]
 pub extern "system" fn Java_com_atheer_ffi_sandbox_GpuExecutionShardService_nativeProbe(
-    _env: JNIEnv,
-    _class: JClass,
+    _env: EnvUnowned<'_>,
+    _class: JClass<'_>,
     handle: jlong,
 ) -> jboolean {
     info!("nativeProbe: handle={handle}");
@@ -94,67 +95,79 @@ pub extern "system" fn Java_com_atheer_ffi_sandbox_GpuExecutionShardService_nati
 #[no_mangle]
 #[allow(improper_ctypes_definitions)]
 pub extern "system" fn Java_com_atheer_ffi_sandbox_GpuExecutionShardService_nativeBatch(
-    mut env: JNIEnv,
-    _class: JClass,
+    mut env: EnvUnowned<'_>,
+    _class: JClass<'_>,
     handle: jlong,
-    token_ids: JLongArray,
-    positions: JLongArray,
+    token_ids: JLongArray<'_>,
+    positions: JLongArray<'_>,
 ) -> Vec<Vec<f32>> {
-    let tokens: Vec<u32> = unsafe {
-        env.get_array_elements(&token_ids, ReleaseMode::NoCopyBack)
-            .map(|elements| elements.iter().map(|&v| v as u32).collect())
-            .unwrap_or_default()
-    };
+    env.with_env(|env| -> jni::errors::Result<_> {
+        // SAFETY: token_ids and positions are valid JNI array arguments supplied
+        // by the JVM; NoCopyBack only borrows their elements for this closure.
+        let tokens: Vec<u32> = unsafe {
+            token_ids
+                .get_elements(env, ReleaseMode::NoCopyBack)?
+                .iter()
+                .map(|&v| v as u32)
+                .collect()
+        };
 
-    let pos: Vec<usize> = unsafe {
-        env.get_array_elements(&positions, ReleaseMode::NoCopyBack)
-            .map(|elements| elements.iter().map(|&v| v as usize).collect())
-            .unwrap_or_default()
-    };
+        // SAFETY: positions is a valid JNI array argument supplied by the JVM;
+        // NoCopyBack only borrows its elements for this closure.
+        let pos: Vec<usize> = unsafe {
+            positions
+                .get_elements(env, ReleaseMode::NoCopyBack)?
+                .iter()
+                .map(|&v| v as usize)
+                .collect()
+        };
 
-    info!(
-        "nativeBatch: handle={handle}, tokens={}, pos={}",
-        tokens.len(),
-        pos.len()
-    );
+        info!(
+            "nativeBatch: handle={handle}, tokens={}, pos={}",
+            tokens.len(),
+            pos.len()
+        );
 
-    match run_batch(handle, &tokens, &pos) {
-        Ok(logits) => logits,
-        Err(e) => {
-            error!("Batch failed: {e}");
-            Vec::new()
+        match run_batch(handle, &tokens, &pos) {
+            Ok(logits) => Ok(logits),
+            Err(e) => {
+                error!("Batch failed: {e}");
+                Ok(Vec::new())
+            }
         }
-    }
+    })
+    .resolve::<ThrowRuntimeExAndDefault>()
 }
 
 /// Get worker diagnostics JSON.
 #[no_mangle]
 pub extern "system" fn Java_com_atheer_ffi_sandbox_GpuExecutionShardService_nativeGetInfo(
-    env: JNIEnv,
-    _class: JClass,
+    mut env: EnvUnowned<'_>,
+    _class: JClass<'_>,
     _handle: jlong,
 ) -> jni::sys::jstring {
-    let shard = SHARD.lock().unwrap();
-    let info = match shard.as_ref() {
-        Some(ctx) => {
-            let uptime = ctx.start_time.elapsed().as_secs();
-            format!(
-                r#"{{"status":"ready","backend":"{}","device":"{}","uptime_secs":{}}}"#,
-                ctx.backend_type, ctx.device_name, uptime
-            )
-        }
-        None => r#"{"status":"uninitialized","backend":"none"}"#.to_string(),
-    };
-    env.new_string(info)
-        .map(|s| s.into_raw())
-        .unwrap_or(std::ptr::null_mut())
+    env.with_env(|env| -> jni::errors::Result<_> {
+        let shard = SHARD.lock().unwrap();
+        let info = match shard.as_ref() {
+            Some(ctx) => {
+                let uptime = ctx.start_time.elapsed().as_secs();
+                format!(
+                    r#"{{"status":"ready","backend":"{}","device":"{}","uptime_secs":{}}}"#,
+                    ctx.backend_type, ctx.device_name, uptime
+                )
+            }
+            None => r#"{"status":"uninitialized","backend":"none"}"#.to_string(),
+        };
+        env.new_string(info).map(|s| s.into_raw())
+    })
+    .resolve::<ThrowRuntimeExAndDefault>()
 }
 
 /// Release GPU resources.
 #[no_mangle]
 pub extern "system" fn Java_com_atheer_ffi_sandbox_GpuExecutionShardService_nativeShutdown(
-    _env: JNIEnv,
-    _class: JClass,
+    _env: EnvUnowned<'_>,
+    _class: JClass<'_>,
     handle: jlong,
 ) {
     info!("nativeShutdown: handle={handle}");
@@ -244,7 +257,7 @@ fn run_batch(
 
 #[no_mangle]
 pub extern "system" fn JNI_OnLoad(
-    _vm: jni::JavaVM,
+    _vm: *mut jni::sys::JavaVM,
     _reserved: *mut std::ffi::c_void,
 ) -> jni::sys::jint {
     tracing_subscriber::fmt()

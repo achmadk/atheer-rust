@@ -1,6 +1,6 @@
 use crate::model_encryption::ModelEncryption;
 use crate::AtheerCoreError;
-use aes_gcm::{aead::Aead, Aes256Gcm, Key, KeyInit, Nonce};
+use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
 use std::fs;
 use std::path::Path;
 use zeroize::Zeroize;
@@ -33,9 +33,11 @@ impl Aes256GcmEncryption {
         let tag_bytes = &data[12..28];
         let ciphertext = &data[28..];
 
-        let key = Key::<Aes256Gcm>::from_slice(self.key.as_slice());
-        let cipher = Aes256Gcm::new(key);
-        let nonce = Nonce::from_slice(nonce_bytes);
+        let cipher = Aes256Gcm::new_from_slice(self.key.as_slice()).map_err(|e| {
+            AtheerCoreError::ModelDecryptionFailed(format!("invalid AES-256 key: {e}"))
+        })?;
+        let nonce = Nonce::try_from(nonce_bytes)
+            .map_err(|e| AtheerCoreError::ModelDecryptionFailed(format!("invalid nonce: {e}")))?;
 
         // AES-GCM decrypt with AAD
         let mut ciphertext_with_tag = ciphertext.to_vec();
@@ -43,7 +45,7 @@ impl Aes256GcmEncryption {
 
         cipher
             .decrypt(
-                nonce,
+                &nonce,
                 aes_gcm::aead::Payload {
                     msg: ciphertext,
                     aad,
@@ -137,20 +139,23 @@ fn decrypt_bin_files(dir: &Path, key: &[u8; 32]) -> Result<(), AtheerCoreError> 
                     AtheerCoreError::ModelDecryptionFailed(format!("read {:?}: {e}", path))
                 })?;
                 let aad = b"atheer-mlpackage-weight";
-                let key_ref = Key::<Aes256Gcm>::from_slice(key.as_slice());
-                let cipher = Aes256Gcm::new(key_ref);
+                let cipher = Aes256Gcm::new_from_slice(key.as_slice()).map_err(|e| {
+                    AtheerCoreError::ModelDecryptionFailed(format!("invalid AES-256 key: {e}"))
+                })?;
                 if encrypted.len() < 28 {
                     return Err(AtheerCoreError::ModelDecryptionFailed(format!(
                         "encrypted .bin too short: {:?}",
                         path
                     )));
                 }
-                let nonce = Nonce::from_slice(&encrypted[..12]);
+                let nonce = Nonce::try_from(&encrypted[..12]).map_err(|e| {
+                    AtheerCoreError::ModelDecryptionFailed(format!("invalid nonce: {e}"))
+                })?;
 
                 let ciphertext = &encrypted[28..];
                 let plaintext = cipher
                     .decrypt(
-                        nonce,
+                        &nonce,
                         aes_gcm::aead::Payload {
                             msg: ciphertext,
                             aad,

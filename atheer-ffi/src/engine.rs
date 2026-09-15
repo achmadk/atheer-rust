@@ -15,7 +15,7 @@ use atheer_memory_bank::{l3_compressed::L3CompressedStorage, MemoryBank};
 use atheer_orchestrator::calibrator::CalibrationSample;
 use atheer_orchestrator::{Orchestrator, OrchestratorConfig};
 use hkdf::Hkdf;
-use rand::Rng;
+use rand::RngExt;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs;
@@ -143,7 +143,7 @@ impl AtheerEngine {
                 })
                 .or_else(|| {
                     if config.checkpoint_dir.is_some() {
-                        Some(rand::thread_rng().gen::<[u8; 32]>())
+                        Some(rand::rng().random::<[u8; 32]>())
                     } else {
                         None
                     }

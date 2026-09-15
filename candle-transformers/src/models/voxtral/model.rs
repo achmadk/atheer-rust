@@ -3,7 +3,7 @@ use candle::{DType, Device, IndexOp, Module, Result, Tensor, D};
 use candle_nn::{
     layer_norm, linear, linear_no_bias, Conv1d, Dropout, LayerNorm, Linear, VarBuilder,
 };
-use rand::Rng;
+use rand::RngExt;
 
 #[derive(Debug, Clone)]
 pub struct VoxtralEncoderConfig {
