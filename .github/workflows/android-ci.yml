@@ -78,6 +78,10 @@ jobs:
         uses: android-actions/setup-android@v4
         with:
           cmdline-tools-version: 15859902
+          # Default package list installs legacy `tools`, which Google removed
+          # from the SDK repo; cmdline-tools 16.0 sdkmanager hard-fails on it.
+          # platform-tools is pre-installed on the runner image.
+          packages: ''
 
       - name: Install NDK
         run: |
@@ -170,6 +174,10 @@ jobs:
         uses: android-actions/setup-android@v4
         with:
           cmdline-tools-version: 15859902
+          # Default package list installs legacy `tools`, which Google removed
+          # from the SDK repo; cmdline-tools 16.0 sdkmanager hard-fails on it.
+          # platform-tools is pre-installed on the runner image.
+          packages: ''
 
       - name: Install NDK
         run: |
@@ -243,6 +251,10 @@ jobs:
         uses: android-actions/setup-android@v4
         with:
           cmdline-tools-version: 15859902
+          # Default package list installs legacy `tools`, which Google removed
+          # from the SDK repo; cmdline-tools 16.0 sdkmanager hard-fails on it.
+          # platform-tools is pre-installed on the runner image.
+          packages: ''
 
       - name: Install NDK
         run: |
@@ -390,6 +402,10 @@ jobs:
         uses: android-actions/setup-android@v4
         with:
           cmdline-tools-version: 15859902
+          # Default package list installs legacy `tools`, which Google removed
+          # from the SDK repo; cmdline-tools 16.0 sdkmanager hard-fails on it.
+          # platform-tools is pre-installed on the runner image.
+          packages: ''
 
       - name: Install NDK
         run: |
@@ -561,6 +577,10 @@ jobs:
         uses: android-actions/setup-android@v4
         with:
           cmdline-tools-version: 15859902
+          # Default package list installs legacy `tools`, which Google removed
+          # from the SDK repo; cmdline-tools 16.0 sdkmanager hard-fails on it.
+          # platform-tools is pre-installed on the runner image.
+          packages: ''
 
       - name: Download APK artifact
         uses: actions/download-artifact@v6
