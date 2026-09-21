@@ -248,6 +248,30 @@ impl NnapiGraphBuilder {
                     v.push(*fused_activation as u32);
                     v
                 }
+                NnapiOperation::Conv2d {
+                    input,
+                    filter,
+                    bias,
+                    padding_left,
+                    padding_right,
+                    padding_top,
+                    padding_bottom,
+                    stride_w,
+                    stride_h,
+                    fused_activation,
+                    ..
+                } => vec![
+                    *input,
+                    *filter,
+                    *bias,
+                    *padding_left,
+                    *padding_right,
+                    *padding_top,
+                    *padding_bottom,
+                    *stride_w,
+                    *stride_h,
+                    *fused_activation as u32,
+                ],
                 _ => inputs,
             };
 

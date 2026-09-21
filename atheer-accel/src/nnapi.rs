@@ -41,13 +41,13 @@ mod ndk {
     }
     // Operation codes (used by NnapiOperation::to_nnapi_code)
     pub const ANEURALNETWORKS_ADD: i32 = 0;
-    pub const ANEURALNETWORKS_MUL: i32 = 1;
-    pub const ANEURALNETWORKS_CONV_2D: i32 = 2;
-    pub const ANEURALNETWORKS_CONCATENATION: i32 = 3;
+    pub const ANEURALNETWORKS_CONCATENATION: i32 = 2;
+    pub const ANEURALNETWORKS_CONV_2D: i32 = 3;
     pub const ANEURALNETWORKS_FULLY_CONNECTED: i32 = 9;
     pub const ANEURALNETWORKS_LOGISTIC: i32 = 14;
-    pub const ANEURALNETWORKS_RELU: i32 = 15;
-    pub const ANEURALNETWORKS_TANH: i32 = 16;
+    pub const ANEURALNETWORKS_MUL: i32 = 18;
+    pub const ANEURALNETWORKS_RELU: i32 = 19;
+    pub const ANEURALNETWORKS_TANH: i32 = 28;
     pub const ANEURALNETWORKS_RESHAPE: i32 = 22;
     pub const ANEURALNETWORKS_SOFTMAX: i32 = 25;
     // Operand type codes (used by helper functions)

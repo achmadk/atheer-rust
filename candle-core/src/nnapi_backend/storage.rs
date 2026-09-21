@@ -597,9 +597,9 @@ impl BackendStorage for NnapiStorage {
         let out_h = params.out_h();
         let out_w = params.out_w();
 
-        let input_dims = [batch, in_h, in_w, in_channels];
-        let filter_dims = [k_h, k_w, in_channels, out_channels];
-        let output_dims = [batch, out_h, out_w, out_channels];
+        let input_dims = [batch, in_channels, in_h, in_w];
+        let filter_dims = [out_channels, in_channels, k_h, k_w];
+        let output_dims = [batch, out_channels, out_h, out_w];
 
         let padding_arr: [i32; 4] = [
             padding as i32,
