@@ -2395,6 +2395,12 @@ impl Tensor {
                 (Storage::Cuda(storage), Device::Cpu) => Storage::Cpu(storage.to_cpu_storage()?),
                 (Storage::Metal(storage), Device::Cpu) => Storage::Cpu(storage.to_cpu_storage()?),
                 (Storage::Vulkan(storage), Device::Cpu) => Storage::Cpu(storage.to_cpu_storage()?),
+                #[cfg(all(feature = "nnapi", target_os = "android"))]
+                (Storage::Cpu(storage), Device::Nnapi(nnapi)) => {
+                    Storage::Nnapi(nnapi.storage_from_cpu_storage(storage)?)
+                }
+                #[cfg(all(feature = "nnapi", target_os = "android"))]
+                (Storage::Nnapi(storage), Device::Cpu) => Storage::Cpu(storage.to_cpu_storage()?),
                 (Storage::Cuda(storage), Device::Cuda(cuda)) => {
                     let dst_storage = storage.transfer_to_device(cuda)?;
                     Storage::Cuda(dst_storage)

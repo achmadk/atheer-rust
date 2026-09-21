@@ -79,7 +79,8 @@ impl DefaultSampler {
 impl Sampler for DefaultSampler {
     fn sample(&mut self, logits: &Tensor, generated_tokens: &[u32]) -> CandleResult<u32> {
         use candle_core::DType;
-        use rand::distributions::{Distribution, WeightedIndex};
+        use rand::distr::weighted::WeightedIndex;
+        use rand::distr::Distribution;
 
         let logits = logits.to_dtype(DType::F32)?;
         let mut logits_vec: Vec<f32> = logits.to_vec1()?;

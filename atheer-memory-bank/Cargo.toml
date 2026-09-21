@@ -7,14 +7,12 @@ edition.workspace = true
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true }
-tracing = { workspace = true }
 lz4 = { workspace = true }
-aes-gcm = "0.10"
+aes-gcm = "0.11"
 zeroize = { version = "1", features = ["zeroize_derive"] }
 
-rand = "0.8"
-uuid = { version = "1.23", features = ["v4"] }
+rand = "0.10"
+uuid = { version = "1.26", features = ["v4"] }
 parking_lot = "0.12"
 
 [dev-dependencies]
