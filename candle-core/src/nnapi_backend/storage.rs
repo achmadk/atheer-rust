@@ -575,6 +575,11 @@ impl BackendStorage for NnapiStorage {
                 "conv2d on NNAPI only supports F32 dtype".to_string(),
             )));
         }
+        if params.dilation != 1 {
+            return Err(crate::Error::Nnapi(NnapiError::Message(
+                "conv2d on NNAPI does not support dilation".to_string(),
+            )));
+        }
 
         let input_data = self.as_f32_slice()?;
         let kernel_data = kernel.as_f32_slice()?;
@@ -730,13 +735,9 @@ impl BackendStorage for NnapiStorage {
         let lhs_data = self.as_f32_slice()?;
         let rhs_data = rhs.as_f32_slice()?;
 
-        let lhs = unsafe { std::slice::from_raw_parts(lhs_data.as_ptr(), m * k) };
-        let rhs = unsafe { std::slice::from_raw_parts(rhs_data.as_ptr(), k * n) };
-
         let mut output = vec![0.0f32; m * n];
-
-        let bias = vec![0.0f32; n];
-        self.executor.execute_fc(lhs, rhs, &bias, &mut output)?;
+        self.executor
+            .execute_matmul(lhs_data, rhs_data, &mut output, m, k, n)?;
 
         let bytes: Vec<u8> = output.iter().flat_map(|&x| x.to_le_bytes()).collect();
         Ok(NnapiStorage::with_executor(
