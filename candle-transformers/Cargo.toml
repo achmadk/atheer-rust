@@ -96,7 +96,7 @@ optional = true
 version = "0.2.19"
 
 [dependencies.rand]
-version = "0.10.2"
+version = "0.10.3"
 
 [dependencies.rayon]
 version = "1.12.0"
