@@ -254,11 +254,13 @@ mod tests {
 
     #[test]
     fn test_repetition_penalty_discourages_repeated() {
-        let mut config = SamplingConfig::default();
-        config.repetition_penalty = 2.0;
-        config.temperature = 1.0;
-        config.top_k = 0;
-        config.top_p = 1.0;
+        let config = SamplingConfig {
+            repetition_penalty: 2.0,
+            temperature: 1.0,
+            top_k: 0,
+            top_p: 1.0,
+            ..Default::default()
+        };
 
         let mut sampler = DefaultSampler::new(config);
         let logits = make_test_logits();
@@ -272,11 +274,13 @@ mod tests {
 
     #[test]
     fn test_frequency_penalty_linear_scaling() {
-        let mut config = SamplingConfig::default();
-        config.frequency_penalty = 2.0;
-        config.temperature = 1.0;
-        config.top_k = 0;
-        config.top_p = 1.0;
+        let config = SamplingConfig {
+            frequency_penalty: 2.0,
+            temperature: 1.0,
+            top_k: 0,
+            top_p: 1.0,
+            ..Default::default()
+        };
 
         let mut sampler = DefaultSampler::new(config);
         let logits = make_test_logits();
@@ -288,10 +292,12 @@ mod tests {
 
     #[test]
     fn test_min_p_does_not_filter_all() {
-        let mut config = SamplingConfig::default();
-        config.min_p = Some(0.1);
-        config.top_k = 0;
-        config.top_p = 1.0;
+        let config = SamplingConfig {
+            min_p: Some(0.1),
+            top_k: 0,
+            top_p: 1.0,
+            ..Default::default()
+        };
 
         let mut sampler = DefaultSampler::new(config);
         // Create logits with one very dominant token

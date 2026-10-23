@@ -40,7 +40,7 @@ candle-transformers = { path = "candle-transformers" }
 
 [workspace.dependencies]
 # Async runtime
-tokio = { version = "1.53", features = ["full"] }
+tokio = { version = "1.54", features = ["full"] }
 
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
@@ -65,7 +65,20 @@ camino = "1.2"
 memmap2 = "0.9"
 
 # HTTP (for model downloads)
-reqwest = { version = "0.12", features = ["json", "stream"] }
+#
+# reqwest 0.13 made `default` mean rustls+aws-lc-rs, so opt out explicitly.
+# `rustls-no-provider` keeps `aws-lc-rs` out of the graph entirely (it needs
+# cmake/nasm to build, which the mobile toolchains don't carry). The only rustls
+# provider enabled in this workspace is `ring` (see atheer-core), which installs
+# itself process-wide before any reqwest client is constructed.
+reqwest = { version = "0.13", default-features = false, features = [
+    "json",
+    "stream",
+    "charset",
+    "http2",
+    "system-proxy",
+    "rustls-no-provider",
+] }
 
 # LZ4 compression for L3 storage
 lz4 = "1.28"

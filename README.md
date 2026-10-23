@@ -4,7 +4,7 @@ Mobile inference engine for LLMs on iOS and Android.
 
 ## Features
 
-- **Multi-backend GPU/NPU acceleration**: Powered by `candle` framework, supporting Metal (iOS GPU), Vulkan (Android GPU with custom GLSL compute shaders), NNAPI (Android NPU/DSP via NDK FFI), and CoreML/ANE (iOS NPU). Platform-specific probe order: NPU → GPU → CPU.
+- **Multi-backend GPU/NPU acceleration**: Powered by `candle` framework, supporting Metal (iOS GPU), Vulkan (Android GPU: `atheer-accel` GLSL/SPIR-V shaders plus the `candle-core` wgpu/WGSL backend), NNAPI (Android NPU/DSP via NDK FFI), and CoreML/ANE (iOS NPU). Platform-specific probe order: NPU → GPU → CPU. Auto-selection skips CPU until no accelerator is available.
 - **Agentic Workflows**: Built-in support for tool-calling definitions, extraction, and autonomous agent loops.
 - **Structured Output**: Native grammar-constrained decoding (Pushdown Automaton) guaranteeing valid JSON output.
 - **Memory hierarchy**: L1/L2/L3 KV caching with intelligent eviction policies.
@@ -34,7 +34,7 @@ Mobile inference engine for LLMs on iOS and Android.
 │           atheer-core                    │
 │   (Candle inference, model & token)      │
 │   [SandboxedGpuBridge — crash escalation]│
-└────────┬───────────────────┬──-──────────┘
+└────────┬───────────────────┬─────────────┘
          │                   │
 ┌────────▼────────┐  ┌────────▼───────────┐
 │ atheer-accel   │  │atheer-orchestrator  │
@@ -76,7 +76,7 @@ Atheer auto-detects the best available backend for the current device. To overri
 | `cpu`       | Any               | always last    | Fallback, no acceleration        |
 | `metal`     | iOS 15+           | iOS: 2nd       | GPU via Candle Metal backend (`Device::Metal`) |
 | `vulkan`    | Android 26+       | Android: 2nd   | GPU via custom Vulkan compute shaders (SPIR-V) |
-| `nnapi`     | Android 24+       | Android: 1st   | NPU/DSP via NNAPI NDK FFI bindings (requires NDK r29) |
+| `nnapi`     | Android 26+       | Android: 1st   | NPU/DSP via NNAPI NDK FFI bindings (device discovery requires API 29+; NDK r30+) |
 | `coreml`    | iOS 15+           | iOS: 1st       | ANE via CoreML compatibility detection (real inference requires macOS build) |
 
 When `backendType` is `None` (default), the engine probes backends in platform-specific priority order:
@@ -110,7 +110,7 @@ print(response.text)
 
 On iOS, the Metal backend delegates tensor operations to `candle_core::Device::Metal`, providing real GPU acceleration for prefill and decode. The CoreML backend detects model compatibility with ANE constraints (architecture, quantization, size) and falls back to Metal for incompatible models.
 
-**iOS hardware telemetry** (thermal, memory, battery) is planned but requires a macOS build environment for `objc2` FFI compilation — currently blocked on Linux CI.
+**iOS hardware telemetry** (thermal, memory, battery) is implemented by `IosMonitor` using `objc2` FFI for Apple targets; validation on physical iOS devices is still pending.
 
 ### Android (Kotlin)
 
@@ -140,19 +140,19 @@ println(response.text)
 
 ### NNAPI NDK Backend (Android NPU/DSP)
 
-The NNAPI backend provides acceleration via Android's Neural Networks API using raw NDK FFI bindings declared in `atheer-accel/src/nnapi_ndk.rs` (~20 extern functions covering the full inference pipeline). The module also includes a full NNAPI graph compiler with 9 supported operation codes:
+The NNAPI backend provides acceleration via Android's Neural Networks API using raw NDK FFI bindings declared in `atheer-accel/src/nnapi_ndk.rs` (32 extern functions covering the full inference pipeline). The module also includes a full NNAPI graph compiler with 10 supported operation codes:
 
 | Stage | NNAPI API | Implementation |
 |-------|-----------|----------------|
 | **Device discovery** | `ANeuralNetworks_getDeviceCount`, `getDevice`, `getDeviceName`/`getDeviceType` | `NnapiExecutor::probe()` — enumerates accelerators, returns `None` if no NNAPI runtime available |
-| **Graph construction** | `ANeuralNetworksModel_create`, `addOperand`, `addOperation`, `setOperandValue` | `NnapiGraphBuilder` — operand/operation graph with validation, `NnapiOperation` enum with 9 variants |
-| **Supported operations** | `ANEURALNETWORKS_ADD`, `MUL`, `FULLY_CONNECTED`, `SOFTMAX`, `LOGISTIC`, `RELU`, `TANH`, `CONCATENATION`, `RESHAPE` | `NnapiOperation::to_nnapi_code()` — maps each variant to its NDK constant with operand validation |
+| **Graph construction** | `ANeuralNetworksModel_create`, `addOperand`, `addOperation`, `setOperandValue` | `NnapiGraphBuilder` — operand/operation graph with validation, `NnapiOperation` enum with 10 variants |
+| **Supported operations** | `ANEURALNETWORKS_ADD`, `MUL`, `FULLY_CONNECTED`, `SOFTMAX`, `LOGISTIC`, `RELU`, `TANH`, `CONCATENATION`, `RESHAPE`, `CONV_2D` | `NnapiOperation::to_nnapi_code()` — maps each variant to its NDK constant with operand validation |
 | **Compilation** | `ANeuralNetworksCompilation_create`, `setPreference` (`SUSTAINED_SPEED`), `finish` | `NnapiGraphBuilder::compile()` → `NnapiCompiledModel` |
 | **Execution** | `ANeuralNetworksExecution_create`, `setInput`/`setOutput`, `compute` | `NnapiCompiledModel::execute()` with multi-input/output buffer support and automatic cleanup |
 
 **Build requirements:**
-- NDK r29+ at `$ANDROID_NDK_HOME`
-- API target 26+ (feature level 3+ for device discovery)
+- NDK r30+ at `$ANDROID_NDK_HOME` (CI installs 30.0.16248370)
+- Compile target API 26+; NNAPI device discovery requires Android 10 / API 29+ at runtime
 - Cross-compilation: `cargo ndk -t arm64-v8a --platform 26 build -p atheer-accel`
 
 ### Vulkan Backend (Android GPU)
@@ -249,20 +249,26 @@ xcode-select --install
 
 ## Testing
 
-The workspace contains **817 tests** across all crates, verified via `cargo test --workspace`:
+The workspace contains **820 tests** across all crates, verified via `cargo test --workspace` (0 failed, 8 ignored):
 
 | Crate | Test Count | Scope |
 |-------|-----------|-------|
-| `atheer-accel` | 53 | Backend creation, forward pass, fallback, quantization, probe order, CoreML compatibility |
-| `atheer-core` | 285 | Model loading, KV cache, block manager, accuracy, security, lifecycle, streaming, session management, multi-turn conversation, **sandbox bridge (18 tests)**, **certificate pinning (8 tests)**, **prompt injection guardrails (42 tests)** |
+| `atheer-accel` | 58 | Backend creation, auto-selection (accelerator over CPU), forward pass, fallback, quantization, probe order, CoreML compatibility |
+| `atheer-core` | 285 (3 ignored) | Model loading, KV cache, block manager, accuracy, security, lifecycle, streaming, session management, multi-turn conversation, **sandbox bridge (18 tests)**, **certificate pinning (8 tests)**, **prompt injection guardrails (42 tests)** |
 | `atheer-ffi` | 45 | Config roundtrip, backend type conversion, engine lifecycle, guardrail FFI, privacy FFI, checkpoint lifecycle, **sandbox engine integration (4 tests)** |
-| `atheer-hardware` | 18 | Monitor creation, sampling thread, health status edge cases, iOS telemetry |
+| `atheer-hardware` | 8 | Monitor creation, sampling thread, health status edge cases, iOS telemetry |
 | `atheer-memory-bank` | 40 | L1/L2/L3 cache, EncryptedStore (AES-256-GCM), handoff protocol, alignment scoring, VRAM monitoring |
 | `atheer-orchestrator` | 84 | Mode switching, NGram cache, grammar PDA, thermal model, eco/balanced/turbo |
-| Integration (tests crate) | 36 | NGram cache, Eco mode, mode switching with telemetry, property-based fuzz tests |
-| `atheer-fuzz` | 3 | Fuzz-resistant KV cache, token, config parsing |
+| Integration (tests crate) | 38 | NGram cache, Eco mode, mode switching with telemetry, property-based fuzz tests |
+| `atheer-fuzz` | 4 | Fuzz-resistant KV cache, token, config parsing |
+| `candle-core` | 170 | Vendored upstream tests plus Atheer Vulkan/NNAPI/Metal paths |
+| `candle-coreml` | 16 | Vendored CoreML model integration |
+| `candle-transformers` | 23 | Vendored upstream tests plus Atheer KV-cache patches |
+| Doc tests | 47 | Documentation examples across the workspace |
 
-A further 4 tests remain `#[ignore]` (structurally blocked — they use `unsafe` construct patterns that cannot be safely tested without a real model).
+Eight tests are ignored: three `atheer-core` tests that require a real GGUF model or an unsupported KV-cache snapshot path, and five doc tests.
+
+Both `cargo clippy --workspace -- -D warnings` and `cargo clippy --workspace --all-targets -- -D warnings` are clean.
 
 To run the full atheer-core test suite with a real model (including 10 model-dependent tests that otherwise skip gracefully):
 
@@ -281,17 +287,23 @@ ATHEER_TEST_MODEL=./models/LFM2-700M-Q4_0.gguf cargo test -p atheer-core
 Atheer includes a `perf-bench` binary for measuring throughput, energy, and thermal behavior:
 
 ```bash
-# Basic throughput benchmark
-cargo run -p perf-bench -- --model-path model.gguf --batch-sizes 1,4,8
+# Basic throughput benchmark (release build)
+cargo run --release -p perf-bench -- \
+  --model-path model.gguf \
+  --tokenizer-path tokenizer.json \
+  --batch-sizes 1,4,8
 
 # Sustained 5-minute test with thermal monitoring
-cargo run -p perf-bench -- --model-path model.gguf --duration-secs 300
+cargo run --release -p perf-bench -- \
+  --model-path model.gguf \
+  --tokenizer-path tokenizer.json \
+  --duration-secs 300
 
 # Compare two runs
 python tools/bench-compare.py before.json after.json
 ```
 
-The binary outputs a machine-readable JSON report (`bench-report.json` by default) with per-batch and sustained power samples. Criterion bench harnesses are also available under `perf-bench/benches/` for CI integration.
+The binary outputs a machine-readable JSON report (`bench-report.json` by default) with per-batch and sustained power samples. `--max-tokens` controls sample length (default 128), and `--generation-timeout-ms` defaults to `0` (disabled). Criterion bench harnesses are also available under `perf-bench/benches/` for CI integration.
 
 ```bash
 cargo bench -p perf-bench
@@ -303,19 +315,19 @@ cargo bench -p perf-bench
 |-------|-------------|-------|
 | `atheer-core` | Core inference engine (powered by `candle` and `tokenizers`) + privacy mode + guardrails + sandbox | 285 |
 | `atheer-ffi` | FFI bindings via uniffi (Swift/Kotlin) | 45 |
-| `atheer-accel` | Hardware acceleration backends (Metal, Vulkan, NNAPI, CoreML, CPU) | 53 |
+| `atheer-accel` | Hardware acceleration backends (Metal, Vulkan, NNAPI, CoreML, CPU) | 58 |
 | `atheer-orchestrator` | Mode selection, grammar sampling, and agent execution loop | 84 |
-| `atheer-hardware` | Platform hardware telemetry (thermal, memory, battery) | 18 |
+| `atheer-hardware` | Platform hardware telemetry (thermal, memory, battery) | 8 |
 | `atheer-memory-bank` | KV cache hierarchy (L1/L2/L3 with handoff) + `EncryptedStore` (AES-256-GCM) | 40 |
-| `perf-bench` | Performance-per-watt benchmarking binary and model-dependent Criterion harnesses | 1 binary + 9 benches |
+| `perf-bench` | Performance-per-watt benchmarking binary and model-dependent Criterion harnesses | 2 unit tests + 10 benches |
 | `atheer-benches` (tests/benches) | Model-free Criterion microbenchmarks (kv_cache, ngram_cache, orchestrator) | 3 benches |
 
 ## Requirements
 
-- Rust 1.75+
+- Rust 1.87+
 - iOS 15+ (Metal, CoreML detection)
-- Android API 26+ for Vulkan (API 28+ recommended for NNAPI device discovery)
-- NDK r29+ for NNAPI cross-compilation (`$ANDROID_NDK_HOME`)
+- Android API 26+ for Vulkan; NNAPI device discovery requires API 29+
+- NDK r30+ for NNAPI cross-compilation (`$ANDROID_NDK_HOME`; CI uses 30.0.16248370)
 - `cargo ndk` for Android builds
 - macOS: Xcode Command Line Tools for iOS/macOS telemetry compilation (`objc2` FFI)
   ```bash
@@ -347,7 +359,7 @@ The `CoreMLBackend` now supports real ANE inference via `candle-coreml` integrat
 5. **Caching** — compatibility computed at load time and stored on the `CoreMLBackend` instance.
 6. **16 unit tests** — all passing (20 with pre-heat tests, cfg-gated).
 
-**Remaining**: Create the `atheer-npu/candle-coreml` GitHub fork (upstream dep bump from 0.9.1 to 0.11.0 and API adaptation), then uncomment the git dep in `atheer-accel/Cargo.toml` and verify the `coreml` feature compiles end-to-end.
+**Remaining**: Validate the ANE path on physical iOS devices. `candle-coreml` is already vendored in-tree as a path dependency, and the `coreml` feature is forwarded through `atheer-ffi` for mobile builds.
 
 ### ANE Compilation Pre-Heat (P5) ✅
 
@@ -361,7 +373,7 @@ Background ANE compilation pre-heat to eliminate cold-start ANE inference latenc
 6. **`AtheerEngine::initialize()` trigger** — after GGUF model is loaded, calls `preheat_ane()` on the backend manager's CoreML backend, kicking off the background load.
 7. **4 cfg-gated tests** — `test_for_preheat_stores_compat`, `test_preheat_ane_idempotent`, `test_preheat_forward_fallback_when_not_ready`, `test_preheat_ane_no_model_path` — all passing.
 
-Builds clean with and without `--features coreml` on macOS. 55/56 tests pass (1 pre-existing Metal failure).
+The feature is wired through `atheer-ffi`; build it on a macOS host with `cargo build -p atheer-ffi --features coreml` (it forwards to `atheer-accel/coreml`). The current workspace suite passes 820/820 tests (0 failures, 8 ignored).
 
 ### Privacy Modes (V1) ✅
 
@@ -397,7 +409,7 @@ MITM-resistant model downloads via rustls custom certificate verification, compl
 5. **`AtheerCoreError::TlsPinningFailed`** — structured error variant with hostname, peer hash, and pinned hashes fields.
 6. **8 unit tests** — default hash count, empty pins, TLS config building, hex literal decoding, invalid DER handling, error display. All 285 core tests pass.
 
-**Implementation details**: 309 lines in `atheer-core/src/cert_pinner.rs`. Depends on `rustls` 0.23, `webpki-roots` 0.26, `rustls-webpki` 0.103. Gated behind `model-registry` feature.
+**Implementation details**: 309 lines in `atheer-core/src/cert_pinner.rs`. Depends on `rustls` 0.23, `webpki-roots` 1.0 (direct dependency; 0.26 remains transitively in the graph), and `rustls-webpki` 0.103. Gated behind `model-registry`.
 
 ### Sandboxed GPU Execution (S8) ✅
 
@@ -416,13 +428,13 @@ MITM-resistant model downloads via rustls custom certificate verification, compl
 
 ### Metal Backend Stability
 
-The Metal backend (`atheer-accel/src/metal.rs`) panics on systems without a Metal GPU (virtualized macOS, CI). Root cause: `candle-core`'s `metal_if_available()` uses `Vec::swap_remove` on an empty device list. Fix requires upstream patch to `candle-core` or a `catch_unwind` wrapper in the backend.
+The vendored `candle-core` now guards against an empty Metal device list: `MetalDevice::new()` returns an error when the requested ordinal is unavailable, and `atheer-accel` treats the missing device as an unavailable backend. The previous empty-list panic is no longer present. Physical-device validation remains part of the iOS/macOS release checklist.
 
 ### Production Readiness
 
 - **NNAPI real device testing** — graph builder and compiled model tests are verified on non-Android (stubs). Real Android device testing needed to validate `ANeuralNetworksModel_addOperation` and `execute()` produce correct outputs.
 - **iOS telemetry on-device** — `IosMonitor` works on macOS. Testing on physical iOS devices is needed to validate `UIDevice` and `NSProcessInfo` selectors behave as expected.
-- **Cross-compilation CI** — add `cargo ndk` and `xcodebuild` build verification to CI pipeline.
+- **Cross-compilation CI** — Android `cargo ndk` builds are in CI; iOS `xcodebuild` verification is still missing.
 
 ## Vendored Dependencies
 
@@ -460,7 +472,7 @@ After pulling, run `cargo check -p candle-core`, the Android Vulkan/NNAPI check,
 
 The current pinned release is **0.11.0**. The local fork branch `patched-v0.11.0` is rebased from upstream tag `0.11.0`; replace `<next-release-tag>` when a later release is selected. The flattened `crate-candle-core` branch must always be advanced as a child of its previous tip, not recreated as an orphan.
 
-The unused `candle-core/src/vulkan_backend_old/`, `candle-core/shaders/`, and `candle-core/build.rs` artifacts were removed after the WGSL backend replaced the old GLSL pipeline. The live shaders under `atheer-accel/shaders/` are unrelated and must remain.
+The unused `candle-core/src/vulkan_backend_old/`, `candle-core/shaders/`, and `candle-core/build.rs` artifacts were removed after the WGSL backend replaced the old GLSL pipeline. The live shaders under `atheer-accel/shaders/` are separate from `candle-core`: they are the GLSL inputs for the `atheer-accel` Vulkan backend and must remain.
 
 Carried delta vs upstream: `candle-core/Cargo.toml` pins `wgpu = "30.0"` (upstream 0.11.0 pins wgpu 22), with `vulkan_backend_wgpu/device.rs` adapted to the v30 API — `request_adapter` returns `Result`, single-arg `request_device`, `DeviceDescriptor` gains `experimental_features` + `trace`, `RequestAdapterOptions` gains `apply_limit_buckets`, `entry_point: Some(..)`, `bind_group_layouts` entries wrapped in `Some`, push constants replaced by `immediate_size: 0`, `get_mapped_range()` returns `Result`. Re-apply both the version pin and the device.rs adaptations after every upstream retree. The NNAPI backend carries a further local delta: `tensor.rs` gains `Storage::Cpu ↔ Device::Nnapi` transfer arms in the Vulkan-gated `to_device`, and `storage.rs` wires `Storage::unary_impl` to `NnapiStorage::unary_impl` (relu/tanh/logistic) — both are required by `candle-core/tests/nnapi_tests.rs`; re-apply them after every upstream retree. Workspace `rust-version` is 1.87 (wgpu 30 MSRV).
 

@@ -5,7 +5,8 @@
 //!
 //! Run: `cargo bench -p perf-bench -- kv_cache_quantize`
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
+use std::hint::black_box;
 
 fn bench_quantize_int8_4k(c: &mut Criterion) {
     let data: Vec<f32> = vec![1.0f32; 4096];

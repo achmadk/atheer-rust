@@ -95,11 +95,13 @@ fn test_eco_mode_ngram() {
 
 #[test]
 fn test_orchestrator_responds_to_thermal_change() {
-    let mut config = OrchestratorConfig::default();
-    config.adaptive = true;
-    config.hysteresis_cooldown_ms = 0;
-    config.thermal_threshold_c = 40.0;
-    config.thermal_margin_c = 5.0;
+    let config = OrchestratorConfig {
+        adaptive: true,
+        hysteresis_cooldown_ms: 0,
+        thermal_threshold_c: 40.0,
+        thermal_margin_c: 5.0,
+        ..Default::default()
+    };
     let mut orchestrator = Orchestrator::new(config);
 
     // Start with good conditions -> should select Turbo
@@ -117,11 +119,13 @@ fn test_orchestrator_responds_to_thermal_change() {
 
 #[test]
 fn test_orchestrator_responds_to_memory_pressure() {
-    let mut config = OrchestratorConfig::default();
-    config.adaptive = true;
-    config.hysteresis_cooldown_ms = 0;
-    config.memory_threshold_mb = 1000;
-    config.memory_critical_mb = 500;
+    let config = OrchestratorConfig {
+        adaptive: true,
+        hysteresis_cooldown_ms: 0,
+        memory_threshold_mb: 1000,
+        memory_critical_mb: 500,
+        ..Default::default()
+    };
     let mut orchestrator = Orchestrator::new(config);
 
     // Plenty of memory -> Turbo
@@ -135,10 +139,12 @@ fn test_orchestrator_responds_to_memory_pressure() {
 
 #[test]
 fn test_orchestrator_responds_to_battery_drain() {
-    let mut config = OrchestratorConfig::default();
-    config.adaptive = true;
-    config.hysteresis_cooldown_ms = 0;
-    config.battery_threshold_percent = 20;
+    let config = OrchestratorConfig {
+        adaptive: true,
+        hysteresis_cooldown_ms: 0,
+        battery_threshold_percent: 20,
+        ..Default::default()
+    };
     let mut orchestrator = Orchestrator::new(config);
 
     // High battery, not on battery -> Turbo

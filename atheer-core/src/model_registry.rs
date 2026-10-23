@@ -52,6 +52,19 @@ pub struct ModelRegistry {
     client: reqwest::blocking::Client,
 }
 
+/// reqwest is built with `rustls-no-provider`, so it panics inside
+/// `ClientBuilder::build()` unless a rustls crypto provider is installed first.
+/// `ring` is the only provider this workspace compiles in, and it is also the one
+/// `CertificatePinner::build_tls_config` builds its verifier with, so the whole
+/// process agrees on one implementation.
+fn ensure_crypto_provider() {
+    if rustls::crypto::CryptoProvider::get_default().is_none() {
+        // Fails only if another thread installed a provider in between, which
+        // still leaves exactly one installed.
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    }
+}
+
 impl ModelRegistry {
     pub fn new(
         cache_dir: Option<PathBuf>,
@@ -60,6 +73,7 @@ impl ModelRegistry {
     ) -> Self {
         let cache_dir = cache_dir.unwrap_or_else(Self::default_cache_dir);
         let max_cache_size = max_cache_size.unwrap_or(10_737_418_240);
+        ensure_crypto_provider();
         let client = match pinner {
             Some(pinner) => {
                 let tls_config = pinner
@@ -91,6 +105,7 @@ impl ModelRegistry {
     pub fn with_pinning(cache_dir: Option<PathBuf>, max_cache_size: Option<u64>) -> Result<Self> {
         let cache_dir = cache_dir.unwrap_or_else(Self::default_cache_dir);
         let max_cache_size = max_cache_size.unwrap_or(10_737_418_240);
+        ensure_crypto_provider();
         let pinner = CertificatePinner::default_huggingface();
         let tls_config = pinner
             .build_tls_config()

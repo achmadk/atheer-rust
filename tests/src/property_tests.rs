@@ -1,5 +1,5 @@
 #[cfg(test)]
-mod property_tests {
+mod properties {
     use atheer_memory_bank::{KvCache, L2WarmCache, MemoryBank};
     use atheer_orchestrator::{NGramCache, SpeculativeDecoder};
     use proptest::prelude::*;
@@ -62,7 +62,7 @@ mod property_tests {
             cache.update_alignment(score);
 
             let actual = cache.alignment_score();
-            prop_assert!(actual >= 0.0 && actual <= 1.0);
+            prop_assert!((0.0..=1.0).contains(&actual));
         }
 
         #[test]

@@ -106,29 +106,22 @@ impl QwenConfig {
 }
 ```
 
-## 🔄 IN PROGRESS: Code Organization Refactoring
+## ✅ COMPLETED: Code Organization Refactoring
 
-### Current Activity: Breaking Down Large qwen.rs File (2263 lines)
+### qwen.rs split into focused modules
 
-**Goal**: Improve maintainability by splitting the monolithic qwen.rs into focused modules.
+The former 2,263-line `src/qwen.rs` has been split. Current layout:
 
-**Progress** (In Progress - August 7, 2025):
-- ✅ **Phase 1**: Created `src/qwen/` module structure with `mod.rs`
-- ✅ **Phase 2**: Extracted `ModelNamingConfig` to `qwen/naming.rs` 
-- 🔄 **Phase 3**: Extracting `QwenConfig` to `qwen/config.rs` (In Progress)
-- ⏳ **Phase 4**: Extract tensor creation methods to `qwen/tensors.rs`
-- ⏳ **Phase 5**: Split model loading and inference logic
-- ⏳ **Phase 6**: Update imports and verify all tests pass
-
-**New Module Structure**:
-```
+```text
 src/qwen/
-├── mod.rs           # Public API re-exports (✅ Done)
-├── naming.rs        # File naming patterns (✅ Done)  
-├── config.rs        # QwenConfig structure (🔄 In Progress)
-├── tensors.rs       # Tensor creation logic (⏳ Pending)
-├── model.rs         # QwenModel struct and loading (⏳ Pending)
-└── inference.rs     # Inference pipeline (⏳ Pending)
+├── mod.rs           # Public API re-exports
+├── naming.rs        # File naming patterns
+├── config.rs        # QwenConfig structure
+├── embeddings.rs    # Embedding helpers
+├── tensors.rs       # Tensor creation logic
+├── model.rs         # QwenModel struct and loading
+├── inference.rs     # Inference pipeline
+└── utilities.rs     # Shared helpers
 ```
 
 **Benefits**: Better code organization, easier maintenance, clearer separation of concerns, improved testability.
@@ -258,10 +251,10 @@ cargo test cache_manager::tests::test_find_all_candle_coreml_caches -- --nocaptu
 
 ## 🔗 Related Files
 
-- **Core Implementation**: `src/qwen.rs` - QwenModel and QwenConfig
-- **Configuration**: `src/config.rs` - CoreML configuration structures  
-- **Model Loading**: `src/model_downloader.rs` - HuggingFace integration
-- **Cache Management**: `src/cache_manager.rs` - Unified cache management system
+- **Core Implementation**: `src/qwen/` - QwenModel, QwenConfig, inference, and tensor helpers
+- **Configuration**: `src/config/` - CoreML configuration structures
+- **Model Loading**: `src/download/` and `src/unified_model_loader.rs` - HuggingFace integration
+- **Cache Management**: `src/cache/manager.rs` - Unified cache management system
 - **Enhanced Cleanup**: `cleanup_coreml_caches_enhanced.sh` - Comprehensive cache cleanup
 - **Examples**: `examples/` - Various usage demonstrations
 - **Test Cases**: `tests/qwen_tests.rs` - Multi-model testing

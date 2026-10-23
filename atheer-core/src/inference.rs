@@ -1401,7 +1401,6 @@ mod tests {
     fn test_engine_smoke() {
         // Verify the struct exists and builder methods are callable.
         // Full engine construction requires a real model + tokenizer.
-        assert!(true);
     }
 
     /// Structural test: verify moderation setter doesn't panic.
@@ -1409,7 +1408,6 @@ mod tests {
     fn test_with_moderation_no_panic() {
         // The method exists and accepts Option<ContentModeration>.
         // Full test requires a real model to construct InferenceEngine.
-        assert!(true);
     }
 
     #[test]
@@ -1461,7 +1459,7 @@ mod tests {
 
         let model = Model::from_gguf(&model_path, &device, None).unwrap();
         let tokenizer = crate::tokenizer::Tokenizer::from_file(
-            &std::path::PathBuf::from(&model_path).with_extension("json"),
+            std::path::PathBuf::from(&model_path).with_extension("json"),
         )
         .unwrap();
 
@@ -1493,7 +1491,7 @@ mod tests {
 
         let model = Model::from_gguf(&model_path, &device, None).unwrap();
         let tokenizer = crate::tokenizer::Tokenizer::from_file(
-            &std::path::PathBuf::from(&model_path).with_extension("json"),
+            std::path::PathBuf::from(&model_path).with_extension("json"),
         )
         .unwrap();
 
@@ -1526,7 +1524,7 @@ mod tests {
 
         let model = Model::from_gguf(&model_path, &device, None).unwrap();
         let tokenizer = crate::tokenizer::Tokenizer::from_file(
-            &std::path::PathBuf::from(&model_path).with_extension("json"),
+            std::path::PathBuf::from(&model_path).with_extension("json"),
         )
         .unwrap();
 
@@ -1557,7 +1555,7 @@ mod tests {
 
         let model = Model::from_gguf(&model_path, &device, None).unwrap();
         let tokenizer = crate::tokenizer::Tokenizer::from_file(
-            &std::path::PathBuf::from(&model_path).with_extension("json"),
+            std::path::PathBuf::from(&model_path).with_extension("json"),
         )
         .unwrap();
 
@@ -1587,7 +1585,7 @@ mod tests {
 
         let model = Model::from_gguf(&model_path, &device, None).unwrap();
         let tokenizer = crate::tokenizer::Tokenizer::from_file(
-            &std::path::PathBuf::from(&model_path).with_extension("json"),
+            std::path::PathBuf::from(&model_path).with_extension("json"),
         )
         .unwrap();
 
@@ -1615,7 +1613,7 @@ mod tests {
 
         let model = Model::from_gguf(&model_path, &device, None).unwrap();
         let tokenizer = crate::tokenizer::Tokenizer::from_file(
-            &std::path::PathBuf::from(&model_path).with_extension("json"),
+            std::path::PathBuf::from(&model_path).with_extension("json"),
         )
         .unwrap();
 
@@ -1670,7 +1668,7 @@ mod tests {
 
         let model = Model::from_gguf(&model_path, &device, None).unwrap();
         let tokenizer = crate::tokenizer::Tokenizer::from_file(
-            &std::path::PathBuf::from(&model_path).with_extension("json"),
+            std::path::PathBuf::from(&model_path).with_extension("json"),
         )
         .unwrap();
 

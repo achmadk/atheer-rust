@@ -31,10 +31,12 @@ ATHEER_TEST_MODEL=/path/to/model.gguf ATHEER_TOKENIZER_PATH=/path/to/tokenizer.j
 ### Binary (sustained throughput)
 
 ```bash
-cargo run -p perf-bench -- --model-path model.gguf --tokenizer-path tokenizer.json --duration-secs 120 --batch-sizes 1,4,8
+cargo run --release -p perf-bench -- --model-path model.gguf --tokenizer-path tokenizer.json --duration-secs 120 --batch-sizes 1,4,8
 ```
 
 ## Benchmark Suites
+
+`perf-bench` contains 10 Criterion targets: one model-free (`kv_cache_quantize`) and nine model-dependent. `atheer-benches` contains three additional model-free targets.
 
 ### Model-Free (run without GGUF file)
 
@@ -57,6 +59,7 @@ cargo run -p perf-bench -- --model-path model.gguf --tokenizer-path tokenizer.js
 | `energy` | `perf-bench/benches/energy.rs` | Energy per token |
 | `mode_switching` | `perf-bench/benches/mode_switching.rs` | Mode transition latency (Turbo/Balanced/Eco) |
 | `thermal_throttling` | `perf-bench/benches/thermal_throttling.rs` | Time-to-throttle under sustained load |
+| `thermal_response` | `perf-bench/benches/thermal_response.rs` | Thermal mode-transition latency during generation |
 
 ## KV Cache Quantization Throughput Baseline
 

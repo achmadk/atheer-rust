@@ -19,6 +19,12 @@ tracing-subscriber = { workspace = true, features = ["env-filter"] }
 [dev-dependencies]
 criterion = { workspace = true }
 
+[lints.cargo]
+# `criterion` is only imported by the bench targets. Cargo's unused_dependencies
+# lint does not account for bench-only dev-dependencies when building the
+# lib/bin/test target kinds, so silence the false positive here.
+unused_dependencies = "allow"
+
 [[bench]]
 name = "kv_cache_quantize"
 harness = false

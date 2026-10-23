@@ -164,7 +164,7 @@ mod tests {
     fn test_validate_tensor_dims_valid_4d() {
         let result = validate_tensor_dims(&[1, 32, 128, 128]);
         assert!(result.is_ok());
-        assert_eq!(result.unwrap().num_elements, 1 * 32 * 128 * 128);
+        assert_eq!(result.unwrap().num_elements, 32 * 128 * 128);
     }
 
     #[test]
@@ -259,7 +259,7 @@ mod tests {
     fn test_full_validation_chain_before_gpu_dispatch() {
         // Step 1: Validate tensor dimensions (simulates model weight tensor)
         let dims = validate_tensor_dims(&[1, 32, 128, 128]).unwrap();
-        assert_eq!(dims.num_elements, 1 * 32 * 128 * 128);
+        assert_eq!(dims.num_elements, 32 * 128 * 128);
 
         // Step 2: Validate batch input (simulates inference request)
         let token_ids = vec![10, 20, 30];

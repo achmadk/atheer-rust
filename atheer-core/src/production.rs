@@ -126,9 +126,11 @@ mod tests {
 
     #[test]
     fn test_config_validation_invalid_temperature() {
-        let mut config = ProductionConfig::default();
-        config.model_path = "/models/test.gguf".to_string();
-        config.temperature = 5.0;
+        let config = ProductionConfig {
+            model_path: "/models/test.gguf".to_string(),
+            temperature: 5.0,
+            ..Default::default()
+        };
 
         let errors = config.validate();
         assert!(!errors.is_empty());
@@ -136,9 +138,11 @@ mod tests {
 
     #[test]
     fn test_config_validation_invalid_max_tokens() {
-        let mut config = ProductionConfig::default();
-        config.model_path = "/models/test.gguf".to_string();
-        config.max_tokens = 100_000;
+        let config = ProductionConfig {
+            model_path: "/models/test.gguf".to_string(),
+            max_tokens: 100_000,
+            ..Default::default()
+        };
 
         let errors = config.validate();
         assert!(!errors.is_empty());

@@ -5,7 +5,8 @@
 //!
 //! Run: `ATHEER_TEST_MODEL=... ATHEER_TOKENIZER_PATH=... cargo bench -p perf-bench -- sustained`
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
+use std::hint::black_box;
 
 fn maybe_bench_sustained(c: &mut Criterion) {
     let model_path = std::env::var("ATHEER_TEST_MODEL").unwrap_or_default();

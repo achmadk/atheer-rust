@@ -286,9 +286,11 @@ mod tests {
 
     #[test]
     fn test_health_status_critical() {
-        let mut status = HealthStatus::default();
-        status.thermal = ThermalState::Critical;
-        status.available_ram_mb = 500;
+        let status = HealthStatus {
+            thermal: ThermalState::Critical,
+            available_ram_mb: 500,
+            ..Default::default()
+        };
 
         assert!(status.is_critical());
     }

@@ -701,14 +701,19 @@
     padding-top: 0.6rem; /* FIX: Added vertical safe space to prevent badge clipping under mobile overflow conditions */
   }
   @media (min-width: 720px) {
-    .roadmap { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .roadmap { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .phase .tag { max-width: 20%; text-align: center; left: var(--space-8); }
     .nav-pill__cta {
       min-width: 6rem;
       display: flex;
       justify-content: center;
     }
-  
+  }
+  @media (min-width: 720px) and (max-width: 1079px) {
+    .roadmap .phase:last-child { grid-column: 1 / -1; }
+  }
+  @media (min-width: 1080px) {
+    .roadmap { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   }
   .phase {
     border: var(--rule-hair) solid var(--color-rule);
@@ -758,6 +763,7 @@
     padding: var(--space-3) 0 var(--space-3) 1.25rem;
     border-top: var(--rule-hair) solid color-mix(in oklch, var(--color-rule) 50%, transparent);
     position: relative;
+    overflow-wrap: anywhere;
   }
   .phase ul li:first-child { border-top: 0; }
   .phase ul li::before {
@@ -993,7 +999,7 @@
 
 <section class="hero" id="hero">
   <div class="hero-copy reveal">
-    <span class="hero-eyebrow">v0.1.0 · MIT / Apache-2.0</span>
+    <span class="hero-eyebrow">v0.1.0 · Rust 1.87 · MIT / Apache-2.0</span>
     <h1>A Rust inference engine for <span class="u">on-device LLMs</span> on iOS and Android.</h1>
     <p class="hero-sub">
       Atheer runs language models locally &mdash; NPU &rarr; GPU &rarr; CPU, automatic.
@@ -1007,8 +1013,8 @@
       <button class="btn btn-ghost" onclick="document.getElementById('architecture').scrollIntoView({behavior:'smooth'})">View architecture</button>
     </div>
     <div class="hero-meta">
-      <div class="m"><div class="v" data-count="817">0</div><div class="k">tests</div></div>
-      <div class="m"><div class="v" data-count="10">0</div><div class="k">crates</div></div>
+      <div class="m"><div class="v" data-count="820">0</div><div class="k">tests</div></div>
+      <div class="m"><div class="v" data-count="16">0</div><div class="k">crates</div></div>
       <div class="m"><div class="v" data-count="5">0</div><div class="k">backends</div></div>
       <div class="m"><div class="v" data-count="100" data-suffix="&#37;">0</div><div class="k">safe rust</div></div>
     </div>
@@ -1016,18 +1022,18 @@
 
   <aside class="hero-proof reveal" aria-label="Crate stack">
     <div class="hero-proof__head">
-      <h3>Crate stack &middot; 10 crates</h3>
-      <span class="count">rust · 2026</span>
+      <h3>Crate stack &middot; 16 packages</h3>
+      <span class="count">10 shown · 6 more</span>
     </div>
     <div class="crate"><span class="crate__n">01</span><div><div class="crate__name">atheer-hardware</div><div class="crate__role">1 Hz telemetry · Android JNI · iOS objc2 FFI</div></div></div>
     <div class="crate"><span class="crate__n">02</span><div><div class="crate__name">atheer-accel</div><div class="crate__role">Metal · Vulkan · NNAPI · CoreML · CPU</div></div></div>
     <div class="crate"><span class="crate__n">03</span><div><div class="crate__name">atheer-memory-bank</div><div class="crate__role">L1/L2/L3 KV cache · PagedAttention blocks</div></div></div>
     <div class="crate"><span class="crate__n">04</span><div><div class="crate__name">atheer-orchestrator</div><div class="crate__role">Predictive mode selection · PDA grammar</div></div></div>
     <div class="crate"><span class="crate__n">05</span><div><div class="crate__name">atheer-core</div><div class="crate__role">Candle inference · session · KV quantizer</div></div></div>
-    <div class="crate"><span class="crate__n">06</span><div><div class="crate__name">atheer-ffi</div><div class="crate__role">UniFFI bindings · streaming callbacks</div></div></div>
+    <div class="crate"><span class="crate__n">06</span><div><div class="crate__name">atheer-ffi</div><div class="crate__role">UniFFI 0.32 · streaming callbacks</div></div></div>
     <div class="crate"><span class="crate__n">07</span><div><div class="crate__name">atheer-gpu-shard</div><div class="crate__role">Android isolated GPU sandbox process</div></div></div>
     <div class="crate"><span class="crate__n">08</span><div><div class="crate__name">atheer-encrypt</div><div class="crate__role">Model encryption primitives</div></div></div>
-    <div class="crate"><span class="crate__n">09</span><div><div class="crate__name">atheer-bindgen</div><div class="crate__role">UniFFI binding generator</div></div></div>
+    <div class="crate"><span class="crate__n">09</span><div><div class="crate__name">atheer-bindgen</div><div class="crate__role">Legacy UDL generator · replacement in progress</div></div></div>
     <div class="crate"><span class="crate__n">10</span><div><div class="crate__name">perf-bench</div><div class="crate__role">Throughput · energy · thermal harness</div></div></div>
   </aside>
 </section>
@@ -1057,11 +1063,11 @@
           <li class="row"><span class="n">03</span><div class="body"><h3>L1/L2/L3 KV cache hierarchy</h3><p>A three-tier cache with alignment gating and explicit handoff protocols. L1 holds the active session, L2 retains recent sessions for fast recall, L3 stores compressed/archived context &mdash; designed for multi-turn agent sessions on memory-constrained devices. <em>(Note: promotion scoring heuristics are not yet implemented &mdash; the alignment score is currently a manually-set placeholder.)</em></p><p class="note">Every other engine uses a single flat KV cache with no tiering, no promotion, and no cross-session handoff.</p></div></li>
           <li class="row"><span class="n">04</span><div class="body"><h3>Grammar-constrained decoding</h3><p>A first-class <code>GrammarConstraint</code> trait implements a pushdown automaton that guarantees valid JSON output at every decode step &mdash; not a post-processing bolt-on, but a native part of the generation loop with thread-safe <code>Send + Sync</code> semantics.</p><p class="note">Only llama.cpp has comparable GBNF grammar support, but it&rsquo;s a C API bolt-on, not a first-class trait in a safe language.</p></div></li>
           <li class="row"><span class="n">05</span><div class="body"><h3>Built-in agent loop</h3><p>An autonomous <code>Agent</code> struct with configurable <code>max_steps</code> handles the generate &rarr; parse &rarr; tool-call &rarr; continue cycle natively. No need to build orchestration logic in the host app &mdash; Atheer ships the loop.</p><p class="note">Every other mobile engine is a text-in-text-out API. You must build agent orchestration, context management, and tool-calling yourself.</p></div></li>
-          <li class="row"><span class="n">06</span><div class="body"><h3>UniFFI cross-platform bindings</h3><p>One UniFFI definition generates idiomatic Swift packages for iOS and Kotlin packages for Android &mdash; from the same Rust codebase, with no platform-specific wrapper code or duplicate SDK maintenance.</p><p class="note">llama.cpp exposes a raw C API requiring per-platform wrappers. ExecuTorch is C++-only. MLX Swift is Apple-exclusive.</p></div></li>
-          <li class="row"><span class="n">07</span><div class="body"><h3>Safe Rust, not C/C++</h3><p>Rust&rsquo;s ownership model guarantees no use-after-free, no data races, no GC pauses. <code>catch_unwind</code> wraps ANE forward calls so accelerator panics don&rsquo;t crash the host app. <strong>Every line of business logic across inference, grammar, cache, and orchestration is safe Rust</strong> &mdash; the only <code>unsafe</code> in the entire codebase is at platform FFI boundaries (C ABI export, NDK, Vulkan, ObjC), exactly the same discipline as Servo, wgpu, and Tokio.</p><p class="note">Most mobile inference engines are written in C/C++ with manual memory management across their entire codebase. Only MLX Swift shares Rust&rsquo;s safety guarantees &mdash; but it&rsquo;s Apple-only.</p></div></li>
+          <li class="row"><span class="n">06</span><div class="body"><h3>One Rust API across Swift and Kotlin</h3><p>UniFFI 0.32 exposes the engine to Swift and Kotlin from the same Rust surface. Swift bindings are generated from the proc-macro definition; Kotlin currently ships handwritten bindings while the UDL-based generator is being replaced.</p><p class="note">llama.cpp exposes a raw C API requiring per-platform wrappers. ExecuTorch is C++-only. MLX Swift is Apple-exclusive.</p></div></li>
+          <li class="row"><span class="n">07</span><div class="body"><h3>Safe Rust, not C/C++</h3><p>Rust&rsquo;s ownership model guarantees no use-after-free, no data races, no GC pauses. <code>catch_unwind</code> wraps ANE forward calls so accelerator panics don&rsquo;t crash the host app. <strong>Every line of business logic across inference, grammar, cache, and orchestration is safe Rust</strong> &mdash; the only <code>unsafe</code> in Atheer-authored code is at platform FFI boundaries (C ABI export, NDK, Vulkan, ObjC), exactly the same discipline as Servo, wgpu, and Tokio.</p><p class="note">Most mobile inference engines are written in C/C++ with manual memory management across their entire codebase. Only MLX Swift shares Rust&rsquo;s safety guarantees &mdash; but it&rsquo;s Apple-only.</p></div></li>
           <li class="row"><span class="n">08</span><div class="body"><h3>Model-level &amp; cache encryption, signature verification, TLS cert pinning, safe load pipeline</h3><p>AES-256-GCM encryption for GGUF and .mlpackage model files at rest, with a three-strategy decryption pipeline &mdash; ServerDistributed keys, DeviceDerived via HKDF-SHA256, or Custom provider. Ed25519 detached signature verification validates model origin and integrity before loading. <strong>TLS certificate pinning</strong> for model downloads: a custom <code>ServerCertVerifier</code> checks SHA-256 hashes of peer SubjectPublicKeyInfo against pinned values (Amazon RSA 2048 M04 intermediate CA + huggingface.co leaf), preventing MITM attacks on GGUF download traffic &mdash; dual-pin strategy covers both the leaf and intermediate CA for defense-in-depth. A pre-allocation header gate (<code>safe_content::parse_header</code>) runs before <em>any</em> <code>Vec&lt;u8&gt;</code> allocation, rejecting crafted GGUF headers via length-pre-validated metadata scans and bounds-checked counts &mdash; with <code>parse_header</code> running <em>before</em> <code>Mmap::map</code> so adversarial sparse files cannot trigger mmap-OOM. Six typed <code>AtheerCoreError</code> variants (<code>InvalidMagic</code>, <code>InvalidCounts</code>, <code>InvalidTensorBounds</code>, &hellip;) replace the prior string-only failure mode, with structured fields emitted through the FFI boundary. KV cache snapshots at rest are also encrypted via the same AES-256-GCM primitive (LZ4 compress &rarr; encrypt with random 12-byte nonce, distinct AAD <code>b"atheer-cache-v1"</code>), with the encryption key zeroized on drop.</p><p class="note">No other open engine encrypts models, signs models, pins TLS certificates for downloads, gates GGUF allocation, <em>or</em> encrypts their KV cache at rest.</p></div></li>
           <li class="row"><span class="n">09</span><div class="body"><h3>Prompt injection guardrails (L1/L2/L3)</h3><p>Three-layer defense-in-depth against prompt injection &mdash; L1 fast heuristics (pattern matching, Unicode normalization, leetspeak, homoglyphs, proximity scoring) in <strong>&lt;100&thinsp;&mu;s</strong>, L2 token-level statistical analysis (repetition ratio, entropy anomaly, adversarial suffix detection) in <strong>&lt;5&thinsp;ms</strong>, and L3 output guard (system prompt leakage detection, jailbreak success markers) in <strong>&lt;100&thinsp;&mu;s</strong>. Encoding detection pipeline automatically decodes base64/hex/ROT13 and re-checks decoded text.</p><p class="note">No other mobile inference engine ships built-in guardrails at any layer, let alone a configurable three-tier pipeline with sidecar pattern loading and encoding detection.</p></div></li>
-          <li class="row"><span class="n">10</span><div class="body"><h3>Sandboxed GPU execution with compliance attestation</h3><p>A <code>SandboxedGpuBridge</code> state machine (Idle &rarr; Starting &rarr; Ready &rarr; Crashed &rarr; Fallback) wraps GPU inference in a crash-isolated sandbox. Sliding-window crash counters with configurable thresholds trigger permanent CPU fallback on escalation. Crash count persisted to flat file across sessions &mdash; a restarted engine starts in Fallback if the prior session exceeded the limit. Audit logging via <code>tracing</code> at every lifecycle transition. Batch KV inference with auto-flush at the page boundary. Four compliance attestation tests covering the full probe &rarr; batch &rarr; crash &rarr; fallback chain, persistence roundtrip, and persisted escalation on construction.</p><p class="note">No other mobile inference engine wraps GPU dispatch in a sandbox with crash escalation, persistence, and compliance attestation &mdash; they all execute GPU kernels directly in-process with no recovery or audit trail.</p></div></li>
+          <li class="row"><span class="n">10</span><div class="body"><h3>Sandboxed GPU execution with compliance attestation</h3><p>A <code>SandboxedGpuBridge</code> state machine (Idle &rarr; Starting &rarr; Ready &rarr; Crashed &rarr; Fallback) wraps GPU inference in a crash-isolated sandbox. Sliding-window crash counters with configurable thresholds trigger permanent CPU fallback on escalation. Crash count persisted to flat file across sessions &mdash; a restarted engine starts in Fallback if the prior session exceeded the limit. Audit logging via <code>tracing</code> at every lifecycle transition. Batch KV inference with auto-flush at the page boundary. Four compliance attestation tests covering the full probe &rarr; batch &rarr; crash &rarr; fallback chain, persistence roundtrip, and persisted escalation on construction. The Android isolated-service shard and JNI surface exist; full isolated-process spawn integration remains in progress.</p><p class="note">No other mobile inference engine wraps GPU dispatch in a sandbox with crash escalation, persistence, and compliance attestation &mdash; they all execute GPU kernels directly in-process with no recovery or audit trail.</p></div></li>
         </ol>
       </div>
     </div>
@@ -1081,7 +1087,7 @@
         </p>
         <p>
           The matrix on the right is honest. Rows highlighted in the accent tint
-          are the seven differentiators <strong>nobody else ships</strong> &mdash; not
+          are the six differentiators <strong>nobody else ships</strong> &mdash; not
           catching-up items, but greenfield opportunities.
         </p>
       </div>
@@ -1100,7 +1106,7 @@
             </thead>
             <tbody>
               <tr><td>Mobile NPU</td><td class="atheer"><span class="mark-yes">CoreML + NNAPI</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-yes">&#10003;</span></td><td class="center"><span class="mark-mid">ANE only</span></td><td class="center"><span class="mark-yes">&#10003;</span></td></tr>
-              <tr><td>All 4 backends</td><td class="atheer"><span class="mark-yes">&#10003;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
+              <tr><td>All 5 backends</td><td class="atheer"><span class="mark-yes">&#10003;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
               <tr><td>Safe Rust</td><td class="atheer"><span class="mark-yes">&#10003;</span></td><td class="center"><span class="mark-mid">C/C++</span></td><td class="center"><span class="mark-mid">Py/C++</span></td><td class="center"><span class="mark-mid">Swift</span></td><td class="center"><span class="mark-mid">Java/C++</span></td></tr>
               <tr><td>Predictive thermal</td><td class="atheer"><span class="mark-yes">unique</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
               <tr><td>KV cache tiering</td><td class="atheer"><span class="mark-yes">L1/L2/L3</span></td><td class="center"><span class="mark-mid">Simple</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
@@ -1112,11 +1118,11 @@
               <tr class="row-emph"><td>TLS cert pinning</td><td class="atheer"><span class="mark-yes">unique</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
               <tr class="row-emph"><td>Privacy mode</td><td class="atheer"><span class="mark-yes">unique</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
               <tr class="row-emph"><td>Prompt guardrails</td><td class="atheer"><span class="mark-yes">L1/L2/L3</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
-              <tr class="row-emph"><td>Sandboxed GPU execution</td><td class="atheer"><span class="mark-yes">unique</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
+              <tr class="row-emph"><td>Sandboxed GPU execution</td><td class="atheer"><span class="mark-yes">bridge shipped</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
               <tr><td>Privacy manifest</td><td class="atheer"><span class="mark-mid">planned</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
               <tr><td>Structured telemetry</td><td class="atheer"><span class="mark-mid">planned</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
               <tr><td>Actual benchmark numbers</td><td class="atheer"><span class="mark-mid">planned</span></td><td class="center"><span class="mark-mid">N/A</span></td><td class="center"><span class="mark-mid">N/A</span></td><td class="center"><span class="mark-mid">N/A</span></td><td class="center"><span class="mark-mid">N/A</span></td></tr>
-              <tr><td>Cache TTL + secure wipe</td><td class="atheer"><span class="mark-mid">planned</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
+              <tr><td>Cache secure wipe / user erasure</td><td class="atheer"><span class="mark-mid">planned</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td><td class="center"><span class="mark-no">&#10007;</span></td></tr>
             </tbody>
           </table>
         </div>
@@ -1137,20 +1143,21 @@
         <span class="label">Architecture</span>
         <h2>Stack from silicon to inference.</h2>
         <p>
-          A layered architecture across 7 Rust crates. Hardware telemetry flows up,
-          acceleration dispatches down, and the orchestrator ties them together.
+          A layered runtime across six Rust crates, backed by a 16-package
+          workspace. Hardware telemetry flows up, acceleration dispatches down,
+          and the orchestrator ties them together.
         </p>
         <p>
           The right column shows the runtime stack, ordered top-down from app to
-          hardware probe. Every layer is a real Rust crate in
-          <code>thee-rust/</code> with workspace-level tests.
+          hardware probe. Each engine layer is a real Rust crate in the
+          <code>atheer-rust</code> workspace, covered by the workspace test suite.
         </p>
       </div>
       <div class="reveal">
         <div class="stack" aria-label="Crate stack">
           <div class="stack__layer"><span class="l">07</span><div><h4>iOS / Android app</h4><p>Swift · Kotlin · UniFFI consumer</p></div></div>
-          <div class="stack__layer"><span class="l">06</span><div><h4>atheer-ffi</h4><p>UniFFI-generated bindings with streaming callback support</p></div></div>
-          <div class="stack__layer"><span class="l">05</span><div><h4>atheer-core</h4><p>Candle inference · session mgmt · KV quantizer · lifecycle</p></div></div>
+          <div class="stack__layer"><span class="l">06</span><div><h4>atheer-ffi</h4><p>UniFFI surface with streaming callback support</p></div></div>
+          <div class="stack__layer"><span class="l">05</span><div><h4>atheer-core</h4><p>Candle inference · sessions · KV quantizer · guardrails</p></div></div>
           <div class="stack__layer"><span class="l">04</span><div><h4>atheer-orchestrator</h4><p>Predictive mode selection · PDA grammar sampler · agent loop</p></div></div>
           <div class="stack__layer"><span class="l">03</span><div><h4>atheer-memory-bank</h4><p>L1/L2/L3 KV cache · PagedAttention blocks · handoff protocol</p></div></div>
           <div class="stack__layer"><span class="l">02</span><div><h4>atheer-accel</h4><p>Metal · Vulkan (custom GLSL) · NNAPI NDK FFI · CoreML · CPU</p></div></div>
@@ -1159,7 +1166,7 @@
         <div class="stack__pills" aria-label="Stack capability summary">
           <span class="pill">1 Hz health &rarr; mode selection</span>
           <span class="pill">Metal / Vulkan compute shaders</span>
-          <span class="pill">NNAPI NDK FFI &middot; 9 ops</span>
+          <span class="pill">NNAPI NDK FFI &middot; 10 ops</span>
           <span class="pill">Character-level PDA grammar</span>
           <span class="pill">PagedAttention 16-token blocks</span>
           <span class="pill">INT8 / INT4 KV cache quant</span>
@@ -1195,8 +1202,8 @@
         <div class="timeline">
           <div class="tl-row"><span class="plat">iOS &middot; P1</span><div><h4>CoreML / ANE</h4><p>Apple Neural Engine via <code>candle-coreml</code> integration. <code>ANECompatibility</code> struct with per-layer heuristics, model size ceiling, and quantization whitelist. Background ANE compilation pre-heat via background thread loads and warms up the model at engine init &mdash; atomically swapped via <code>Arc&lt;OnceLock&gt;</code> to eliminate cold-start latency. Falls back to Metal for incompatible architectures. <code>catch_unwind</code> protected.</p><div class="meta">ANE detection &middot; macOS build</div></div></div>
           <div class="tl-row"><span class="plat">iOS &middot; P2</span><div><h4>Metal GPU</h4><p>GPU acceleration via <code>candle_core::Device::Metal</code>. Full tensor ops for prefill and decode in <code>atheer-accel/src/metal.rs</code>.</p><div class="meta">iOS 15+ &middot; Candle Metal backend</div></div></div>
-          <div class="tl-row"><span class="plat">Android &middot; P1</span><div><h4>NNAPI NPU/DSP</h4><p>Raw NDK FFI bindings with ~20 extern functions covering device discovery, graph construction (9 ops), compilation, and execution. Full pipeline in <code>atheer-accel/src/nnapi_ndk.rs</code>.</p><div class="meta">API 24+ &middot; NDK r29+</div></div></div>
-          <div class="tl-row"><span class="plat">Android &middot; P2</span><div><h4>Vulkan GPU</h4><p>Custom GLSL compute shaders (gemv.glsl, attention.glsl) compiled to SPIR-V via <code>naga</code> at build time. DP4A-style int8 matrix-vector multiply and flash attention in <code>atheer-accel/src/vulkan.rs</code> (~1120 lines).</p><div class="meta">API 26+ &middot; custom compute shaders</div></div></div>
+          <div class="tl-row"><span class="plat">Android &middot; P1</span><div><h4>NNAPI NPU/DSP</h4><p>Raw NDK FFI bindings with 32 extern functions covering device discovery, graph construction (10 ops, including CONV_2D), compilation, and execution. Full pipeline in <code>atheer-accel/src/nnapi_ndk.rs</code>.</p><div class="meta">API 26+ &middot; discovery API 29+ &middot; NDK r30+</div></div></div>
+          <div class="tl-row"><span class="plat">Android &middot; P2</span><div><h4>Vulkan GPU</h4><p>Custom GLSL compute shaders (gemv.glsl, attention.glsl) compiled to SPIR-V via <code>naga</code> at build time. DP4A-style int8 matrix-vector multiply and flash attention in <code>atheer-accel/src/vulkan.rs</code> (~1.2K lines).</p><div class="meta">API 26+ &middot; custom compute shaders</div></div></div>
           <div class="tl-row"><span class="plat">Fallback</span><div><h4>CPU</h4><p>Always available fallback using Candle CPU backend. Graceful degradation when no accelerator is available &mdash; graceful, tested, documented.</p><div class="meta">Any platform &middot; zero acceleration</div></div></div>
         </div>
       </div>
@@ -1215,9 +1222,9 @@
           app. Three commands to a running engine, three more to a mobile integration.
         </p>
         <p>
-          The code blocks are real: the bash block is the workspace build, the
-          swift block is iOS, the kotlin block is Android. Each is a copy-paste
-          start, not a fragment.
+          The code blocks show the integration shape: workspace build, iOS
+          Swift, Android Kotlin. Regenerate the Swift/Kotlin bindings through
+          UniFFI 0.32 before shipping; use the README for the full config surface.
         </p>
         <button class="btn-text" onclick="window.open('https://github.com/achmadk/atheer-rust','_blank')">Read the full guide on GitHub &rarr;</button>
       </div>
@@ -1231,7 +1238,7 @@
           <pre class="code-block"><code><span class="comment"># Build the entire workspace</span>
 cargo build --workspace
 
-<span class="comment"># Run all 817 tests</span>
+<span class="comment"># Run all 820 tests</span>
 cargo test --workspace
 
 <span class="comment"># Download a test model (~350 MB)</span>
@@ -1241,9 +1248,10 @@ scripts/download-test-model.sh
 ATHEER_TEST_MODEL=./models/LFM2-700M-Q4_0.gguf \
   cargo test -p atheer-core
 
-<span class="comment"># Benchmark throughput</span>
-cargo run -p perf-bench -- \
+<span class="comment"># Benchmark throughput (release build)</span>
+cargo run --release -p perf-bench -- \
   --model-path model.gguf \
+  --tokenizer-path tokenizer.json \
   --batch-sizes 1,4,8</code></pre>
         </div>
         <div class="code-block-wrap">
@@ -1256,6 +1264,7 @@ cargo run -p perf-bench -- \
 
 <span class="keyword">var</span> config = <span class="type">AtheerConfig</span>()
 config.modelPath = <span class="string">"/models/llama.gguf"</span>
+config.tokenizerPath = <span class="string">"/models/tokenizer.json"</span>
 config.adaptive = <span class="keyword">true</span>
 
 <span class="keyword">let</span> engine = <span class="type">AtheerEngine</span>(config: config)
@@ -1275,6 +1284,7 @@ config.adaptive = <span class="keyword">true</span>
 
 <span class="keyword">val</span> config = <span class="type">AtheerConfig</span>(
     modelPath = <span class="string">"/models/llama.gguf"</span>,
+    tokenizerPath = <span class="string">"/models/tokenizer.json"</span>,
     modelId = <span class="keyword">null</span>,
     draftModelPath = <span class="keyword">null</span>,
     adaptive = <span class="keyword">true</span>,
@@ -1331,7 +1341,6 @@ engine.initialize()
             <div class="bench-row"><span>kv_cache bench</span><span>read / write / evict latency</span></div>
             <div class="bench-row"><span>ngram_cache bench</span><span>match / miss throughput</span></div>
             <div class="bench-row"><span>orchestrator bench</span><span>mode switch overhead</span></div>
-            <div class="bench-row"><span>grammar PDA bench</span><span>step / push / pop</span></div>
           </div>
           <div class="bench-card">
             <h4>perf-bench binary</h4>
@@ -1342,7 +1351,7 @@ engine.initialize()
           </div>
           <div class="bench-card">
             <h4>What gets measured</h4>
-            <div class="cat">per commit &middot; per release</div>
+            <div class="cat">per run &middot; per device</div>
             <div class="bench-row"><span>Token throughput</span><span>tok/s &middot; prefill + decode</span></div>
             <div class="bench-row"><span>Thermal throttling</span><span>mode degradation curve</span></div>
             <div class="bench-row"><span>Energy per token</span><span>power draw samples</span></div>
@@ -1359,11 +1368,10 @@ engine.initialize()
       <span class="label">Roadmap &amp; research</span>
       <h2>Closing the gaps, shipping the future.</h2>
       <p>
-        A comprehensive codebase audit across 7 dimensions (security, privacy,
-        reliability, performance, platform, compliance, observability) produced a
-        prioritized 3-phase roadmap. Phases 1 and 2 are complete. Phase 3
-        estimated: <strong>3&ndash;5 weeks</strong> for a Rust engineer
-        familiar with the codebase.
+        A codebase audit across security, privacy, reliability, performance,
+        platform, compliance, and observability produced a three-phase roadmap.
+        Phases 1 and 2 are complete. Phase 3 is now validation, bindings, and
+        benchmark work rather than new subsystems.
       </p>
     </div>
     <div class="roadmap reveal">
@@ -1373,7 +1381,7 @@ engine.initialize()
         <h3>Security &amp; reliability</h3>
         <div class="meta">2&ndash;3 weeks &middot; 9 items</div>
         <ul>
-          <li>Fix 14 test failures + 40+ warnings</li>
+          <li>820-test suite green &middot; all-targets clippy clean</li>
           <li>Fix PII redactor + UTF-8 bugs</li>
           <li>Un-stub draft speculation (real GGUF models)</li>
           <li>Continuous runtime calibration (<code>PerfCalibrator</code>)</li>
@@ -1388,7 +1396,7 @@ engine.initialize()
         <span class="tag">Done</span>
         <span class="label">Phase 2</span>
         <h3>Security &amp; privacy hardening</h3>
-        <div class="meta">3&ndash;4 weeks &middot; 8 items</div>
+        <div class="meta">3&ndash;4 weeks &middot; 9 items</div>
         <ul>
           <li>Encrypt L2/L3 cache + checkpoints (AES-256-GCM)</li>
           <li>Model signature + hash verification (S2 + S3)</li>
@@ -1404,23 +1412,23 @@ engine.initialize()
       <div class="phase" data-state="pending">
         <span class="tag">Pending</span>
         <span class="label">Phase 3</span>
-        <h3>Production hardening &amp; observability</h3>
-        <div class="meta">3&ndash;5 weeks &middot; 14 items</div>
+        <h3>Validation &amp; production hardening</h3>
+        <div class="meta">14 items</div>
         <ul>
-          <li>Baseline + competitive benchmarks (real hardware)</li>
-          <li>Cache TTL + secure wipe (GDPR erasure)</li>
-          <li>iOS Privacy manifest (App Store required)</li>
-          <li>GDPR data flow docs + <code>delete_all_user_data()</code> API</li>
-          <li>Fix binding generation pipeline (E1 + R14)</li>
+          <li>Regenerate Swift/Kotlin bindings through UniFFI 0.32</li>
+          <li>Add iOS build job to CI</li>
+          <li>Validate NNAPI on real Android devices</li>
+          <li>Validate CoreML / Metal + iOS telemetry on physical devices</li>
+          <li>Exercise Vulkan parity on real Android GPUs</li>
+          <li>Complete isolated GPU sandbox spawn integration</li>
+          <li>Populate reference benchmark baselines</li>
+          <li>Add <code>--all-targets</code> to the CI lint job</li>
+          <li>iOS privacy manifest + GDPR data-flow docs</li>
           <li>Structured metrics / OpenTelemetry export</li>
-          <li>PII redactor upgrade (regex-based)</li>
-          <li>AGENTS.md (AI-assistant onboarding)</li>
-          <li>macOS CI runner (CoreML/Metal verification)</li>
-          <li>Audit logging (HMAC-chained append-only log)</li>
-          <li>FFI API versioning</li>
-          <li>Fuzz harness expansion</li>
-          <li>Watchdog for runaway inference</li>
+          <li>Secure cache wipe + <code>delete_all_user_data()</code></li>
+          <li>Expand fuzz corpus + CI fuzz run</li>
           <li>Example SwiftUI / Compose demo apps</li>
+          <li>FFI API versioning + HMAC-chained audit log</li>
         </ul>
       </div>
     </div>

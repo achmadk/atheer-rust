@@ -536,8 +536,10 @@ mod tests {
     #[test]
     fn test_engine_lifecycle_on_background_disabled() {
         let bridge = TestBridge::with_layers(2, 4);
-        let mut config = LifecycleConfig::default();
-        config.checkpoint_on_background = false;
+        let config = LifecycleConfig {
+            checkpoint_on_background: false,
+            ..Default::default()
+        };
         let mut lifecycle = EngineLifecycle::new(bridge, config);
 
         assert!(lifecycle.on_background().is_ok());

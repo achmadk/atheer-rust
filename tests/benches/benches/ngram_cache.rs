@@ -1,5 +1,6 @@
 use atheer_orchestrator::NGramCache;
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
+use std::hint::black_box;
 
 fn ngram_cache_insert(c: &mut Criterion) {
     let mut cache = NGramCache::new(5, 10000);

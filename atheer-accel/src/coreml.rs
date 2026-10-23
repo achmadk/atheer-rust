@@ -439,7 +439,7 @@ impl CoreMLBackend {
         {
             self.ane_available && self.coreml_model.as_ref().map_or(false, |r| r.is_ok())
         }
-        #[cfg(not(feature = "coreml"))]
+        #[cfg(not(all(feature = "coreml", any(target_os = "ios", target_os = "macos"))))]
         {
             self.ane_available
         }

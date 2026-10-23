@@ -1,6 +1,6 @@
 # Anchored Summary — S8: Model Execution Sandboxing
 
-> Last updated: 2026-07-16 18:50 WIB
+> Historical snapshot: 2026-07-16 18:50 WIB. Current status lives in `PROGRESS.md` and `README.md`.
 
 ## Scope
 
@@ -12,7 +12,7 @@ Implement `SandboxedGpuBridge` — a stateful sandbox wrapper for GPU inference 
 
 ### T4 — SandboxedGpuBridge (`atheer-core/src/sandbox/`)
 
-**`bridge.rs`** (760 lines) — Full implementation of `SandboxedGpuBridge`:
+**`bridge.rs`** (759 lines) — Full implementation of `SandboxedGpuBridge`:
 
 | Feature | Lines | Tests |
 |---------|-------|-------|
@@ -101,7 +101,7 @@ FFI Callback:
 | File | Lines | Purpose |
 |------|-------|---------|
 | `atheer-core/src/sandbox/mod.rs` | ~50 | Module declaration, `SandboxConfig`, re-exports |
-| `atheer-core/src/sandbox/bridge.rs` | ~602 | `SandboxedGpuBridge` full implementation + 18 tests |
+| `atheer-core/src/sandbox/bridge.rs` | 759 | `SandboxedGpuBridge` full implementation + 18 tests |
 
 ## Files Modified
 

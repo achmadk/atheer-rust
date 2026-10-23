@@ -1,5 +1,6 @@
 use atheer_orchestrator::{InferenceMode, Orchestrator, OrchestratorConfig};
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
+use std::hint::black_box;
 
 fn orchestrator_creation(c: &mut Criterion) {
     c.bench_function("orchestrator_creation", |b| {

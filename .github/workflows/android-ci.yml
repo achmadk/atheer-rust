@@ -118,7 +118,7 @@ jobs:
             -o android/atheer-sdk/src/main/jniLibs \
             build -p atheer-gpu-shard --release
         env:
-          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.3.13750724
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/30.0.16248370
 
       - name: Verify libatheer_gpu_shard.so was produced
         run: |
@@ -211,7 +211,7 @@ jobs:
             -t arm64-v8a \
             build -p candle-core --features vulkan --release
         env:
-          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.3.13750724
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/30.0.16248370
 
       - name: Verify candle-core with vulkan compiled
         run: |
@@ -292,7 +292,7 @@ jobs:
             build -p candle-core --features vulkan \
             --tests --release 2>&1 | tail -30
         env:
-          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.3.13750724
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/30.0.16248370
 
       - name: Find test binary
         run: |
@@ -440,7 +440,7 @@ jobs:
             build -p candle-core --features nnapi \
             --tests --release 2>&1 | tail -30
         env:
-          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/27.3.13750724
+          ANDROID_NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/30.0.16248370
 
       - name: Find NNAPI integration test binary
         run: |

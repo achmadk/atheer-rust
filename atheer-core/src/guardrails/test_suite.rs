@@ -566,7 +566,7 @@ mod integration {
     fn test_normalizer_transformations() {
         assert_eq!(normalize_text("ＡＢＣ"), "abc", "Fullwidth → lowercase");
 
-        let with_zwsp = format!("Ignore\u{200B}instructions");
+        let with_zwsp = "Ignore\u{200B}instructions".to_string();
         let nz = normalize_text(&with_zwsp);
         assert!(
             !nz.contains('\u{200B}'),

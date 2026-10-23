@@ -13,7 +13,7 @@ uniffi = { workspace = true }
 memmap2 = { workspace = true }
 tracing = { workspace = true }
 
-uuid = { version = "1.26", features = ["v4"] }
+uuid = { version = "1.28", features = ["v4"] }
 chrono = { version = "0.4", features = ["serde"] }
 candle-core = "0.11.0"
 candle-nn = "0.11.0"
@@ -31,7 +31,7 @@ dirs = { version = "7.0", optional = true }
 filetime = { version = "0.2", optional = true }
 unicode-normalization = "0.1"
 base64 = "0.23"
-reqwest = { workspace = true, features = ["blocking", "rustls-tls"], optional = true }
+reqwest = { workspace = true, features = ["blocking"], optional = true }
 atheer-memory-bank = { path = "../atheer-memory-bank", optional = true }
 atheer-accel = { path = "../atheer-accel", optional = true }
 rustls = { version = "0.23", optional = true, default-features = false, features = ["ring"] }

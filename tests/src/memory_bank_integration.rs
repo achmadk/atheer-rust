@@ -41,7 +41,7 @@ fn test_memory_bank_alignment_score() {
     bank.load_l2("model-1").expect("Should load");
 
     let score = bank.alignment_score();
-    assert!(score >= 0.0 && score <= 1.0);
+    assert!((0.0..=1.0).contains(&score));
 }
 
 #[test]

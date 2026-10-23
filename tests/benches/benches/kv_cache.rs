@@ -1,5 +1,6 @@
 use atheer_memory_bank::KvCache;
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
+use std::hint::black_box;
 
 fn kv_cache_insert(c: &mut Criterion) {
     let mut cache = KvCache::new(32, 8, 128, 2048);

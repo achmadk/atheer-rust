@@ -664,7 +664,7 @@ mod tests {
     use crate::quantized_nn::RmsNorm;
     use crate::utils::build_causal_mask;
     use candle::{Device, Result, Tensor};
-    use candle_nn::{Embedding, Module};
+    use candle_nn::Embedding;
 
     fn single_layer_model() -> Result<ModelWeights> {
         let device = Device::Cpu;

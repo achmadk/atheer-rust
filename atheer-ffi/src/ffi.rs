@@ -498,8 +498,10 @@ mod tests {
 
     #[test]
     fn test_ffi_config_backend_type_roundtrip() {
-        let mut config = crate::AtheerConfig::default();
-        config.backend_type = Some(crate::AtheerBackendType::Cpu);
+        let mut config = crate::AtheerConfig {
+            backend_type: Some(crate::AtheerBackendType::Cpu),
+            ..Default::default()
+        };
         assert_eq!(config.backend_type, Some(crate::AtheerBackendType::Cpu));
 
         config.backend_type = Some(crate::AtheerBackendType::Metal);
@@ -517,8 +519,10 @@ mod tests {
 
     #[test]
     fn test_ffi_config_coreml_model_path_set_and_get() {
-        let mut config = crate::AtheerConfig::default();
-        config.coreml_model_path = Some("/tmp/model.mlpackage".to_string());
+        let config = crate::AtheerConfig {
+            coreml_model_path: Some("/tmp/model.mlpackage".to_string()),
+            ..Default::default()
+        };
         assert_eq!(
             config.coreml_model_path,
             Some("/tmp/model.mlpackage".to_string())
@@ -527,10 +531,12 @@ mod tests {
 
     #[test]
     fn test_ffi_config_coreml_model_path_serialization_roundtrip() {
-        let mut config = crate::AtheerConfig::default();
-        config.coreml_model_path = Some("/models/llama.mlpackage".to_string());
-        config.model_path = Some("/models/llama.gguf".to_string());
-        config.model_id = Some("llama-3.2-3b".to_string());
+        let config = crate::AtheerConfig {
+            coreml_model_path: Some("/models/llama.mlpackage".to_string()),
+            model_path: Some("/models/llama.gguf".to_string()),
+            model_id: Some("llama-3.2-3b".to_string()),
+            ..Default::default()
+        };
 
         let json = serde_json::to_string(&config).expect("serialization should succeed");
         let deserialized: crate::AtheerConfig =
@@ -567,9 +573,11 @@ mod tests {
 
     #[test]
     fn test_ffi_engine_respects_cpu_backend_config() {
-        let mut config = crate::AtheerConfig::default();
-        config.backend_type = Some(crate::AtheerBackendType::Cpu);
-        config.model_path = Some("/nonexistent/model.gguf".to_string());
+        let config = crate::AtheerConfig {
+            backend_type: Some(crate::AtheerBackendType::Cpu),
+            model_path: Some("/nonexistent/model.gguf".to_string()),
+            ..Default::default()
+        };
 
         let engine = crate::AtheerEngine::new(config);
         // Should not panic — config is respected even if model can't load later
@@ -579,9 +587,11 @@ mod tests {
 
     #[test]
     fn test_initialize_degradation_both_devices_fail() {
-        let mut config = crate::AtheerConfig::default();
-        config.backend_type = Some(crate::AtheerBackendType::Cpu);
-        config.model_path = Some("/nonexistent/model.gguf".to_string());
+        let config = crate::AtheerConfig {
+            backend_type: Some(crate::AtheerBackendType::Cpu),
+            model_path: Some("/nonexistent/model.gguf".to_string()),
+            ..Default::default()
+        };
 
         let engine = crate::AtheerEngine::new(config);
         let result = engine.initialize();
@@ -600,12 +610,14 @@ mod tests {
 
     #[test]
     fn test_initialize_degradation_metal_unavailable_both_fail() {
-        let mut config = crate::AtheerConfig::default();
         // Metal backend — on non-macOS CI this will resolve to Device::Cpu via
         // metal_if_available().unwrap_or(Device::Cpu), so both the "preferred"
         // and fallback attempts fail on CPU with the same nonexistent-model error.
-        config.backend_type = Some(crate::AtheerBackendType::Metal);
-        config.model_path = Some("/nonexistent/model.gguf".to_string());
+        let config = crate::AtheerConfig {
+            backend_type: Some(crate::AtheerBackendType::Metal),
+            model_path: Some("/nonexistent/model.gguf".to_string()),
+            ..Default::default()
+        };
 
         let engine = crate::AtheerEngine::new(config);
         let result = engine.initialize();
@@ -648,7 +660,7 @@ mod tests {
 
         // Create 5 fake checkpoint meta files for the same model
         let model_id = "test-model-v1";
-        let names = vec![
+        let names = [
             "checkpoint_a.meta",
             "checkpoint_b.meta",
             "checkpoint_c.meta",
@@ -678,10 +690,12 @@ mod tests {
         .unwrap();
 
         // Create engine with max_checkpoints=2
-        let mut config = crate::AtheerConfig::default();
-        config.checkpoint_dir = Some(dir.clone());
-        config.model_id = Some(model_id.to_string());
-        config.max_checkpoints = 2;
+        let config = crate::AtheerConfig {
+            checkpoint_dir: Some(dir.clone()),
+            model_id: Some(model_id.to_string()),
+            max_checkpoints: 2,
+            ..Default::default()
+        };
         let _engine = crate::AtheerEngine::new(config);
 
         // Verify all files still exist
@@ -701,9 +715,11 @@ mod tests {
         let dir = temp_dir.path().to_string_lossy().to_string();
 
         // Verify checkpoint_ttl_hours is propagated by checking behavior
-        let mut config = crate::AtheerConfig::default();
-        config.checkpoint_dir = Some(dir.clone());
-        config.checkpoint_ttl_hours = 48;
+        let config = crate::AtheerConfig {
+            checkpoint_dir: Some(dir.clone()),
+            checkpoint_ttl_hours: 48,
+            ..Default::default()
+        };
         let _engine = crate::AtheerEngine::new(config);
     }
 
@@ -731,15 +747,17 @@ mod tests {
     /// Test that checkpoint config fields roundtrip correctly through serialization.
     #[test]
     fn test_checkpoint_config_serialization_roundtrip() {
-        let mut config = crate::AtheerConfig::default();
-        config.checkpoint_dir = Some("/tmp/checkpoints".to_string());
-        config.max_checkpoints = 5;
-        config.checkpoint_ttl_hours = 24;
-        config.checkpoint_on_background = false;
-        config.restore_on_foreground = false;
-        config.checkpoint_on_low_memory = true;
-        config.checkpoint_on_terminate = true;
-        config.clear_on_low_memory = false;
+        let config = crate::AtheerConfig {
+            checkpoint_dir: Some("/tmp/checkpoints".to_string()),
+            max_checkpoints: 5,
+            checkpoint_ttl_hours: 24,
+            checkpoint_on_background: false,
+            restore_on_foreground: false,
+            checkpoint_on_low_memory: true,
+            checkpoint_on_terminate: true,
+            clear_on_low_memory: false,
+            ..Default::default()
+        };
 
         let json = serde_json::to_string(&config).unwrap();
         let deserialized: crate::AtheerConfig = serde_json::from_str(&json).unwrap();
@@ -763,9 +781,11 @@ mod tests {
         let temp_dir = tempfile::TempDir::new().unwrap();
         let dir = temp_dir.path().to_string_lossy().to_string();
 
-        let mut config = crate::AtheerConfig::default();
-        config.checkpoint_dir = Some(dir.clone());
-        config.model_id = Some("test-model".to_string());
+        let config = crate::AtheerConfig {
+            checkpoint_dir: Some(dir.clone()),
+            model_id: Some("test-model".to_string()),
+            ..Default::default()
+        };
         let engine = crate::AtheerEngine::new(config);
 
         // Before any checkpoint, has_checkpoint returns false
@@ -821,15 +841,16 @@ mod tests {
     #[test]
     fn test_lifecycle_methods_respect_config_flags() {
         // When checkpoint_on_background is disabled, on_background should not save
-        let mut config = crate::AtheerConfig::default();
-        config.checkpoint_on_background = false;
-        config.checkpoint_on_low_memory = false;
-        config.checkpoint_on_terminate = false;
-        config.restore_on_foreground = false;
-
         let temp_dir = tempfile::TempDir::new().unwrap();
         let dir = temp_dir.path().to_string_lossy().to_string();
-        config.checkpoint_dir = Some(dir.clone());
+        let config = crate::AtheerConfig {
+            checkpoint_on_background: false,
+            checkpoint_on_low_memory: false,
+            checkpoint_on_terminate: false,
+            restore_on_foreground: false,
+            checkpoint_dir: Some(dir.clone()),
+            ..Default::default()
+        };
 
         let engine = crate::AtheerEngine::new(config);
 

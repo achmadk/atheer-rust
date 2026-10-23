@@ -69,10 +69,10 @@ ios/  android/          ── Mobile SDK wrappers (Swift, Kotlin)
 ### Workspace (all Atheer crates)
 
 ```bash
-# Full workspace build (—features coreml on macOS for CoreML/ANE)
+# Full workspace build
 cargo build --workspace
 
-# Run all workspace tests (817 across the workspace)
+# Run all workspace tests (820 across the workspace)
 cargo test --workspace
 
 # Run specific crate tests
@@ -81,8 +81,8 @@ cargo test -p atheer-orchestrator
 cargo test -p atheer-memory-bank
 cargo test -p atheer-ffi
 
-# Build with CoreML support (macOS only)
-cargo build --features coreml
+# Build the FFI with CoreML support (macOS/iOS; forwards atheer-accel/coreml)
+cargo build -p atheer-ffi --features coreml
 ```
 
 ### Vendored Forks
@@ -131,7 +131,7 @@ cargo fmt --check
 
 | Target | Primary Backend | Test Status |
 |--------|----------------|-------------|
-| `aarch64-apple-ios` | ANE → Metal → CPU | ✅ CI |
+| `aarch64-apple-ios` | ANE → Metal → CPU | macOS host; iOS target build not in CI |
 | `aarch64-linux-android` | NNAPI → Vulkan → CPU | ✅ CI |
 | `aarch64-apple-darwin` | ANE → Metal → CPU (dev) | ✅ Dev |
 | `x86_64-apple-darwin` | Metal → CPU | ✅ Dev |
@@ -225,7 +225,7 @@ mod tests {
 
 3. **Tiered KV cache (L1/L2/L3)**: L1 = hot (RAM, uncompressed), L2 = warm (RAM, compressed), L3 = cold (disk, compressed, optionally encrypted). Checkpoints persist across app restarts.
 
-4. **Sandboxed GPU bridge**: Forward passes can be routed through an isolated subprocess with a state machine (Unprovisioned → Standby → Ready → Fallback). Crash in sandbox → falls back to in-process, never crashes the app.
+4. **Sandboxed GPU bridge**: Lifecycle and crash escalation use the `Idle → Starting → Ready → Crashed → Fallback` state machine. The Android shard JNI lives in `atheer-gpu-shard`; full isolated-process spawn integration is still being completed. Crash escalation falls back to in-process CPU rather than crashing the app.
 
 5. **Guardrail pipeline**: Three-layer defense (L1: fast heuristics <100μs, L2: token analysis <5ms, L3: output guard <100μs). Configurable levels (None/Basic/Balanced/Strict). Hot-reloadable pattern files.
 
@@ -256,10 +256,10 @@ mod tests {
 
 ### Known Issues
 
-- 3 integration tests ignored (require real GGUF model download)
-- ~10 compiler warnings (unused imports, dead code across platform-gated paths)
-- `candle-core` vendored + heavily patched — upstream sync is manual
-- `candle-coreml` crate has ~2263-line `qwen.rs` — refactoring in progress (see its CLAUDE.md)
+- 3 `atheer-core` tests ignored (real GGUF model / unsupported KV-cache snapshot); 5 doc tests are also ignored.
+- Both `cargo clippy --workspace -- -D warnings` and `cargo clippy --workspace --all-targets -- -D warnings` are clean.
+- `candle-core` vendored + heavily patched — upstream sync is manual.
+- `candle-coreml`'s former `qwen.rs` is now split into `src/qwen/` modules; its vendored CLAUDE.md still describes the old refactor.
 
 ---
 
@@ -288,12 +288,12 @@ mod tests {
 
 ## FFI Boundary Constraints
 
-- UniFFI v0.27 — `uniffi::Error` derives for FFI error types
+- UniFFI v0.32 — proc-macro mode (`uniffi::setup_scaffolding!()`), no `.udl` file
 - All FFI error fields must be `String` (no structured enum variants across FFI)
 - `map_core_error()` in `atheer-ffi/src/error.rs` converts typed errors to flat strings
 - FFI methods are synchronous (blocking) — generation streams via `pollStreamToken`/`streamDone`
 - AtheerConfig struct exposed to Swift/Kotlin with optional fields for model path, encryption keys, guardrail settings
-- Re-generate Swift/Kotlin bindings from the .udl file after adding/changing FFI methods
+- Regenerate Swift/Kotlin bindings with the UniFFI 0.32 library-mode tooling after adding or changing FFI methods; `cargo run -p atheer-bindgen` still expects a UDL and is not the supported path
 
 ---
 
@@ -310,7 +310,7 @@ mod tests {
 
 ### Backend Selection Priority
 
-1. CoreML/ANE (`--features coreml`, macOS/iOS only)
+1. CoreML/ANE (`cargo build -p atheer-ffi --features coreml`, macOS/iOS only)
 2. NNAPI (`--features nnapi`, Android only)
 3. Metal (Apple GPU)
 4. Vulkan (Android GPU, desktop)
@@ -325,7 +325,8 @@ mod tests {
 cargo run -p atheer-encrypt -- --method aes-256-gcm --input model.gguf --output model.enc
 
 # Benchmarks
-cargo bench -p bench-crate
+cargo bench -p perf-bench
+cargo bench -p atheer-benches
 
 # Fuzz (cargo-fuzz)
 cd fuzz && cargo fuzz run fuzz_gguf_header

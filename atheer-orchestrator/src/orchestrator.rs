@@ -400,9 +400,11 @@ mod tests {
 
     #[test]
     fn test_thermal_throttle() {
-        let mut config = OrchestratorConfig::default();
-        config.adaptive = true;
-        config.hysteresis_cooldown_ms = 0;
+        let config = OrchestratorConfig {
+            adaptive: true,
+            hysteresis_cooldown_ms: 0,
+            ..Default::default()
+        };
         let mut orchestrator = Orchestrator::new(config);
 
         let mode = orchestrator.select_mode(Some(45.0), 4096, Some(50), false);
@@ -411,9 +413,11 @@ mod tests {
 
     #[test]
     fn test_low_memory_mode() {
-        let mut config = OrchestratorConfig::default();
-        config.adaptive = true;
-        config.hysteresis_cooldown_ms = 0;
+        let config = OrchestratorConfig {
+            adaptive: true,
+            hysteresis_cooldown_ms: 0,
+            ..Default::default()
+        };
         let mut orchestrator = Orchestrator::new(config);
 
         let mode = orchestrator.select_mode(None, 600, Some(50), false);
@@ -422,9 +426,11 @@ mod tests {
 
     #[test]
     fn test_turbo_mode_selection() {
-        let mut config = OrchestratorConfig::default();
-        config.adaptive = true;
-        config.hysteresis_cooldown_ms = 0;
+        let config = OrchestratorConfig {
+            adaptive: true,
+            hysteresis_cooldown_ms: 0,
+            ..Default::default()
+        };
         let mut orchestrator = Orchestrator::new(config);
 
         let mode = orchestrator.select_mode(Some(35.0), 4096, Some(80), false);
@@ -433,9 +439,11 @@ mod tests {
 
     #[test]
     fn test_hysteresis_prevents_upgrade() {
-        let mut config = OrchestratorConfig::default();
-        config.adaptive = true;
-        config.hysteresis_cooldown_ms = 10000;
+        let config = OrchestratorConfig {
+            adaptive: true,
+            hysteresis_cooldown_ms: 10000,
+            ..Default::default()
+        };
         let mut orchestrator = Orchestrator::new(config);
 
         orchestrator.select_mode(Some(35.0), 4096, Some(80), false);
@@ -448,9 +456,11 @@ mod tests {
 
     #[test]
     fn test_downgrade_allowed_during_hysteresis() {
-        let mut config = OrchestratorConfig::default();
-        config.adaptive = true;
-        config.hysteresis_cooldown_ms = 10000;
+        let config = OrchestratorConfig {
+            adaptive: true,
+            hysteresis_cooldown_ms: 10000,
+            ..Default::default()
+        };
         let mut orchestrator = Orchestrator::new(config);
 
         orchestrator.set_mode(InferenceMode::Turbo);
@@ -461,8 +471,10 @@ mod tests {
 
     #[test]
     fn test_mode_change_count() {
-        let mut config = OrchestratorConfig::default();
-        config.hysteresis_cooldown_ms = 0;
+        let config = OrchestratorConfig {
+            hysteresis_cooldown_ms: 0,
+            ..Default::default()
+        };
         let mut orchestrator = Orchestrator::new(config);
 
         assert_eq!(orchestrator.mode_change_count(), 0);
@@ -476,8 +488,10 @@ mod tests {
 
     #[test]
     fn test_confidence_tracking() {
-        let mut config = OrchestratorConfig::default();
-        config.hysteresis_cooldown_ms = 0;
+        let config = OrchestratorConfig {
+            hysteresis_cooldown_ms: 0,
+            ..Default::default()
+        };
         let mut orchestrator = Orchestrator::new(config);
 
         orchestrator.update_confidence(0.8);
@@ -492,8 +506,10 @@ mod tests {
 
     #[test]
     fn test_speculation_depth_via_mode() {
-        let mut config = OrchestratorConfig::default();
-        config.hysteresis_cooldown_ms = 0;
+        let config = OrchestratorConfig {
+            hysteresis_cooldown_ms: 0,
+            ..Default::default()
+        };
         let mut orchestrator = Orchestrator::new(config);
 
         orchestrator.set_mode(InferenceMode::Turbo);
@@ -503,10 +519,12 @@ mod tests {
 
     #[test]
     fn test_battery_threshold_triggers_eco() {
-        let mut config = OrchestratorConfig::default();
-        config.adaptive = true;
-        config.hysteresis_cooldown_ms = 0;
-        config.battery_threshold_percent = 20;
+        let config = OrchestratorConfig {
+            adaptive: true,
+            hysteresis_cooldown_ms: 0,
+            battery_threshold_percent: 20,
+            ..Default::default()
+        };
         let mut orchestrator = Orchestrator::new(config);
 
         let mode = orchestrator.select_mode(Some(30.0), 4096, Some(15), true);
@@ -515,9 +533,11 @@ mod tests {
 
     #[test]
     fn test_balanced_mode_selection() {
-        let mut config = OrchestratorConfig::default();
-        config.adaptive = true;
-        config.hysteresis_cooldown_ms = 0;
+        let config = OrchestratorConfig {
+            adaptive: true,
+            hysteresis_cooldown_ms: 0,
+            ..Default::default()
+        };
         let mut orchestrator = Orchestrator::new(config);
 
         orchestrator.set_mode(InferenceMode::Balanced);
@@ -536,8 +556,10 @@ mod tests {
 
     #[test]
     fn test_check_memory_pressure_returns_true_when_over_threshold() {
-        let mut config = OrchestratorConfig::default();
-        config.memory_threshold_mb = 1; // Very low threshold
+        let config = OrchestratorConfig {
+            memory_threshold_mb: 1, // Very low threshold
+            ..Default::default()
+        };
         let orchestrator = Orchestrator::new(config);
         let memory_bank = atheer_memory_bank::MemoryBank::new(1024, None);
 

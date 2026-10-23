@@ -91,12 +91,18 @@ impl BackendManager {
         self
     }
 
-    /// Return the first backend in registration order that reports as available.
+    /// Return the first available accelerator, falling back to CPU.
     ///
-    /// Priority is determined by [`BackendManager::new`] and matches platform
-    /// conventions (NPU > GPU > CPU). Each backend's [`AccelBackend::is_available`]
-    /// handles the platform-specific availability checks.
+    /// CPU is registered first so `BackendManager::new()` always has a usable
+    /// default, but it must not win auto-selection when an accelerator is
+    /// available. Accelerators are considered in registration order
+    /// (NPU > GPU on each platform), then CPU is used as the fallback.
     pub fn best_available(&self) -> Arc<dyn AccelBackend> {
+        for backend in &self.backends {
+            if backend.backend_type() != BackendType::Cpu && backend.is_available() {
+                return backend.clone();
+            }
+        }
         for backend in &self.backends {
             if backend.is_available() {
                 return backend.clone();
@@ -198,6 +204,60 @@ impl Default for BackendManager {
 mod tests {
     use super::*;
 
+    struct FakeBackend {
+        kind: BackendType,
+        available: bool,
+    }
+
+    impl AccelBackend for FakeBackend {
+        fn name(&self) -> &str {
+            self.kind.as_str()
+        }
+
+        fn backend_type(&self) -> BackendType {
+            self.kind
+        }
+
+        fn is_available(&self) -> bool {
+            self.available
+        }
+
+        #[allow(deprecated)]
+        fn forward(
+            &self,
+            _input_ids: &[u32],
+            _positions: &[usize],
+        ) -> crate::Result<crate::AccelResult> {
+            Err(crate::AccelError::OperationFailed(
+                "fake backend".to_string(),
+            ))
+        }
+    }
+
+    fn manager_with(backends: Vec<std::sync::Arc<dyn AccelBackend>>) -> BackendManager {
+        let selected = backends[0].clone();
+        BackendManager {
+            backends,
+            selected,
+            coreml_model_path: None,
+        }
+    }
+
+    #[test]
+    fn test_best_available_prefers_accelerator_over_cpu() {
+        let cpu = std::sync::Arc::new(FakeBackend {
+            kind: BackendType::Cpu,
+            available: true,
+        });
+        let npu = std::sync::Arc::new(FakeBackend {
+            kind: BackendType::NNAPI,
+            available: true,
+        });
+        let manager = manager_with(vec![cpu, npu]);
+
+        assert_eq!(manager.best_available().backend_type(), BackendType::NNAPI);
+    }
+
     #[test]
     fn test_backend_manager_creation() {
         let manager = BackendManager::new();
@@ -210,7 +270,16 @@ mod tests {
     fn test_backend_manager_autoselect() {
         let manager = BackendManager::new().with_autoselect();
         let current = manager.current();
+
+        #[cfg(not(any(target_os = "ios", target_os = "macos", target_os = "android")))]
         assert_eq!(current.backend_type(), BackendType::Cpu);
+
+        // On platforms with accelerators, CPU is only valid when probing found
+        // none. If an accelerator is available, auto-selection must use it.
+        #[cfg(any(target_os = "ios", target_os = "macos", target_os = "android"))]
+        if current.backend_type() == BackendType::Cpu {
+            assert!(manager.probe_all().is_none());
+        }
     }
 
     #[test]

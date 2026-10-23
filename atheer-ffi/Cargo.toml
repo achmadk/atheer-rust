@@ -3,6 +3,13 @@ name = "atheer-ffi"
 version.workspace = true
 edition.workspace = true
 
+[features]
+default = []
+# Forward the Apple CoreML/ANE backend switch to atheer-accel. Without this,
+# a plain `cargo build -p atheer-ffi` cannot enable real CoreML inference
+# even when an app supplies a .mlpackage path.
+coreml = ["atheer-accel/coreml"]
+
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }

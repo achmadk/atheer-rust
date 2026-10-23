@@ -1,9 +1,9 @@
 //! NNAPI graph compiler — model construction, compilation, and execution.
 //!
 //! This module provides a full NNAPI model compiler with:
-//! - `NnapiOperation` — 9 supported operation codes:
+//! - `NnapiOperation` — 10 supported operation codes:
 //!   ADD, MUL, SOFTMAX, LOGISTIC, RELU, TANH, CONCATENATION,
-//!   RESHAPE, FULLY_CONNECTED
+//!   RESHAPE, FULLY_CONNECTED, CONV_2D
 //! - `NnapiGraphBuilder` — operand/operation graph construction with
 //!   validation, `.finish()` and `.compile()` lifecycle
 //! - `NnapiCompiledModel` — executable handle with `.execute()` for

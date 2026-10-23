@@ -35,6 +35,14 @@ struct Cli {
     #[arg(long, default_value_t = 30)]
     duration_secs: u64,
 
+    /// Maximum tokens to generate per sample
+    #[arg(long, default_value_t = 128)]
+    max_tokens: u32,
+
+    /// Per-generation timeout in milliseconds (0 disables the timeout)
+    #[arg(long, default_value_t = 0)]
+    generation_timeout_ms: u64,
+
     /// Output JSON report path
     #[arg(long, default_value = "bench-report.json")]
     output: PathBuf,
@@ -42,6 +50,10 @@ struct Cli {
     /// Max sequence length
     #[arg(long, default_value_t = 4096)]
     max_seq_len: usize,
+}
+
+fn generation_timeout(timeout_ms: u64) -> Option<u64> {
+    (timeout_ms > 0).then_some(timeout_ms)
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -68,6 +80,12 @@ fn main() {
         .init();
 
     let cli = Cli::parse();
+
+    if cfg!(debug_assertions) {
+        eprintln!(
+            "WARNING: debug build detected; use `cargo run --release -p perf-bench -- ...` for meaningful timings."
+        );
+    }
 
     // Validate required args
     let model_path = cli.model_path.unwrap_or_else(|| {
@@ -119,12 +137,20 @@ fn main() {
 
     eprintln!("Batch sizes: {:?}", batch_sizes);
     eprintln!("Duration: {}s", cli.duration_secs);
+    eprintln!("Max tokens per sample: {}", cli.max_tokens);
+    if cli.generation_timeout_ms == 0 {
+        eprintln!("Generation timeout: disabled");
+    } else {
+        eprintln!("Generation timeout: {}ms", cli.generation_timeout_ms);
+    }
+    let timeout = generation_timeout(cli.generation_timeout_ms);
 
     // Measure per-batch throughput
     let mut batch_results = Vec::new();
     for &batch_size in &batch_sizes {
         eprintln!("Benchmarking batch size {batch_size}...");
-        let tokens_per_second = measure_throughput(&mut engine, cli.duration_secs);
+        let tokens_per_second =
+            measure_throughput(&mut engine, cli.duration_secs, cli.max_tokens, timeout);
         eprintln!("  Batch {batch_size}: {tokens_per_second:.1} tok/s");
         batch_results.push(BatchResult {
             batch_size,
@@ -134,7 +160,7 @@ fn main() {
 
     // Sustained sampling
     eprintln!("Running sustained benchmark for {}s...", cli.duration_secs);
-    let samples = measure_sustained(&mut engine, cli.duration_secs);
+    let samples = measure_sustained(&mut engine, cli.duration_secs, cli.max_tokens, timeout);
 
     let avg_tps = if samples.is_empty() {
         0.0
@@ -159,14 +185,18 @@ fn main() {
 }
 
 /// Measure average tokens/second for a given duration.
-fn measure_throughput(engine: &mut InferenceEngine, duration_secs: u64) -> f64 {
+fn measure_throughput(
+    engine: &mut InferenceEngine,
+    duration_secs: u64,
+    max_tokens: u32,
+    generation_timeout: Option<u64>,
+) -> f64 {
     let prompt = "Hello";
-    let max_tokens = 128u32;
     let start = Instant::now();
     let mut total_tokens: u64 = 0;
 
     while start.elapsed() < Duration::from_secs(duration_secs) {
-        match engine.generate(prompt, max_tokens, Some(5000)) {
+        match engine.generate(prompt, max_tokens, generation_timeout) {
             Ok((_text, tokens_generated, _elapsed)) => {
                 total_tokens += tokens_generated as u64;
             }
@@ -186,9 +216,13 @@ fn measure_throughput(engine: &mut InferenceEngine, duration_secs: u64) -> f64 {
 }
 
 /// Collect per-second throughput samples over the given duration.
-fn measure_sustained(engine: &mut InferenceEngine, duration_secs: u64) -> Vec<f64> {
+fn measure_sustained(
+    engine: &mut InferenceEngine,
+    duration_secs: u64,
+    max_tokens: u32,
+    generation_timeout: Option<u64>,
+) -> Vec<f64> {
     let prompt = "Hello";
-    let max_tokens = 128u32;
     let sample_interval = Duration::from_secs(1);
     let mut samples = Vec::new();
 
@@ -198,7 +232,7 @@ fn measure_sustained(engine: &mut InferenceEngine, duration_secs: u64) -> Vec<f6
         let mut tokens_this_second: u64 = 0;
 
         while sample_start.elapsed() < sample_interval {
-            match engine.generate(prompt, max_tokens, Some(5000)) {
+            match engine.generate(prompt, max_tokens, generation_timeout) {
                 Ok((_text, tokens_generated, _elapsed)) => {
                     tokens_this_second += tokens_generated as u64;
                 }
@@ -214,4 +248,27 @@ fn measure_sustained(engine: &mut InferenceEngine, duration_secs: u64) -> Vec<f6
     }
 
     samples
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn benchmark_defaults_disable_generation_timeout() {
+        let cli = Cli::try_parse_from(["perf-bench"]).expect("parse defaults");
+
+        assert_eq!(cli.max_tokens, 128);
+        assert_eq!(cli.generation_timeout_ms, 0);
+        assert_eq!(generation_timeout(cli.generation_timeout_ms), None);
+    }
+
+    #[test]
+    fn explicit_generation_timeout_is_forwarded() {
+        let cli = Cli::try_parse_from(["perf-bench", "--generation-timeout-ms", "5000"])
+            .expect("parse explicit timeout");
+
+        assert_eq!(cli.generation_timeout_ms, 5000);
+        assert_eq!(generation_timeout(cli.generation_timeout_ms), Some(5000));
+    }
 }

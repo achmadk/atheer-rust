@@ -14,5 +14,5 @@ atheer-memory-bank = { path = "../atheer-memory-bank" }
 
 [dev-dependencies]
 atheer-ffi = { path = "../atheer-ffi" }
-tokio = { version = "1.53", features = ["full"] }
+tokio = { version = "1.54", features = ["full"] }
 proptest = { workspace = true }

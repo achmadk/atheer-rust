@@ -5,7 +5,8 @@
 //!
 //! Run: `ATHEER_TEST_MODEL=... ATHEER_TOKENIZER_PATH=... cargo bench -p perf-bench -- memory`
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
+use std::hint::black_box;
 
 #[cfg(target_os = "linux")]
 fn read_rss_kb() -> u64 {
@@ -40,7 +41,7 @@ fn maybe_bench_memory(c: &mut Criterion) {
         let tokenizer = atheer_core::tokenizer::Tokenizer::from_file(&tokenizer_path)
             .expect("Failed to load tokenizer");
         let mut engine =
-            atheer_core::InferenceEngine::new_auto(&model_path, tokenizer, config.clone(), ctx_len)
+            atheer_core::InferenceEngine::new_auto(&model_path, tokenizer, config, ctx_len)
                 .expect("Failed to load model");
 
         let _ = engine.generate("Hello", 128, Some(10_000));

@@ -9,5 +9,5 @@ atheer-ffi = { path = "../atheer-ffi" }
 atheer-core = { path = "../atheer-core" }
 atheer-memory-bank = { path = "../atheer-memory-bank" }
 serde_json = { workspace = true }
-arbitrary = "1.4"
+arbitrary = "1.5"
 libfuzzer-sys = "0.4"

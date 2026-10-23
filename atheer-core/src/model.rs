@@ -263,9 +263,8 @@ mod tests {
 
     #[test]
     fn test_context_size_default() {
-        // Can't construct a real model without GGUF; tests will need an actual file
-        // For now, verify the trait impl compiles and error paths work
-        assert!(true);
+        // Can't construct a real model without GGUF; tests will need an actual file.
+        // For now, verify the trait impl compiles and error paths work.
     }
 
     /// S6 (closes G1 regression): `from_gguf_reader` — the path used by the

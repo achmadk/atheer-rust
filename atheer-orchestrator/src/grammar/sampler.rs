@@ -105,6 +105,6 @@ impl<G: GrammarConstraint + Clone> Sampler for GrammarSampler<G> {
 mod tests {
     #[test]
     fn test_grammar_sampler_construction() {
-        assert!(true);
+        // Construction is checked by the compiler; no runtime assertion needed.
     }
 }
